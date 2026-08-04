@@ -31,14 +31,14 @@ def load_stock_list(start=0, limit=10):
 
 
 def run_screener(start=0, limit=10):
-    """
-    指定銘柄数を解析し、
-    price_data.csv と screening_result.csv を作成する
-    """
 
     stocks = load_stock_list(start, limit)
 
-    results = []
+    price_path = Path(config.DATA_DIR) / "price_data.csv"
+
+    # 前回の結果を消して新規作成
+    if price_path.exists():
+        price_path.unlink()
 
     total = len(stocks)
 
@@ -46,7 +46,7 @@ def run_screener(start=0, limit=10):
 
         code = stock["コード"]
 
-        print(f"[{i}/{total}] 取得中 : {code}")
+        print(f"[{i}/{total}] {code}")
 
         df = get_history(code)
 
@@ -58,45 +58,60 @@ def run_screener(start=0, limit=10):
 
         latest = df.iloc[-1]
 
-        results.append({
+        row = pd.DataFrame([{
             "コード": code,
             "銘柄名": stock["銘柄名"],
             "市場": stock["市場・商品区分"],
             "終値": round(float(latest["Close"]), 2),
-            "MA5": round(float(latest["MA5"]), 2) if pd.notna(latest["MA5"]) else None,
-            "MA25": round(float(latest["MA25"]), 2) if pd.notna(latest["MA25"]) else None,
+            "MA5": round(float(latest["MA5"]), 2),
+            "MA25": round(float(latest["MA25"]), 2),
             "出来高": int(latest["Volume"]),
-            "出来高倍率": round(float(latest["VolumeRatio"]), 2) if pd.notna(latest["VolumeRatio"]) else None,
+            "出来高倍率": round(float(latest["VolumeRatio"]), 2),
             "株価上昇": bool(latest["PriceUp"]),
             "5MA上": bool(latest["AboveMA5"]),
-        })
+        }])
 
-    result_df = pd.DataFrame(results)
-
-    # 全データ保存
-    price_path = Path(config.DATA_DIR) / "price_data.csv"
-    result_df.to_csv(price_path, index=False, encoding="utf-8-sig")
+        row.to_csv(
+            price_path,
+            mode="a",
+            index=False,
+            header=not price_path.exists(),
+            encoding="utf-8-sig"
+        )
 
     print()
-    print(f"保存しました : {price_path}")
+    print("price_data.csv 作成完了")
 
+    # =====================
     # スクリーニング
+    # =====================
+
+    result_df = pd.read_csv(price_path)
+
     screening_df = result_df[
         (result_df["出来高倍率"] >= 2)
         & (result_df["株価上昇"])
         & (result_df["5MA上"])
-    ].sort_values("出来高倍率", ascending=False)
+    ].sort_values(
+        "出来高倍率",
+        ascending=False
+    )
 
     screening_path = Path(config.DATA_DIR) / "screening_result.csv"
-    screening_df.to_csv(screening_path, index=False, encoding="utf-8-sig")
 
-    print(f"保存しました : {screening_path}")
+    screening_df.to_csv(
+        screening_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
 
-    print()
+    print("screening_result.csv 作成完了")
 
     if screening_df.empty:
+        print()
         print("条件に一致する銘柄はありませんでした。")
     else:
+        print()
         print(screening_df)
 
     return screening_df
