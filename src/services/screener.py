@@ -26,8 +26,23 @@ def run(limit=10):
 
         price = get_price(code)
 
-        if price is not None:
-            results.append(price)
+        if price is None:
+            continue
+
+        results.append(
+            {
+                "コード": code,
+                "銘柄名": row["銘柄名"],
+                "市場": row["市場・商品区分"],
+                "33業種": row["33業種区分"],
+                "17業種": row["17業種区分"],
+                "規模": row["規模区分"],
+                "終値": price["close"],
+                "高値": price["high"],
+                "安値": price["low"],
+                "出来高": price["volume"],
+            }
+        )
 
     result_df = pd.DataFrame(results)
 
@@ -36,7 +51,7 @@ def run(limit=10):
     result_df.to_csv(
         save_path,
         index=False,
-        encoding="utf-8-sig"
+        encoding="utf-8-sig",
     )
 
     print()
