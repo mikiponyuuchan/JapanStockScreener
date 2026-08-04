@@ -4,7 +4,7 @@ from pathlib import Path
 import config
 
 
-def load_stock_list(start=0, limit=10):
+def load_stock_list(start=0, limit=None):
     """
     普通株のみ読み込む
     """
@@ -20,9 +20,22 @@ def load_stock_list(start=0, limit=10):
     ]
 
     df = df[df["市場・商品区分"].isin(normal_markets)]
+    df = df.reset_index(drop=True)
 
-    print(f"普通株数 : {len(df)}")
-    print(f"対象 : {start + 1} ～ {start + limit} 銘柄")
+    total = len(df)
+
+    if limit is None:
+
+        print(f"普通株数 : {total}")
+        print(f"対象 : 全銘柄")
+        print()
+
+        return df
+
+    end = min(start + limit, total)
+
+    print(f"普通株数 : {total}")
+    print(f"対象 : {start + 1} ～ {end} 銘柄")
     print()
 
-    return df.iloc[start:start + limit].reset_index(drop=True)
+    return df.iloc[start:end].reset_index(drop=True)

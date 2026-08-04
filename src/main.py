@@ -11,7 +11,7 @@ start_time = time.time()
 
 run_screener(
     start=0,
-    limit=100
+    limit=None
 )
 
 elapsed = time.time() - start_time

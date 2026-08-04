@@ -8,7 +8,7 @@ from screener.analyzer import analyze_stock
 
 
 
-def run_screener(start=0, limit=10):
+def run_screener(start=0, limit=None):
 
     stocks = load_stock_list(start, limit)
 
