@@ -90,6 +90,38 @@ def make_rank(score):
 
 
 
+def make_analysis_comment(latest, score, rank):
+    """
+    総合分析コメント作成
+    """
+
+    comments = []
+
+    comments.append(f"{rank}ランク")
+    comments.append(f"強気度{score}点")
+
+    if latest["AboveMA25"]:
+        comments.append("25日線上")
+
+    if latest["AboveMA75"]:
+        comments.append("75日線上")
+
+    if latest["MACD_GC"]:
+        comments.append("MACD GC")
+
+    if latest["New30High"]:
+        comments.append("30日高値更新")
+
+    if pd.notna(latest["VolumeRatio"]):
+        if latest["VolumeRatio"] >= 2:
+            comments.append(
+                f"出来高{round(float(latest['VolumeRatio']),2)}倍"
+            )
+
+    return " / ".join(comments)
+
+
+
 def analyze_stock(stock):
     """
     1銘柄を解析して結果(dict)を返す
@@ -102,15 +134,17 @@ def analyze_stock(stock):
     if df is None or df.empty:
         return None
 
-    # テクニカル指標追加
     df = add_indicators(df)
 
     latest = df.iloc[-1]
 
     score = calculate_score(latest)
 
+    rank = make_rank(score)
+
 
     return {
+
         "コード": code,
 
         "銘柄名": stock["銘柄名"],
@@ -118,11 +152,9 @@ def analyze_stock(stock):
         "市場": stock["市場・商品区分"],
 
 
-        # 株価
         "終値": round(float(latest["Close"]), 2),
 
 
-        # 移動平均
         "5日線": (
             round(float(latest["MA5"]), 2)
             if pd.notna(latest["MA5"])
@@ -142,7 +174,6 @@ def analyze_stock(stock):
         ),
 
 
-        # 出来高
         "出来高": int(latest["Volume"]),
 
         "出来高倍率": (
@@ -152,7 +183,6 @@ def analyze_stock(stock):
         ),
 
 
-        # トレンド
         "株価上昇": "○" if latest["PriceUp"] else "",
 
         "5日線上": "○" if latest["AboveMA5"] else "",
@@ -162,16 +192,21 @@ def analyze_stock(stock):
         "75日線上": "○" if latest["AboveMA75"] else "",
 
 
-        # シグナル
         "MACD GC": "○" if latest["MACD_GC"] else "",
 
         "30日高値更新": "○" if latest["New30High"] else "",
 
 
-        # 追加機能
         "注目ポイント": make_comment(latest),
 
         "強気度": score,
 
-        "監視ランク": make_rank(score),
+        "監視ランク": rank,
+
+        # 1.14追加
+        "分析コメント": make_analysis_comment(
+            latest,
+            score,
+            rank
+        ),
     }
