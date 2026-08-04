@@ -39,6 +39,48 @@ def make_comment(latest):
     return " / ".join(comments)
 
 
+
+def calculate_score(latest):
+    """
+    強気度スコア計算
+    最大11点
+    """
+
+    score = 0
+
+    # 株価上昇
+    if latest["PriceUp"]:
+        score += 1
+
+    # 短期トレンド
+    if latest["AboveMA5"]:
+        score += 1
+
+    # 中期トレンド
+    if latest["AboveMA25"]:
+        score += 2
+
+    # 長期トレンド
+    if latest["AboveMA75"]:
+        score += 2
+
+    # MACD買いシグナル
+    if latest["MACD_GC"]:
+        score += 2
+
+    # ブレイクアウト
+    if latest["New30High"]:
+        score += 2
+
+    # 出来高増加
+    if pd.notna(latest["VolumeRatio"]):
+        if latest["VolumeRatio"] >= 2:
+            score += 1
+
+    return score
+
+
+
 def analyze_stock(stock):
     """
     1銘柄を解析して結果(dict)を返す
@@ -56,13 +98,18 @@ def analyze_stock(stock):
 
     latest = df.iloc[-1]
 
+
     return {
         "コード": code,
+
         "銘柄名": stock["銘柄名"],
+
         "市場": stock["市場・商品区分"],
+
 
         # 株価
         "終値": round(float(latest["Close"]), 2),
+
 
         # 移動平均
         "5日線": (
@@ -83,6 +130,7 @@ def analyze_stock(stock):
             else None
         ),
 
+
         # 出来高
         "出来高": int(latest["Volume"]),
 
@@ -91,6 +139,7 @@ def analyze_stock(stock):
             if pd.notna(latest["VolumeRatio"])
             else None
         ),
+
 
         # トレンド
         "株価上昇": "○" if latest["PriceUp"] else "",
@@ -102,12 +151,16 @@ def analyze_stock(stock):
         "75日線上": "○" if latest["AboveMA75"] else "",
 
 
-        # シグナル
+        # テクニカルシグナル
         "MACD GC": "○" if latest["MACD_GC"] else "",
 
         "30日高値更新": "○" if latest["New30High"] else "",
 
 
-        # 追加（1.9）
+        # 1.9追加
         "注目ポイント": make_comment(latest),
+
+
+        # 1.10追加
+        "強気度": calculate_score(latest),
     }
