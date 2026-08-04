@@ -24,11 +24,26 @@ def analyze_stock(stock):
         "コード": code,
         "銘柄名": stock["銘柄名"],
         "市場": stock["市場・商品区分"],
+
         "終値": round(float(latest["Close"]), 2),
-        "MA5": round(float(latest["MA5"]), 2) if pd.notna(latest["MA5"]) else None,
-        "MA25": round(float(latest["MA25"]), 2) if pd.notna(latest["MA25"]) else None,
+
+        "5日線": round(float(latest["MA5"]), 2)
+        if pd.notna(latest["MA5"]) else None,
+
+        "25日線": round(float(latest["MA25"]), 2)
+        if pd.notna(latest["MA25"]) else None,
+
         "出来高": int(latest["Volume"]),
-        "出来高倍率": round(float(latest["VolumeRatio"]), 2) if pd.notna(latest["VolumeRatio"]) else None,
-        "株価上昇": bool(latest["PriceUp"]),
-        "5MA上": bool(latest["AboveMA5"]),
+
+        "出来高倍率": round(float(latest["VolumeRatio"]), 2)
+        if pd.notna(latest["VolumeRatio"]) else None,
+
+        # ○表示にする
+        "株価上昇": "○" if latest["PriceUp"] else "",
+
+        "5日線上": "○" if latest["AboveMA5"] else "",
+
+        "MACD GC": "○" if latest["MACD_GC"] else "",
+
+        "30日高値更新": "○" if latest["New30High"] else "",
     }

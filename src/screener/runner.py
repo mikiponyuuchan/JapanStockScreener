@@ -24,9 +24,16 @@ def run_screener(start=0, limit=10):
         if result is not None:
             results.append(result)
 
+    # ==========================
+    # DataFrame作成
+    # ==========================
+
     result_df = pd.DataFrame(results)
 
+    # ==========================
     # 全データ保存
+    # ==========================
+
     price_path = Path(config.DATA_DIR) / "price_data.csv"
 
     result_df.to_csv(
@@ -38,15 +45,22 @@ def run_screener(start=0, limit=10):
     print()
     print(f"保存しました : {price_path}")
 
+    # ==========================
     # スクリーニング
+    # ==========================
+
     screening_df = result_df[
         (result_df["出来高倍率"] >= 2)
-        & (result_df["株価上昇"])
-        & (result_df["5MA上"])
+        & (result_df["株価上昇"] == "○")
+        & (result_df["5日線上"] == "○")
     ].sort_values(
         "出来高倍率",
         ascending=False
     )
+
+    # ==========================
+    # 結果保存
+    # ==========================
 
     screening_path = Path(config.DATA_DIR) / "screening_result.csv"
 
