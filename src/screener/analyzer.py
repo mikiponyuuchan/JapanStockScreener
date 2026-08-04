@@ -48,36 +48,45 @@ def calculate_score(latest):
 
     score = 0
 
-    # 株価上昇
     if latest["PriceUp"]:
         score += 1
 
-    # 短期トレンド
     if latest["AboveMA5"]:
         score += 1
 
-    # 中期トレンド
     if latest["AboveMA25"]:
         score += 2
 
-    # 長期トレンド
     if latest["AboveMA75"]:
         score += 2
 
-    # MACD買いシグナル
     if latest["MACD_GC"]:
         score += 2
 
-    # ブレイクアウト
     if latest["New30High"]:
         score += 2
 
-    # 出来高増加
     if pd.notna(latest["VolumeRatio"]):
         if latest["VolumeRatio"] >= 2:
             score += 1
 
     return score
+
+
+
+def make_rank(score):
+    """
+    強気度から監視ランク作成
+    """
+
+    if score >= 8:
+        return "A"
+
+    elif score >= 5:
+        return "B"
+
+    else:
+        return "C"
 
 
 
@@ -97,6 +106,8 @@ def analyze_stock(stock):
     df = add_indicators(df)
 
     latest = df.iloc[-1]
+
+    score = calculate_score(latest)
 
 
     return {
@@ -151,16 +162,16 @@ def analyze_stock(stock):
         "75日線上": "○" if latest["AboveMA75"] else "",
 
 
-        # テクニカルシグナル
+        # シグナル
         "MACD GC": "○" if latest["MACD_GC"] else "",
 
         "30日高値更新": "○" if latest["New30High"] else "",
 
 
-        # 1.9追加
+        # 追加機能
         "注目ポイント": make_comment(latest),
 
+        "強気度": score,
 
-        # 1.10追加
-        "強気度": calculate_score(latest),
+        "監視ランク": make_rank(score),
     }
