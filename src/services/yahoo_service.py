@@ -1,53 +1,64 @@
+import time
 import yfinance as yf
 
 
+RETRY_COUNT = 3
+RETRY_WAIT = 1
+
+
 def get_price(code: str):
-    """
-    最新株価を取得
-    """
 
     ticker = f"{code}.T"
 
-    stock = yf.Ticker(ticker)
+    for attempt in range(RETRY_COUNT):
 
-    hist = stock.history(period="5d")
+        try:
 
-    if hist.empty:
-        return None
+            stock = yf.Ticker(ticker)
 
-    latest = hist.iloc[-1]
+            hist = stock.history(period="5d")
 
-    return {
-        "code": code,
-        "close": round(float(latest["Close"]), 2),
-        "high": round(float(latest["High"]), 2),
-        "low": round(float(latest["Low"]), 2),
-        "volume": int(latest["Volume"]),
-    }
+            if hist.empty:
+                return None
+
+            latest = hist.iloc[-1]
+
+            return {
+                "code": code,
+                "close": round(float(latest["Close"]), 2),
+                "high": round(float(latest["High"]), 2),
+                "low": round(float(latest["Low"]), 2),
+                "volume": int(latest["Volume"]),
+            }
+
+        except Exception:
+
+            if attempt == RETRY_COUNT - 1:
+                return None
+
+            time.sleep(RETRY_WAIT)
 
 
 def get_history(code: str, period="6mo"):
-    """
-    過去の株価履歴を取得
-
-    Parameters
-    ----------
-    code : str
-        銘柄コード（例: "7203"）
-
-    period : str
-        取得期間（初期値6か月）
-    """
 
     ticker = f"{code}.T"
 
-    stock = yf.Ticker(ticker)
+    for attempt in range(RETRY_COUNT):
 
-    df = stock.history(period=period)
+        try:
 
-    if df.empty:
-        return None
+            stock = yf.Ticker(ticker)
 
-    df = df.reset_index()
+            df = stock.history(period=period)
 
-    return df
+            if df.empty:
+                return None
+
+            return df.reset_index()
+
+        except Exception:
+
+            if attempt == RETRY_COUNT - 1:
+                return None
+
+            time.sleep(RETRY_WAIT)
