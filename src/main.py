@@ -1,11 +1,10 @@
-from services.screener import run
+from services.yahoo_service import get_history
 
 print("=================================")
-print(" 日本株スクリーナー Ver0.6")
+print(" 日本株スクリーナー Ver0.8")
 print("=================================")
 print()
 
-df = run(limit=10)
+df = get_history("7203")
 
-print()
 print(df)
