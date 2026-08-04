@@ -30,8 +30,8 @@ def get_price(code: str):
 
     return {
         "code": code,
-        "close": float(latest["Close"]),
-        "high": float(latest["High"]),
-        "low": float(latest["Low"]),
+        "close": round(float(latest["Close"]), 2),
+        "high": round(float(latest["High"]), 2),
+        "low": round(float(latest["Low"]), 2),
         "volume": int(latest["Volume"]),
     }
