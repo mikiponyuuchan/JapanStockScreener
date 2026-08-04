@@ -314,20 +314,48 @@ def make_total_judgement(
         score,
         short_trend,
         middle_trend,
-        position):
+        position,
+        latest=None):
 
+
+    # ==========================
+    # 買い候補
+    # ==========================
 
     if (
         rank == "A"
-        and score >= 15
-        and short_trend == "強い"
-        and middle_trend == "強い"
-        and position != "高値圏"
+        and score >= 18
+        and latest is not None
+        and (
+            latest["BreakoutSignal"]
+            or
+            latest["MACD_GC"]
+            or
+            latest["InitialMoveSignal"]
+        )
+        and latest["RSI"] >= 50
     ):
 
         return "買い候補"
 
 
+
+    # ==========================
+    # 監視強化
+    # ==========================
+
+    elif (
+        rank == "A"
+        and score >= 15
+    ):
+
+        return "監視強化"
+
+
+
+    # ==========================
+    # 通常監視
+    # ==========================
 
     elif rank in ["A","B"]:
 
@@ -338,8 +366,6 @@ def make_total_judgement(
     else:
 
         return "様子見"
-
-
 
 
 
@@ -554,32 +580,22 @@ def make_analysis_comment(
 
 def analyze_stock(stock):
 
-
     code = stock["コード"]
-
 
     df = get_history(code)
 
-
-
     if df is None or df.empty:
-
         return None
-
 
 
     df = add_indicators(df)
 
-
     latest = df.iloc[-1]
-
 
 
     score = calculate_score(latest)
 
-
     rank = make_rank(score)
-
 
 
     position = make_price_position(
@@ -587,21 +603,17 @@ def analyze_stock(stock):
     )
 
 
-
     short_trend = make_trend(
         latest["AboveMA5"]
     )
-
 
     middle_trend = make_trend(
         latest["AboveMA25"]
     )
 
-
     long_trend = make_trend(
         latest["AboveMA75"]
     )
-
 
 
     judgement = make_total_judgement(
@@ -609,212 +621,72 @@ def analyze_stock(stock):
         score,
         short_trend,
         middle_trend,
-        position
+        position,
+        latest
     )
-
 
 
     return {
 
-
         "コード":
             code,
-
 
         "銘柄名":
             stock["銘柄名"],
 
-
         "市場":
             stock["市場・商品区分"],
-
-
 
         "終値":
             round(float(latest["Close"]),2),
 
-
-
         "前日比%":
             latest["ChangePercent"],
-
-
 
         "5日騰落率%":
             latest["Change5Days"],
 
-
-
         "20日騰落率%":
             latest["Change20Days"],
-
-
-
-        "25日線乖離率%":
-            latest["MA25Deviation"],
-
-
 
         "RSI":
             latest["RSI"],
 
-
-
-        "RSI判定":
-            "良好" if latest["RSI_Strong"] else "",
-
-
-
         "ATR":
             latest["ATR"],
-
-
-
-        "MA収束度%":
-            latest["MAConvergence"],
-
-
 
         "トレンド評価":
             latest["TrendEvaluation"],
 
-
-
         "MA並び":
             latest["MAAlignment"],
-
-
 
         "初動シグナル":
             "○" if latest["InitialMoveSignal"] else "",
 
-
-
         "押し目判定":
             "○" if latest["PullbackSignal"] else "",
-
-
-
-        "値動き評価":
-            latest["PriceMovement"],
-
-
-
-        "連続上昇日数":
-            int(latest["ConsecutiveUpDays"]),
-
-
-
-        "出来高増加日数":
-            int(latest["VolumeIncreaseDays"]),
-
-
-
-        "出来高倍率":
-            latest["VolumeRatio"],
-
-
-
-        "20日出来高倍率":
-            latest["VolumeRatio20"],
-
-
-
-        "30日高値":
-            latest["High30"],
-
-
-
-        "30日高値までの距離%":
-            latest["High30Distance"],
-
-
-
-        "年初来高値":
-            latest["YearHigh"],
-
-
-
-        "年初来高値更新":
-            "○" if latest["NewYearHigh"] else "",
-
-
-
-        "ブレイクアウト":
-            "○" if latest["BreakoutSignal"] else "",
-
-
-
-        "ブレイク初日":
-            "○" if latest["BreakoutFirstDay"] else "",
-
-
-
-        "株価位置":
-            position,
-
-
-
-        "株価上昇":
-            "○" if latest["PriceUp"] else "",
-
-
-
-        "5日線上":
-            "○" if latest["AboveMA5"] else "",
-
-
-
-        "25日線上":
-            "○" if latest["AboveMA25"] else "",
-
-
-
-        "75日線上":
-            "○" if latest["AboveMA75"] else "",
-
-
 
         "MACD GC":
             "○" if latest["MACD_GC"] else "",
 
-
-
         "30日高値更新":
             "○" if latest["New30High"] else "",
 
+        "年初来高値更新":
+            "○" if latest["NewYearHigh"] else "",
 
-
-        "注目ポイント":
-            make_comment(latest),
-
-
+        "ブレイク":
+            "○" if latest["BreakoutSignal"] else "",
 
         "強気度":
             score,
 
-
-
         "監視ランク":
             rank,
 
-
-
         "総合判定":
             judgement,
-
-
-
-        "買い候補理由":
-            make_buy_reason(
-                latest,
-                score,
-                rank,
-                position,
-                judgement
-            ),
-
-
 
         "分析コメント":
             make_analysis_comment(
@@ -826,6 +698,5 @@ def analyze_stock(stock):
                 middle_trend,
                 long_trend,
                 judgement
-            ),
-
+            )
     }
