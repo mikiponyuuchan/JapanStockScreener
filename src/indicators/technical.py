@@ -1,12 +1,14 @@
 import pandas as pd
 
 
+
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     テクニカル指標を追加する
     """
 
     df = df.copy()
+
 
 
     # =====================
@@ -20,6 +22,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         .round(2)
     )
 
+
     df["MA25"] = (
         df["Close"]
         .rolling(25)
@@ -27,12 +30,14 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         .round(2)
     )
 
+
     df["MA75"] = (
         df["Close"]
         .rolling(75)
         .mean()
         .round(2)
     )
+
 
 
 
@@ -87,6 +92,45 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+    # =====================
+    # 1.26 騰落率
+    # =====================
+
+    df["Change5Days"] = (
+        (
+            (
+                df["Close"]
+                -
+                df["Close"].shift(5)
+            )
+            /
+            df["Close"].shift(5)
+            *
+            100
+        )
+        .round(2)
+    )
+
+
+    df["Change20Days"] = (
+        (
+            (
+                df["Close"]
+                -
+                df["Close"].shift(20)
+            )
+            /
+            df["Close"].shift(20)
+            *
+            100
+        )
+        .round(2)
+    )
+
+
+
+
     # =====================
     # 株価判定
     # =====================
@@ -120,6 +164,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 連続上昇日数
     # =====================
@@ -139,10 +184,13 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     for value in up_flag:
 
         if value:
+
             current += 1
 
         else:
+
             current = 0
+
 
         count.append(current)
 
@@ -151,14 +199,15 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
-    # 出来高増加連続日数
+    # 出来高増加日数
     # =====================
 
-    volume_up_flag = (
+    volume_flag = (
         df["Volume"]
         >
-        df["Volume"].shift(1)
+        df["VolumeMA5"]
     )
 
 
@@ -167,13 +216,16 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     current = 0
 
 
-    for value in volume_up_flag:
+    for value in volume_flag:
 
         if value:
+
             current += 1
 
         else:
+
             current = 0
+
 
         volume_count.append(current)
 
@@ -182,20 +234,30 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
     # MACD
     # =====================
 
-    ema12 = df["Close"].ewm(
-        span=12,
-        adjust=False
-    ).mean()
+    ema12 = (
+        df["Close"]
+        .ewm(
+            span=12,
+            adjust=False
+        )
+        .mean()
+    )
 
 
-    ema26 = df["Close"].ewm(
-        span=26,
-        adjust=False
-    ).mean()
+    ema26 = (
+        df["Close"]
+        .ewm(
+            span=26,
+            adjust=False
+        )
+        .mean()
+    )
 
 
     df["MACD"] = (
@@ -218,13 +280,16 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["MACD_GC"] = (
         (df["MACD"] > df["Signal"])
         &
-        (df["MACD"].shift(1) <= df["Signal"].shift(1))
+        (df["MACD"].shift(1)
+         <=
+         df["Signal"].shift(1))
     )
 
 
 
+
     # =====================
-    # 30営業日高値
+    # 30日高値
     # =====================
 
     df["High30"] = (
@@ -251,6 +316,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 高値余地
     # =====================
@@ -272,6 +338,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 値動き評価
     # =====================
@@ -279,18 +346,27 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     def judge_price_change(value):
 
         if pd.isna(value):
+
             return ""
 
+
         if value >= 3:
+
             return "急上昇"
 
+
         elif value >= 0.5:
+
             return "上昇"
 
+
         elif value >= -0.5:
+
             return "横ばい"
 
+
         else:
+
             return "下落"
 
 
@@ -299,6 +375,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         df["ChangePercent"]
         .apply(judge_price_change)
     )
+
 
 
     return df
