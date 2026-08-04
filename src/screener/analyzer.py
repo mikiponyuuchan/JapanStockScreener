@@ -41,21 +41,25 @@ def make_comment(latest):
     if pd.notna(latest["VolumeRatio"]):
 
         if latest["VolumeRatio"] >= 2:
+
             comments.append("出来高急増")
 
 
-    if latest["PriceMovement"]:
+
+    if latest["TrendEvaluation"]:
 
         comments.append(
-            latest["PriceMovement"]
+            latest["TrendEvaluation"]
         )
 
 
-    if latest["ConsecutiveUpDays"] > 0:
+
+    if latest["MAAlignment"]:
 
         comments.append(
-            f"{latest['ConsecutiveUpDays']}日連続上昇"
+            latest["MAAlignment"]
         )
+
 
 
     if latest["Change5Days"] >= 5:
@@ -70,6 +74,15 @@ def make_comment(latest):
         comments.append(
             f"20日上昇{latest['Change20Days']}%"
         )
+
+
+
+    if latest["ConsecutiveUpDays"] > 0:
+
+        comments.append(
+            f"{latest['ConsecutiveUpDays']}日連続上昇"
+        )
+
 
 
     return " / ".join(comments)
@@ -88,35 +101,38 @@ def calculate_score(latest):
 
 
     if latest["PriceUp"]:
+
         score += 1
 
 
     if latest["AboveMA5"]:
+
         score += 1
 
 
     if latest["AboveMA25"]:
+
         score += 2
 
 
     if latest["AboveMA75"]:
+
         score += 2
 
 
     if latest["MACD_GC"]:
+
         score += 2
 
 
     if latest["New30High"]:
+
         score += 2
 
 
-    if pd.notna(latest["VolumeRatio"]):
+    if latest["VolumeRatio"] >= 2:
 
-        if latest["VolumeRatio"] >= 2:
-
-            score += 1
-
+        score += 1
 
 
     if latest["VolumeIncreaseDays"] >= 3:
@@ -124,11 +140,9 @@ def calculate_score(latest):
         score += 1
 
 
-
     if latest["ConsecutiveUpDays"] >= 3:
 
         score += 1
-
 
 
     if latest["Change5Days"] >= 5:
@@ -136,8 +150,20 @@ def calculate_score(latest):
         score += 1
 
 
-
     if latest["Change20Days"] >= 10:
+
+        score += 1
+
+
+
+    # Ver1.27 トレンド加点
+
+    if latest["TrendEvaluation"] == "強い上昇":
+
+        score += 2
+
+
+    elif latest["TrendEvaluation"] == "上昇継続":
 
         score += 1
 
@@ -155,12 +181,12 @@ def calculate_score(latest):
 
 def make_rank(score):
 
-    if score >= 10:
+    if score >= 12:
 
         return "A"
 
 
-    elif score >= 5:
+    elif score >= 6:
 
         return "B"
 
@@ -234,7 +260,7 @@ def make_total_judgement(
 
     if (
         rank == "A"
-        and score >= 8
+        and score >= 10
         and short_trend == "強い"
         and middle_trend == "強い"
         and position != "高値圏"
@@ -279,11 +305,29 @@ def make_buy_reason(
     )
 
 
+
+    if latest["TrendEvaluation"]:
+
+        reasons.append(
+            latest["TrendEvaluation"]
+        )
+
+
+
+    if latest["MAAlignment"]:
+
+        reasons.append(
+            latest["MAAlignment"]
+        )
+
+
+
     if latest["MACD_GC"]:
 
         reasons.append(
             "MACDゴールデンクロス"
         )
+
 
 
     if latest["New30High"]:
@@ -293,11 +337,13 @@ def make_buy_reason(
         )
 
 
+
     if latest["VolumeRatio"] >= 2:
 
         reasons.append(
             f"出来高{latest['VolumeRatio']}倍"
         )
+
 
 
     if latest["Change5Days"] >= 5:
@@ -307,11 +353,13 @@ def make_buy_reason(
         )
 
 
+
     if latest["Change20Days"] >= 10:
 
         reasons.append(
             f"20日上昇{latest['Change20Days']}%"
         )
+
 
 
     if latest["ConsecutiveUpDays"] >= 3:
@@ -321,11 +369,13 @@ def make_buy_reason(
         )
 
 
+
     if position:
 
         reasons.append(
             f"株価位置:{position}"
         )
+
 
 
     return " / ".join(reasons)
@@ -363,6 +413,16 @@ def make_analysis_comment(
 
 
     comments.append(
+        latest["TrendEvaluation"]
+    )
+
+
+    comments.append(
+        latest["MAAlignment"]
+    )
+
+
+    comments.append(
         f"短期{short_trend}"
     )
 
@@ -377,6 +437,7 @@ def make_analysis_comment(
     )
 
 
+
     if latest["Change5Days"]:
 
         comments.append(
@@ -384,11 +445,13 @@ def make_analysis_comment(
         )
 
 
+
     if latest["Change20Days"]:
 
         comments.append(
             f"20日騰落率{latest['Change20Days']}%"
         )
+
 
 
     comments.append(
@@ -469,95 +532,134 @@ def analyze_stock(stock):
 
     return {
 
-        "コード": code,
 
-        "銘柄名": stock["銘柄名"],
 
-        "市場": stock["市場・商品区分"],
+        "コード":
+            code,
+
+
+        "銘柄名":
+            stock["銘柄名"],
+
+
+        "市場":
+            stock["市場・商品区分"],
+
 
 
         "終値":
             round(float(latest["Close"]),2),
 
 
+
         "前日比%":
             latest["ChangePercent"],
+
 
 
         "5日騰落率%":
             latest["Change5Days"],
 
 
+
         "20日騰落率%":
             latest["Change20Days"],
+
+
+
+        "トレンド評価":
+            latest["TrendEvaluation"],
+
+
+
+        "MA並び":
+            latest["MAAlignment"],
+
 
 
         "値動き評価":
             latest["PriceMovement"],
 
 
+
         "連続上昇日数":
             int(latest["ConsecutiveUpDays"]),
+
 
 
         "出来高増加日数":
             int(latest["VolumeIncreaseDays"]),
 
 
+
         "出来高倍率":
             latest["VolumeRatio"],
+
 
 
         "30日高値":
             latest["High30"],
 
 
+
         "30日高値までの距離%":
             latest["High30Distance"],
+
 
 
         "株価位置":
             position,
 
 
+
         "株価上昇":
             "○" if latest["PriceUp"] else "",
+
 
 
         "5日線上":
             "○" if latest["AboveMA5"] else "",
 
 
+
         "25日線上":
             "○" if latest["AboveMA25"] else "",
+
 
 
         "75日線上":
             "○" if latest["AboveMA75"] else "",
 
 
+
         "MACD GC":
             "○" if latest["MACD_GC"] else "",
+
 
 
         "30日高値更新":
             "○" if latest["New30High"] else "",
 
 
+
         "注目ポイント":
             make_comment(latest),
+
 
 
         "強気度":
             score,
 
 
+
         "監視ランク":
             rank,
 
 
+
         "総合判定":
             judgement,
+
 
 
         "買い候補理由":
@@ -568,6 +670,7 @@ def analyze_stock(stock):
                 position,
                 judgement
             ),
+
 
 
         "分析コメント":

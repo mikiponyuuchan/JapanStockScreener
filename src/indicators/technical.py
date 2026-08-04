@@ -61,6 +61,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
     # 前日比
     # =====================
@@ -93,8 +95,9 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
-    # 1.26 騰落率
+    # 騰落率
     # =====================
 
     df["Change5Days"] = (
@@ -131,6 +134,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 株価判定
     # =====================
@@ -161,6 +165,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         >
         df["MA75"]
     )
+
 
 
 
@@ -200,6 +205,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 出来高増加日数
     # =====================
@@ -231,12 +237,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     df["VolumeIncreaseDays"] = volume_count
-
-
-
-
-
-    # =====================
+        # =====================
     # MACD
     # =====================
 
@@ -288,6 +289,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 30日高値
     # =====================
@@ -317,6 +319,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
     # =====================
     # 高値余地
     # =====================
@@ -335,6 +338,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         )
         .round(2)
     )
+
 
 
 
@@ -374,6 +378,125 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["PriceMovement"] = (
         df["ChangePercent"]
         .apply(judge_price_change)
+    )
+
+
+
+
+
+    # =====================
+    # Ver1.27 トレンド判定
+    # =====================
+
+    def judge_trend(row):
+
+        ma5 = row["MA5"]
+        ma25 = row["MA25"]
+        ma75 = row["MA75"]
+        close = row["Close"]
+
+
+        if pd.isna(ma75):
+
+            return "判定待ち"
+
+
+
+        # 強い上昇
+
+        if (
+            close > ma5
+            and
+            ma5 > ma25
+            and
+            ma25 > ma75
+        ):
+
+            return "強い上昇"
+
+
+
+        # 上昇継続
+
+        elif (
+            close > ma5
+            and
+            ma5 > ma25
+        ):
+
+            return "上昇継続"
+
+
+
+        # 中立
+
+        elif close > ma25:
+
+            return "中立"
+
+
+
+        else:
+
+            return "弱い"
+
+
+
+    df["TrendEvaluation"] = (
+        df.apply(
+            judge_trend,
+            axis=1
+        )
+    )
+
+
+
+
+
+    # =====================
+    # MA並び
+    # =====================
+
+    def make_ma_alignment(row):
+
+        if pd.isna(row["MA75"]):
+
+            return ""
+
+
+        if (
+            row["MA5"]
+            >
+            row["MA25"]
+            >
+            row["MA75"]
+        ):
+
+            return "上昇配列"
+
+
+        elif (
+            row["MA5"]
+            <
+            row["MA25"]
+            <
+            row["MA75"]
+        ):
+
+            return "下降配列"
+
+
+        else:
+
+            return "混在"
+
+
+
+    df["MAAlignment"] = (
+        df.apply(
+            make_ma_alignment,
+            axis=1
+        )
     )
 
 
