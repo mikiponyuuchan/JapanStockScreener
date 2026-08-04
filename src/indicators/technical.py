@@ -35,6 +35,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+
     # =====================
     # 出来高
     # =====================
@@ -46,9 +47,43 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         .round()
     )
 
+
     df["VolumeRatio"] = (
-        df["Volume"] / df["VolumeMA5"]
+        df["Volume"]
+        /
+        df["VolumeMA5"]
     ).round(2)
+
+
+
+    # =====================
+    # 1.21 前日比
+    # =====================
+
+    df["PreviousClose"] = (
+        df["Close"]
+        .shift(1)
+        .round(2)
+    )
+
+
+    df["Change"] = (
+        df["Close"]
+        -
+        df["PreviousClose"]
+    ).round(2)
+
+
+    df["ChangePercent"] = (
+        (
+            df["Change"]
+            /
+            df["PreviousClose"]
+            *
+            100
+        )
+        .round(2)
+    )
 
 
 
@@ -57,19 +92,30 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # =====================
 
     df["PriceUp"] = (
-        df["Close"] > df["Close"].shift(1)
+        df["Close"]
+        >
+        df["Close"].shift(1)
     )
+
 
     df["AboveMA5"] = (
-        df["Close"] > df["MA5"]
+        df["Close"]
+        >
+        df["MA5"]
     )
+
 
     df["AboveMA25"] = (
-        df["Close"] > df["MA25"]
+        df["Close"]
+        >
+        df["MA25"]
     )
 
+
     df["AboveMA75"] = (
-        df["Close"] > df["MA75"]
+        df["Close"]
+        >
+        df["MA75"]
     )
 
 
@@ -83,13 +129,18 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         adjust=False
     ).mean()
 
+
     ema26 = df["Close"].ewm(
         span=26,
         adjust=False
     ).mean()
 
 
-    df["MACD"] = ema12 - ema26
+    df["MACD"] = (
+        ema12
+        -
+        ema26
+    )
 
 
     df["Signal"] = (
@@ -127,7 +178,9 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+
     # 高値更新判定
+
     prev30high = (
         df["High"]
         .shift(1)
@@ -137,7 +190,9 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     df["New30High"] = (
-        df["High"] > prev30high
+        df["High"]
+        >
+        prev30high
     )
 
 
@@ -148,7 +203,11 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     df["High30Distance"] = (
         (
-            (df["High30"] - df["Close"])
+            (
+                df["High30"]
+                -
+                df["Close"]
+            )
             /
             df["Close"]
             *
@@ -156,6 +215,37 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         )
         .round(2)
     )
+
+
+
+    # =====================
+    # 1.21 値動き評価
+    # =====================
+
+    def judge_price_change(value):
+
+        if pd.isna(value):
+            return ""
+
+        if value >= 3:
+            return "急上昇"
+
+        elif value >= 0.5:
+            return "上昇"
+
+        elif value >= -0.5:
+            return "横ばい"
+
+        else:
+            return "下落"
+
+
+
+    df["PriceMovement"] = (
+        df["ChangePercent"]
+        .apply(judge_price_change)
+    )
+
 
 
     return df
