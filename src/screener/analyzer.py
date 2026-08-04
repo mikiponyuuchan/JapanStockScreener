@@ -5,10 +5,6 @@ from indicators.technical import add_indicators
 
 
 def make_comment(latest):
-    """
-    注目ポイントを文章化
-    """
-
     comments = []
 
     if latest["PriceUp"]:
@@ -41,10 +37,6 @@ def make_comment(latest):
 
 
 def calculate_score(latest):
-    """
-    強気度スコア計算
-    最大11点
-    """
 
     score = 0
 
@@ -75,9 +67,6 @@ def calculate_score(latest):
 
 
 def make_rank(score):
-    """
-    強気度から監視ランク作成
-    """
 
     if score >= 8:
         return "A"
@@ -91,9 +80,6 @@ def make_rank(score):
 
 
 def make_analysis_comment(latest, score, rank):
-    """
-    総合分析コメント作成
-    """
 
     comments = []
 
@@ -118,14 +104,25 @@ def make_analysis_comment(latest, score, rank):
                 f"出来高{round(float(latest['VolumeRatio']),2)}倍"
             )
 
+    if pd.notna(latest["High30Distance"]):
+
+        distance = round(
+            float(latest["High30Distance"]),
+            2
+        )
+
+        if distance <= 5:
+            comments.append("高値圏")
+
+        elif distance >= 15:
+            comments.append("上昇余地あり")
+
+
     return " / ".join(comments)
 
 
 
 def analyze_stock(stock):
-    """
-    1銘柄を解析して結果(dict)を返す
-    """
 
     code = stock["コード"]
 
@@ -133,6 +130,7 @@ def analyze_stock(stock):
 
     if df is None or df.empty:
         return None
+
 
     df = add_indicators(df)
 
@@ -153,6 +151,20 @@ def analyze_stock(stock):
 
 
         "終値": round(float(latest["Close"]), 2),
+
+
+        "30日高値": (
+            round(float(latest["High30"]), 2)
+            if pd.notna(latest["High30"])
+            else None
+        ),
+
+
+        "30日高値までの距離%": (
+            round(float(latest["High30Distance"]), 2)
+            if pd.notna(latest["High30Distance"])
+            else None
+        ),
 
 
         "5日線": (
@@ -203,7 +215,7 @@ def analyze_stock(stock):
 
         "監視ランク": rank,
 
-        # 1.14追加
+
         "分析コメント": make_analysis_comment(
             latest,
             score,
