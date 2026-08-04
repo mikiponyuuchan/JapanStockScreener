@@ -9,23 +9,30 @@ def make_comment(latest):
 
     comments = []
 
+
     if latest["PriceUp"]:
         comments.append("株価上昇")
+
 
     if latest["AboveMA5"]:
         comments.append("5日線上")
 
+
     if latest["AboveMA25"]:
         comments.append("25日線上")
+
 
     if latest["AboveMA75"]:
         comments.append("75日線上")
 
+
     if latest["MACD_GC"]:
         comments.append("MACD GC")
 
+
     if latest["New30High"]:
         comments.append("30日高値更新")
+
 
     if pd.notna(latest["VolumeRatio"]):
 
@@ -46,7 +53,16 @@ def make_comment(latest):
         )
 
 
+    if latest["VolumeTrend"] != "普通":
+
+        comments.append(
+            latest["VolumeTrend"]
+        )
+
+
     return " / ".join(comments)
+
+
 
 
 
@@ -54,30 +70,45 @@ def calculate_score(latest):
 
     score = 0
 
+
     if latest["PriceUp"]:
         score += 1
+
 
     if latest["AboveMA5"]:
         score += 1
 
+
     if latest["AboveMA25"]:
         score += 2
+
 
     if latest["AboveMA75"]:
         score += 2
 
+
     if latest["MACD_GC"]:
         score += 2
 
+
     if latest["New30High"]:
         score += 2
+
 
     if pd.notna(latest["VolumeRatio"]):
 
         if latest["VolumeRatio"] >= 2:
             score += 1
 
+
+    # 出来高継続ボーナス
+    if latest["VolumeIncreaseDays"] >= 3:
+        score += 1
+
+
     return score
+
+
 
 
 
@@ -94,19 +125,26 @@ def make_rank(score):
 
 
 
+
+
 def make_price_position(distance):
 
     if pd.isna(distance):
         return ""
 
+
     if distance <= 5:
         return "高値圏"
+
 
     elif distance <= 15:
         return "上昇中"
 
+
     else:
         return "上昇余地あり"
+
+
 
 
 
@@ -117,6 +155,8 @@ def make_trend(value):
 
     else:
         return "弱い"
+
+
 
 
 
@@ -147,6 +187,8 @@ def make_total_judgement(
     else:
 
         return "様子見"
+
+
 
 
 
@@ -210,6 +252,13 @@ def make_analysis_comment(
         )
 
 
+    if latest["VolumeTrend"] != "普通":
+
+        comments.append(
+            latest["VolumeTrend"]
+        )
+
+
     if latest["MACD_GC"]:
 
         comments.append("MACD GC")
@@ -240,6 +289,8 @@ def make_analysis_comment(
 
 
     return " / ".join(comments)
+
+
 
 
 
@@ -309,9 +360,7 @@ def analyze_stock(stock):
 
         "コード": code,
 
-
         "銘柄名": stock["銘柄名"],
-
 
         "市場": stock["市場・商品区分"],
 
@@ -328,13 +377,11 @@ def analyze_stock(stock):
         ),
 
 
-
         "前日比": (
             round(float(latest["Change"]),2)
             if pd.notna(latest["Change"])
             else None
         ),
-
 
 
         "前日比%": (
@@ -353,6 +400,17 @@ def analyze_stock(stock):
         "連続上昇日数": int(
             latest["ConsecutiveUpDays"]
         ),
+
+
+
+        "出来高継続日数": int(
+            latest["VolumeIncreaseDays"]
+        ),
+
+
+
+        "出来高トレンド":
+        latest["VolumeTrend"],
 
 
 
@@ -459,6 +517,5 @@ def analyze_stock(stock):
             long_trend,
             judgement
         ),
-
 
     }

@@ -20,12 +20,14 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         .round(2)
     )
 
+
     df["MA25"] = (
         df["Close"]
         .rolling(25)
         .mean()
         .round(2)
     )
+
 
     df["MA75"] = (
         df["Close"]
@@ -135,6 +137,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     current = 0
 
+
     for value in up_flag:
 
         if value:
@@ -147,6 +150,57 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     df["ConsecutiveUpDays"] = count
+
+
+
+    # =====================
+    # 1.23 出来高継続日数
+    # =====================
+
+    volume_up_flag = (
+        df["Volume"]
+        >
+        df["Volume"].shift(1)
+    )
+
+
+    volume_count = []
+
+    current_volume = 0
+
+
+    for value in volume_up_flag:
+
+        if value:
+            current_volume += 1
+
+        else:
+            current_volume = 0
+
+        volume_count.append(current_volume)
+
+
+    df["VolumeIncreaseDays"] = volume_count
+
+
+
+    def judge_volume_trend(days):
+
+        if days >= 3:
+            return "出来高増加継続"
+
+        elif days >= 1:
+            return "出来高増加"
+
+        else:
+            return "普通"
+
+
+
+    df["VolumeTrend"] = (
+        df["VolumeIncreaseDays"]
+        .apply(judge_volume_trend)
+    )
 
 
 
@@ -254,14 +308,18 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(value):
             return ""
 
+
         if value >= 3:
             return "急上昇"
+
 
         elif value >= 0.5:
             return "上昇"
 
+
         elif value >= -0.5:
             return "横ばい"
+
 
         else:
             return "下落"
