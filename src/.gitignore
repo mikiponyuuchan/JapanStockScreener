@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# ログ
+logs/
+
+# 一時ファイル
+*.log
