@@ -28,13 +28,23 @@ def make_comment(latest):
         comments.append("30日高値更新")
 
     if pd.notna(latest["VolumeRatio"]):
+
         if latest["VolumeRatio"] >= 2:
             comments.append("出来高急増")
+
 
     if latest["PriceMovement"]:
         comments.append(
             latest["PriceMovement"]
         )
+
+
+    if latest["ConsecutiveUpDays"] > 0:
+
+        comments.append(
+            f"{latest['ConsecutiveUpDays']}日連続上昇"
+        )
+
 
     return " / ".join(comments)
 
@@ -117,6 +127,7 @@ def make_total_judgement(
         middle_trend,
         position):
 
+
     if (
         rank == "A"
         and score >= 8
@@ -124,12 +135,17 @@ def make_total_judgement(
         and middle_trend == "強い"
         and position != "高値圏"
     ):
+
         return "買い候補"
 
+
     elif rank in ["A", "B"]:
+
         return "監視継続"
 
+
     else:
+
         return "様子見"
 
 
@@ -144,23 +160,29 @@ def make_analysis_comment(
         long_trend,
         judgement):
 
+
     comments = []
+
 
     comments.append(
         f"{rank}ランク"
     )
 
+
     comments.append(
         f"強気度{score}点"
     )
+
 
     comments.append(
         f"短期{short_trend}"
     )
 
+
     comments.append(
         f"中期{middle_trend}"
     )
+
 
     comments.append(
         f"長期{long_trend}"
@@ -181,11 +203,20 @@ def make_analysis_comment(
         )
 
 
+    if latest["ConsecutiveUpDays"] > 0:
+
+        comments.append(
+            f"{latest['ConsecutiveUpDays']}日連続上昇"
+        )
+
+
     if latest["MACD_GC"]:
+
         comments.append("MACD GC")
 
 
     if latest["New30High"]:
+
         comments.append("30日高値更新")
 
 
@@ -199,6 +230,7 @@ def make_analysis_comment(
 
 
     if position:
+
         comments.append(position)
 
 
@@ -213,22 +245,31 @@ def make_analysis_comment(
 
 def analyze_stock(stock):
 
+
     code = stock["コード"]
+
 
     df = get_history(code)
 
+
     if df is None or df.empty:
+
         return None
+
 
 
     df = add_indicators(df)
 
+
     latest = df.iloc[-1]
+
 
 
     score = calculate_score(latest)
 
+
     rank = make_rank(score)
+
 
 
     position = make_price_position(
@@ -236,17 +277,21 @@ def analyze_stock(stock):
     )
 
 
+
     short_trend = make_trend(
         latest["AboveMA5"]
     )
+
 
     middle_trend = make_trend(
         latest["AboveMA25"]
     )
 
+
     long_trend = make_trend(
         latest["AboveMA75"]
     )
+
 
 
     judgement = make_total_judgement(
@@ -258,25 +303,30 @@ def analyze_stock(stock):
     )
 
 
+
     return {
+
 
         "コード": code,
 
+
         "銘柄名": stock["銘柄名"],
 
+
         "市場": stock["市場・商品区分"],
+
 
 
         "終値": round(float(latest["Close"]),2),
 
 
-        # 1.21 前日比
 
         "前日終値": (
             round(float(latest["PreviousClose"]),2)
             if pd.notna(latest["PreviousClose"])
             else None
         ),
+
 
 
         "前日比": (
@@ -286,6 +336,7 @@ def analyze_stock(stock):
         ),
 
 
+
         "前日比%": (
             round(float(latest["ChangePercent"]),2)
             if pd.notna(latest["ChangePercent"])
@@ -293,8 +344,15 @@ def analyze_stock(stock):
         ),
 
 
+
         "値動き評価":
         latest["PriceMovement"],
+
+
+
+        "連続上昇日数": int(
+            latest["ConsecutiveUpDays"]
+        ),
 
 
 
@@ -305,11 +363,13 @@ def analyze_stock(stock):
         ),
 
 
+
         "30日高値までの距離%": (
             round(float(latest["High30Distance"]),2)
             if pd.notna(latest["High30Distance"])
             else None
         ),
+
 
 
         "株価位置": position,
@@ -323,11 +383,13 @@ def analyze_stock(stock):
         ),
 
 
+
         "25日線": (
             round(float(latest["MA25"]),2)
             if pd.notna(latest["MA25"])
             else None
         ),
+
 
 
         "75日線": (
@@ -339,6 +401,7 @@ def analyze_stock(stock):
 
 
         "出来高": int(latest["Volume"]),
+
 
 
         "出来高倍率": (
@@ -375,11 +438,15 @@ def analyze_stock(stock):
 
         "注目ポイント": make_comment(latest),
 
+
         "強気度": score,
+
 
         "監視ランク": rank,
 
+
         "総合判定": judgement,
+
 
 
         "分析コメント": make_analysis_comment(
@@ -392,5 +459,6 @@ def analyze_stock(stock):
             long_trend,
             judgement
         ),
+
 
     }
