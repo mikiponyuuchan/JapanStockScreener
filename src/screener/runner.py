@@ -25,17 +25,10 @@ def run_screener(start=0, limit=10):
             results.append(result)
 
 
-    # ==========================
-    # DataFrame作成
-    # ==========================
-
     result_df = pd.DataFrame(results)
 
 
-    # ==========================
     # 全データ保存
-    # ==========================
-
     price_path = Path(config.DATA_DIR) / "price_data.csv"
 
     result_df.to_csv(
@@ -44,14 +37,10 @@ def run_screener(start=0, limit=10):
         encoding="utf-8-sig"
     )
 
-    print()
     print(f"保存しました : {price_path}")
 
 
-    # ==========================
-    # スクリーニング
-    # ==========================
-
+    # 基本スクリーニング
     screening_df = result_df[
         (result_df["出来高倍率"] >= 2)
         & (result_df["株価上昇"] == "○")
@@ -61,10 +50,6 @@ def run_screener(start=0, limit=10):
         ascending=False
     )
 
-
-    # ==========================
-    # 結果保存
-    # ==========================
 
     screening_path = Path(config.DATA_DIR) / "screening_result.csv"
 
@@ -78,7 +63,7 @@ def run_screener(start=0, limit=10):
 
 
     # ==========================
-    # 1.12 注目銘柄リスト作成
+    # 1.13 watchlist強化
     # ==========================
 
     watchlist_df = result_df[
@@ -87,9 +72,19 @@ def run_screener(start=0, limit=10):
         (result_df["MACD GC"] == "○")
         |
         (result_df["30日高値更新"] == "○")
-    ].sort_values(
-        "強気度",
-        ascending=False
+    ]
+
+
+    # 強気度 → 出来高倍率 の順
+    watchlist_df = watchlist_df.sort_values(
+        [
+            "強気度",
+            "出来高倍率"
+        ],
+        ascending=[
+            False,
+            False
+        ]
     )
 
 
@@ -104,21 +99,29 @@ def run_screener(start=0, limit=10):
     print(f"保存しました : {watchlist_path}")
 
 
+    # 上位20銘柄
+    watchlist_top_df = watchlist_df.head(20)
+
+
+    watchlist_top_path = Path(config.DATA_DIR) / "watchlist_top.csv"
+
+    watchlist_top_df.to_csv(
+        watchlist_top_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print(f"保存しました : {watchlist_top_path}")
+
+
     print()
 
-    if screening_df.empty:
-        print("条件に一致する銘柄はありませんでした。")
-    else:
-        print(screening_df)
-
-
-    print()
-
-    if watchlist_df.empty:
+    if watchlist_top_df.empty:
         print("注目銘柄はありませんでした。")
+
     else:
-        print("=== 注目銘柄 ===")
-        print(watchlist_df)
+        print("=== 本日の注目銘柄 TOP20 ===")
+        print(watchlist_top_df)
 
 
     return screening_df
