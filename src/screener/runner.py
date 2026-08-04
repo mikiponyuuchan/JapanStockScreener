@@ -66,7 +66,6 @@ def run_screener(start=0, limit=10):
     )
 
 
-
     screening_path = (
         Path(config.DATA_DIR)
         /
@@ -121,7 +120,6 @@ def run_screener(start=0, limit=10):
         index=False,
         encoding="utf-8-sig"
     )
-
 
     print(f"保存しました : {watchlist_path}")
 
@@ -193,7 +191,117 @@ def run_screener(start=0, limit=10):
 
 
 
+    # ==========================
+    # 1.20 候補履歴比較
+    # ==========================
+
+    previous_path = (
+        Path(config.DATA_DIR)
+        /
+        "previous_buy_candidate.csv"
+    )
+
+
+    change_path = (
+        Path(config.DATA_DIR)
+        /
+        "candidate_change.csv"
+    )
+
+
+    if previous_path.exists():
+
+        previous_df = pd.read_csv(
+            previous_path,
+            encoding="utf-8-sig"
+        )
+
+
+        previous_codes = set(
+            previous_df["コード"]
+        )
+
+        current_codes = set(
+            buy_candidate_df["コード"]
+        )
+
+
+        change_results = []
+
+
+        # 新規・継続候補
+        for _, row in buy_candidate_df.iterrows():
+
+            if row["コード"] in previous_codes:
+
+                status = "継続候補"
+
+            else:
+
+                status = "新規候補"
+
+
+            change_results.append(
+                {
+                    "コード": row["コード"],
+                    "銘柄名": row["銘柄名"],
+                    "候補変化": status,
+                    "強気度": row["強気度"],
+                    "総合判定": row["総合判定"]
+                }
+            )
+
+
+        # 除外銘柄
+        for _, row in previous_df.iterrows():
+
+            if row["コード"] not in current_codes:
+
+                change_results.append(
+                    {
+                        "コード": row["コード"],
+                        "銘柄名": row["銘柄名"],
+                        "候補変化": "除外銘柄",
+                        "強気度": "",
+                        "総合判定": ""
+                    }
+                )
+
+
+        change_df = pd.DataFrame(
+            change_results
+        )
+
+
+        change_df.to_csv(
+            change_path,
+            index=False,
+            encoding="utf-8-sig"
+        )
+
+
+        print(
+            f"保存しました : {change_path}"
+        )
+
+
+    else:
+
+        print(
+            "初回実行のため候補履歴を作成します。"
+        )
+
+
+    # 今日の候補を保存
+    buy_candidate_df.to_csv(
+        previous_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+
     print()
+
 
 
     if watchlist_top_df.empty:
