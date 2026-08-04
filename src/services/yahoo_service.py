@@ -26,17 +26,17 @@ def get_price(code: str):
     }
 
 
-def get_history(code: str, period="30d"):
+def get_history(code: str, period="6mo"):
     """
     過去の株価履歴を取得
 
     Parameters
     ----------
     code : str
-        銘柄コード（例: "7203")
+        銘柄コード（例: "7203"）
 
     period : str
-        取得期間（初期値30日）
+        取得期間（初期値6か月）
     """
 
     ticker = f"{code}.T"

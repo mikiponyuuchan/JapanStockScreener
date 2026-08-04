@@ -16,6 +16,7 @@ def analyze_stock(stock):
     if df is None or df.empty:
         return None
 
+    # テクニカル指標追加
     df = add_indicators(df)
 
     latest = df.iloc[-1]
@@ -25,24 +26,47 @@ def analyze_stock(stock):
         "銘柄名": stock["銘柄名"],
         "市場": stock["市場・商品区分"],
 
+        # 株価
         "終値": round(float(latest["Close"]), 2),
 
-        "5日線": round(float(latest["MA5"]), 2)
-        if pd.notna(latest["MA5"]) else None,
+        # 移動平均
+        "5日線": (
+            round(float(latest["MA5"]), 2)
+            if pd.notna(latest["MA5"])
+            else None
+        ),
 
-        "25日線": round(float(latest["MA25"]), 2)
-        if pd.notna(latest["MA25"]) else None,
+        "25日線": (
+            round(float(latest["MA25"]), 2)
+            if pd.notna(latest["MA25"])
+            else None
+        ),
 
+        "75日線": (
+            round(float(latest["MA75"]), 2)
+            if pd.notna(latest["MA75"])
+            else None
+        ),
+
+        # 出来高
         "出来高": int(latest["Volume"]),
 
-        "出来高倍率": round(float(latest["VolumeRatio"]), 2)
-        if pd.notna(latest["VolumeRatio"]) else None,
+        "出来高倍率": (
+            round(float(latest["VolumeRatio"]), 2)
+            if pd.notna(latest["VolumeRatio"])
+            else None
+        ),
 
-        # ○表示にする
+        # 株価トレンド
         "株価上昇": "○" if latest["PriceUp"] else "",
 
         "5日線上": "○" if latest["AboveMA5"] else "",
 
+        "25日線上": "○" if latest["AboveMA25"] else "",
+
+        "75日線上": "○" if latest["AboveMA75"] else "",
+
+        # テクニカルシグナル
         "MACD GC": "○" if latest["MACD_GC"] else "",
 
         "30日高値更新": "○" if latest["New30High"] else "",
