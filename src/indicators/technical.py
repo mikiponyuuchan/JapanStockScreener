@@ -20,14 +20,12 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         .round(2)
     )
 
-
     df["MA25"] = (
         df["Close"]
         .rolling(25)
         .mean()
         .round(2)
     )
-
 
     df["MA75"] = (
         df["Close"]
@@ -59,7 +57,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
-    # 1.21 前日比
+    # 前日比
     # =====================
 
     df["PreviousClose"] = (
@@ -123,7 +121,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
-    # 1.22 連続上昇日数
+    # 連続上昇日数
     # =====================
 
     up_flag = (
@@ -154,7 +152,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
-    # 1.23 出来高継続日数
+    # 出来高増加連続日数
     # =====================
 
     volume_up_flag = (
@@ -166,41 +164,21 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     volume_count = []
 
-    current_volume = 0
+    current = 0
 
 
     for value in volume_up_flag:
 
         if value:
-            current_volume += 1
+            current += 1
 
         else:
-            current_volume = 0
+            current = 0
 
-        volume_count.append(current_volume)
+        volume_count.append(current)
 
 
     df["VolumeIncreaseDays"] = volume_count
-
-
-
-    def judge_volume_trend(days):
-
-        if days >= 3:
-            return "出来高増加継続"
-
-        elif days >= 1:
-            return "出来高増加"
-
-        else:
-            return "普通"
-
-
-
-    df["VolumeTrend"] = (
-        df["VolumeIncreaseDays"]
-        .apply(judge_volume_trend)
-    )
 
 
 
@@ -249,15 +227,10 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # 30営業日高値
     # =====================
 
-    high30 = (
+    df["High30"] = (
         df["High"]
         .rolling(30)
         .max()
-    )
-
-
-    df["High30"] = (
-        high30
         .round(2)
     )
 
@@ -308,18 +281,14 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(value):
             return ""
 
-
         if value >= 3:
             return "急上昇"
-
 
         elif value >= 0.5:
             return "上昇"
 
-
         elif value >= -0.5:
             return "横ばい"
-
 
         else:
             return "下落"
@@ -330,7 +299,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         df["ChangePercent"]
         .apply(judge_price_change)
     )
-
 
 
     return df
