@@ -1,13 +1,10 @@
-from services.yahoo_service import get_history
-from indicators.technical import add_indicators
+from services.screener import load_stock_list
 
 print("=================================")
-print(" 日本株スクリーナー Ver0.9")
+print(" 日本株スクリーナー Ver1.0")
 print("=================================")
 print()
 
-df = get_history("7203")
+stocks = load_stock_list()
 
-df = add_indicators(df)
-
-print(df.tail())
+print(stocks[["コード", "銘柄名", "市場・商品区分"]])
