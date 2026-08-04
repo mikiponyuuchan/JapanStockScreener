@@ -228,17 +228,45 @@ def run_screener(start=0, limit=10):
 
         change_results = []
 
-
-        # 新規・継続候補
+        # 新規・継続・強化・弱化判定
         for _, row in buy_candidate_df.iterrows():
 
             if row["コード"] in previous_codes:
 
-                status = "継続候補"
+                old_row = previous_df[
+                    previous_df["コード"] == row["コード"]
+                ].iloc[0]
+
+
+                old_score = old_row["強気度"]
+
+                new_score = row["強気度"]
+
+
+                if new_score > old_score:
+
+                    status = "強化"
+
+
+                elif new_score < old_score:
+
+                    status = "弱化"
+
+
+                else:
+
+                    status = "継続候補"
+
+
 
             else:
 
+                old_score = ""
+
+                new_score = row["強気度"]
+
                 status = "新規候補"
+
 
 
             change_results.append(
@@ -246,10 +274,18 @@ def run_screener(start=0, limit=10):
                     "コード": row["コード"],
                     "銘柄名": row["銘柄名"],
                     "候補変化": status,
-                    "強気度": row["強気度"],
+                    "前回強気度": old_score,
+                    "今回強気度": new_score,
+                    "強気度差":
+                        (
+                            new_score - old_score
+                            if old_score != ""
+                            else ""
+                        ),
                     "総合判定": row["総合判定"]
                 }
             )
+
 
 
         # 除外銘柄
