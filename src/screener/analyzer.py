@@ -31,6 +31,11 @@ def make_comment(latest):
         if latest["VolumeRatio"] >= 2:
             comments.append("出来高急増")
 
+    if latest["PriceMovement"]:
+        comments.append(
+            latest["PriceMovement"]
+        )
+
     return " / ".join(comments)
 
 
@@ -58,6 +63,7 @@ def calculate_score(latest):
         score += 2
 
     if pd.notna(latest["VolumeRatio"]):
+
         if latest["VolumeRatio"] >= 2:
             score += 1
 
@@ -110,9 +116,6 @@ def make_total_judgement(
         short_trend,
         middle_trend,
         position):
-    """
-    総合判定
-    """
 
     if (
         rank == "A"
@@ -123,10 +126,8 @@ def make_total_judgement(
     ):
         return "買い候補"
 
-
     elif rank in ["A", "B"]:
         return "監視継続"
-
 
     else:
         return "様子見"
@@ -145,8 +146,13 @@ def make_analysis_comment(
 
     comments = []
 
-    comments.append(f"{rank}ランク")
-    comments.append(f"強気度{score}点")
+    comments.append(
+        f"{rank}ランク"
+    )
+
+    comments.append(
+        f"強気度{score}点"
+    )
 
     comments.append(
         f"短期{short_trend}"
@@ -161,8 +167,23 @@ def make_analysis_comment(
     )
 
 
+    if pd.notna(latest["ChangePercent"]):
+
+        comments.append(
+            f"前日比{latest['ChangePercent']}%"
+        )
+
+
+    if latest["PriceMovement"]:
+
+        comments.append(
+            latest["PriceMovement"]
+        )
+
+
     if latest["MACD_GC"]:
         comments.append("MACD GC")
+
 
     if latest["New30High"]:
         comments.append("30日高値更新")
@@ -171,6 +192,7 @@ def make_analysis_comment(
     if pd.notna(latest["VolumeRatio"]):
 
         if latest["VolumeRatio"] >= 2:
+
             comments.append(
                 f"出来高{round(float(latest['VolumeRatio']),2)}倍"
             )
@@ -180,7 +202,9 @@ def make_analysis_comment(
         comments.append(position)
 
 
-    comments.append(judgement)
+    comments.append(
+        judgement
+    )
 
 
     return " / ".join(comments)
@@ -243,18 +267,46 @@ def analyze_stock(stock):
         "市場": stock["市場・商品区分"],
 
 
-        "終値": round(float(latest["Close"]), 2),
+        "終値": round(float(latest["Close"]),2),
+
+
+        # 1.21 前日比
+
+        "前日終値": (
+            round(float(latest["PreviousClose"]),2)
+            if pd.notna(latest["PreviousClose"])
+            else None
+        ),
+
+
+        "前日比": (
+            round(float(latest["Change"]),2)
+            if pd.notna(latest["Change"])
+            else None
+        ),
+
+
+        "前日比%": (
+            round(float(latest["ChangePercent"]),2)
+            if pd.notna(latest["ChangePercent"])
+            else None
+        ),
+
+
+        "値動き評価":
+        latest["PriceMovement"],
+
 
 
         "30日高値": (
-            round(float(latest["High30"]), 2)
+            round(float(latest["High30"]),2)
             if pd.notna(latest["High30"])
             else None
         ),
 
 
         "30日高値までの距離%": (
-            round(float(latest["High30Distance"]), 2)
+            round(float(latest["High30Distance"]),2)
             if pd.notna(latest["High30Distance"])
             else None
         ),
@@ -263,26 +315,38 @@ def analyze_stock(stock):
         "株価位置": position,
 
 
-        "5日線": round(float(latest["MA5"]),2)
-        if pd.notna(latest["MA5"])
-        else None,
 
-        "25日線": round(float(latest["MA25"]),2)
-        if pd.notna(latest["MA25"])
-        else None,
+        "5日線": (
+            round(float(latest["MA5"]),2)
+            if pd.notna(latest["MA5"])
+            else None
+        ),
 
-        "75日線": round(float(latest["MA75"]),2)
-        if pd.notna(latest["MA75"])
-        else None,
+
+        "25日線": (
+            round(float(latest["MA25"]),2)
+            if pd.notna(latest["MA25"])
+            else None
+        ),
+
+
+        "75日線": (
+            round(float(latest["MA75"]),2)
+            if pd.notna(latest["MA75"])
+            else None
+        ),
+
 
 
         "出来高": int(latest["Volume"]),
+
 
         "出来高倍率": (
             round(float(latest["VolumeRatio"]),2)
             if pd.notna(latest["VolumeRatio"])
             else None
         ),
+
 
 
         "株価上昇": "○" if latest["PriceUp"] else "",
@@ -294,6 +358,7 @@ def analyze_stock(stock):
         "75日線上": "○" if latest["AboveMA75"] else "",
 
 
+
         "短期トレンド": short_trend,
 
         "中期トレンド": middle_trend,
@@ -301,9 +366,11 @@ def analyze_stock(stock):
         "長期トレンド": long_trend,
 
 
+
         "MACD GC": "○" if latest["MACD_GC"] else "",
 
         "30日高値更新": "○" if latest["New30High"] else "",
+
 
 
         "注目ポイント": make_comment(latest),
@@ -325,4 +392,5 @@ def analyze_stock(stock):
             long_trend,
             judgement
         ),
+
     }
