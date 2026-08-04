@@ -4,7 +4,9 @@ from services.yahoo_service import get_history
 from indicators.technical import add_indicators
 
 
+
 def make_comment(latest):
+
     comments = []
 
     if latest["PriceUp"]:
@@ -28,9 +30,6 @@ def make_comment(latest):
     if pd.notna(latest["VolumeRatio"]):
         if latest["VolumeRatio"] >= 2:
             comments.append("出来高急増")
-
-    if len(comments) == 0:
-        return ""
 
     return " / ".join(comments)
 
@@ -79,7 +78,26 @@ def make_rank(score):
 
 
 
-def make_analysis_comment(latest, score, rank):
+def make_price_position(distance):
+    """
+    株価位置判定
+    """
+
+    if pd.isna(distance):
+        return ""
+
+    if distance <= 5:
+        return "高値圏"
+
+    elif distance <= 15:
+        return "上昇中"
+
+    else:
+        return "上昇余地あり"
+
+
+
+def make_analysis_comment(latest, score, rank, position):
 
     comments = []
 
@@ -99,24 +117,14 @@ def make_analysis_comment(latest, score, rank):
         comments.append("30日高値更新")
 
     if pd.notna(latest["VolumeRatio"]):
+
         if latest["VolumeRatio"] >= 2:
             comments.append(
                 f"出来高{round(float(latest['VolumeRatio']),2)}倍"
             )
 
-    if pd.notna(latest["High30Distance"]):
-
-        distance = round(
-            float(latest["High30Distance"]),
-            2
-        )
-
-        if distance <= 5:
-            comments.append("高値圏")
-
-        elif distance >= 15:
-            comments.append("上昇余地あり")
-
+    if position:
+        comments.append(position)
 
     return " / ".join(comments)
 
@@ -136,9 +144,15 @@ def analyze_stock(stock):
 
     latest = df.iloc[-1]
 
+
     score = calculate_score(latest)
 
     rank = make_rank(score)
+
+
+    position = make_price_position(
+        latest["High30Distance"]
+    )
 
 
     return {
@@ -165,6 +179,9 @@ def analyze_stock(stock):
             if pd.notna(latest["High30Distance"])
             else None
         ),
+
+
+        "株価位置": position,
 
 
         "5日線": (
@@ -219,6 +236,7 @@ def analyze_stock(stock):
         "分析コメント": make_analysis_comment(
             latest,
             score,
-            rank
+            rank,
+            position
         ),
     }
