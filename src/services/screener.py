@@ -31,7 +31,8 @@ def load_stock_list(limit=10):
 
 def run_screener(limit=10):
     """
-    指定銘柄数を解析し、price_data.csv を作成する
+    指定銘柄数を解析し、
+    price_data.csv と screening_result.csv を作成する
     """
 
     stocks = load_stock_list(limit)
@@ -47,6 +48,7 @@ def run_screener(limit=10):
         df = get_history(code)
 
         if df is None:
+            print("  データ取得失敗")
             continue
 
         df = add_indicators(df)
@@ -66,17 +68,56 @@ def run_screener(limit=10):
             "5MA上": bool(latest["AboveMA5"]),
         })
 
+    # DataFrame化
     result_df = pd.DataFrame(results)
 
-    save_path = Path(config.DATA_DIR) / "price_data.csv"
+    # -----------------------------------
+    # 全銘柄データ保存
+    # -----------------------------------
 
-    result_df.to_csv(save_path, index=False, encoding="utf-8-sig")
+    price_path = Path(config.DATA_DIR) / "price_data.csv"
+
+    result_df.to_csv(
+        price_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
 
     print()
-    print("保存しました")
-    print(save_path)
+    print(f"保存しました : {price_path}")
+
+    # -----------------------------------
+    # スクリーニング
+    # -----------------------------------
+
+    screening_df = result_df[
+        (result_df["出来高倍率"] >= 2)
+        & (result_df["株価上昇"])
+        & (result_df["5MA上"])
+    ]
+
+    # 出来高倍率の高い順
+    screening_df = screening_df.sort_values(
+        by="出来高倍率",
+        ascending=False
+    )
+
+    screening_path = Path(config.DATA_DIR) / "screening_result.csv"
+
+    screening_df.to_csv(
+        screening_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print(f"保存しました : {screening_path}")
 
     print()
-    print(result_df)
+    print("========== スクリーニング結果 ==========")
 
-    return result_df
+    if screening_df.empty:
+        print("条件に一致する銘柄はありませんでした。")
+    else:
+        print(screening_df)
+
+    return screening_df
