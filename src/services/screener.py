@@ -6,7 +6,7 @@ from services.yahoo_service import get_history
 from indicators.technical import add_indicators
 
 
-def load_stock_list(limit=10):
+def load_stock_list(start=0, limit=10):
     """
     普通株のみ読み込む
     """
@@ -15,7 +15,6 @@ def load_stock_list(limit=10):
 
     df = pd.read_csv(file_path, dtype={"コード": str})
 
-    # 普通株だけ残す
     normal_markets = [
         "プライム（内国株式）",
         "スタンダード（内国株式）",
@@ -25,30 +24,34 @@ def load_stock_list(limit=10):
     df = df[df["市場・商品区分"].isin(normal_markets)]
 
     print(f"普通株数 : {len(df)}")
+    print(f"対象 : {start + 1} ～ {start + limit} 銘柄")
+    print()
 
-    return df.head(limit)
+    return df.iloc[start:start + limit].reset_index(drop=True)
 
 
-def run_screener(limit=10):
+def run_screener(start=0, limit=10):
     """
     指定銘柄数を解析し、
     price_data.csv と screening_result.csv を作成する
     """
 
-    stocks = load_stock_list(limit)
+    stocks = load_stock_list(start, limit)
 
     results = []
 
-    for _, stock in stocks.iterrows():
+    total = len(stocks)
+
+    for i, (_, stock) in enumerate(stocks.iterrows(), start=1):
 
         code = stock["コード"]
 
-        print(f"取得中 : {code}")
+        print(f"[{i}/{total}] 取得中 : {code}")
 
         df = get_history(code)
 
-        if df is None:
-            print("  データ取得失敗")
+        if df is None or df.empty:
+            print("   データ取得失敗")
             continue
 
         df = add_indicators(df)
@@ -68,52 +71,28 @@ def run_screener(limit=10):
             "5MA上": bool(latest["AboveMA5"]),
         })
 
-    # DataFrame化
     result_df = pd.DataFrame(results)
 
-    # -----------------------------------
-    # 全銘柄データ保存
-    # -----------------------------------
-
+    # 全データ保存
     price_path = Path(config.DATA_DIR) / "price_data.csv"
-
-    result_df.to_csv(
-        price_path,
-        index=False,
-        encoding="utf-8-sig"
-    )
+    result_df.to_csv(price_path, index=False, encoding="utf-8-sig")
 
     print()
     print(f"保存しました : {price_path}")
 
-    # -----------------------------------
     # スクリーニング
-    # -----------------------------------
-
     screening_df = result_df[
         (result_df["出来高倍率"] >= 2)
         & (result_df["株価上昇"])
         & (result_df["5MA上"])
-    ]
-
-    # 出来高倍率の高い順
-    screening_df = screening_df.sort_values(
-        by="出来高倍率",
-        ascending=False
-    )
+    ].sort_values("出来高倍率", ascending=False)
 
     screening_path = Path(config.DATA_DIR) / "screening_result.csv"
-
-    screening_df.to_csv(
-        screening_path,
-        index=False,
-        encoding="utf-8-sig"
-    )
+    screening_df.to_csv(screening_path, index=False, encoding="utf-8-sig")
 
     print(f"保存しました : {screening_path}")
 
     print()
-    print("========== スクリーニング結果 ==========")
 
     if screening_df.empty:
         print("条件に一致する銘柄はありませんでした。")
