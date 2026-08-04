@@ -62,7 +62,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
-
     # =====================
     # 前日比
     # =====================
@@ -91,7 +90,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         )
         .round(2)
     )
-
 
 
 
@@ -134,7 +132,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
-
     # =====================
     # 株価判定
     # =====================
@@ -165,7 +162,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         >
         df["MA75"]
     )
-
 
 
 
@@ -201,7 +197,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     df["ConsecutiveUpDays"] = count
-
 
 
 
@@ -385,52 +380,40 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
-    # Ver1.27 トレンド判定
+    # Ver1.27 トレンド評価
     # =====================
 
     def judge_trend(row):
 
-        ma5 = row["MA5"]
-        ma25 = row["MA25"]
-        ma75 = row["MA75"]
-        close = row["Close"]
-
-
-        if pd.isna(ma75):
+        if pd.isna(row["MA75"]):
 
             return "判定待ち"
 
 
 
-        # 強い上昇
-
         if (
-            close > ma5
+            row["Close"] > row["MA5"]
             and
-            ma5 > ma25
+            row["MA5"] > row["MA25"]
             and
-            ma25 > ma75
+            row["MA25"] > row["MA75"]
         ):
 
             return "強い上昇"
 
 
 
-        # 上昇継続
-
         elif (
-            close > ma5
+            row["Close"] > row["MA5"]
             and
-            ma5 > ma25
+            row["MA5"] > row["MA25"]
         ):
 
             return "上昇継続"
 
 
 
-        # 中立
-
-        elif close > ma25:
+        elif row["Close"] > row["MA25"]:
 
             return "中立"
 
@@ -497,6 +480,105 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
             make_ma_alignment,
             axis=1
         )
+    )
+
+
+
+
+
+    # =====================
+    # Ver1.28 25日線乖離率
+    # =====================
+
+    df["MA25Deviation"] = (
+        (
+            (
+                df["Close"]
+                -
+                df["MA25"]
+            )
+            /
+            df["MA25"]
+            *
+            100
+        )
+        .round(2)
+    )
+
+
+
+
+
+    # =====================
+    # Ver1.28 MA収束度
+    # =====================
+
+    df["MAConvergence"] = (
+        (
+            abs(
+                df["MA5"]
+                -
+                df["MA25"]
+            )
+            /
+            df["MA25"]
+            *
+            100
+        )
+        .round(2)
+    )
+
+
+
+
+
+    # =====================
+    # Ver1.28 初動シグナル
+    # =====================
+
+    df["InitialMoveSignal"] = (
+
+        (df["Close"] > df["MA5"])
+
+        &
+
+        (df["MA5"] > df["MA25"])
+
+        &
+
+        (df["Change5Days"] > 0)
+
+        &
+
+        (df["MA25Deviation"] < 15)
+
+    )
+
+
+
+
+
+    # =====================
+    # Ver1.28 押し目判定
+    # =====================
+
+    df["PullbackSignal"] = (
+
+        (df["TrendEvaluation"].isin(
+            [
+                "強い上昇",
+                "上昇継続"
+            ]
+        ))
+
+        &
+
+        (df["Close"] <= df["MA5"] * 1.02)
+
+        &
+
+        (df["Close"] >= df["MA25"])
+
     )
 
 

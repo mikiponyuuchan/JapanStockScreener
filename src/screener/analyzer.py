@@ -5,6 +5,8 @@ from indicators.technical import add_indicators
 
 
 
+
+
 # ==========================
 # 注目ポイント
 # ==========================
@@ -15,35 +17,23 @@ def make_comment(latest):
 
 
     if latest["PriceUp"]:
+
         comments.append("株価上昇")
 
 
     if latest["AboveMA5"]:
+
         comments.append("5日線上")
 
 
     if latest["AboveMA25"]:
+
         comments.append("25日線上")
 
 
     if latest["AboveMA75"]:
+
         comments.append("75日線上")
-
-
-    if latest["MACD_GC"]:
-        comments.append("MACD GC")
-
-
-    if latest["New30High"]:
-        comments.append("30日高値更新")
-
-
-    if pd.notna(latest["VolumeRatio"]):
-
-        if latest["VolumeRatio"] >= 2:
-
-            comments.append("出来高急増")
-
 
 
     if latest["TrendEvaluation"]:
@@ -53,12 +43,48 @@ def make_comment(latest):
         )
 
 
-
     if latest["MAAlignment"]:
 
         comments.append(
             latest["MAAlignment"]
         )
+
+
+    if latest["InitialMoveSignal"]:
+
+        comments.append(
+            "初動シグナル"
+        )
+
+
+    if latest["PullbackSignal"]:
+
+        comments.append(
+            "押し目候補"
+        )
+
+
+    if latest["MACD_GC"]:
+
+        comments.append(
+            "MACD GC"
+        )
+
+
+    if latest["New30High"]:
+
+        comments.append(
+            "30日高値更新"
+        )
+
+
+    if pd.notna(latest["VolumeRatio"]):
+
+        if latest["VolumeRatio"] >= 2:
+
+            comments.append(
+                "出来高急増"
+            )
 
 
 
@@ -67,6 +93,7 @@ def make_comment(latest):
         comments.append(
             f"5日上昇{latest['Change5Days']}%"
         )
+
 
 
     if latest["Change20Days"] >= 10:
@@ -91,6 +118,8 @@ def make_comment(latest):
 
 
 
+
+
 # ==========================
 # スコア計算
 # ==========================
@@ -98,6 +127,7 @@ def make_comment(latest):
 def calculate_score(latest):
 
     score = 0
+
 
 
     if latest["PriceUp"]:
@@ -156,7 +186,8 @@ def calculate_score(latest):
 
 
 
-    # Ver1.27 トレンド加点
+
+    # Ver1.27
 
     if latest["TrendEvaluation"] == "強い上昇":
 
@@ -164,6 +195,21 @@ def calculate_score(latest):
 
 
     elif latest["TrendEvaluation"] == "上昇継続":
+
+        score += 1
+
+
+
+
+
+    # Ver1.28
+
+    if latest["InitialMoveSignal"]:
+
+        score += 2
+
+
+    if latest["PullbackSignal"]:
 
         score += 1
 
@@ -181,12 +227,12 @@ def calculate_score(latest):
 
 def make_rank(score):
 
-    if score >= 12:
+    if score >= 14:
 
         return "A"
 
 
-    elif score >= 6:
+    elif score >= 7:
 
         return "B"
 
@@ -260,7 +306,7 @@ def make_total_judgement(
 
     if (
         rank == "A"
-        and score >= 10
+        and score >= 12
         and short_trend == "強い"
         and middle_trend == "強い"
         and position != "高値圏"
@@ -270,7 +316,7 @@ def make_total_judgement(
 
 
 
-    elif rank in ["A", "B"]:
+    elif rank in ["A","B"]:
 
         return "監視継続"
 
@@ -322,6 +368,22 @@ def make_buy_reason(
 
 
 
+    if latest["InitialMoveSignal"]:
+
+        reasons.append(
+            "初動シグナル"
+        )
+
+
+
+    if latest["PullbackSignal"]:
+
+        reasons.append(
+            "押し目判定"
+        )
+
+
+
     if latest["MACD_GC"]:
 
         reasons.append(
@@ -346,26 +408,10 @@ def make_buy_reason(
 
 
 
-    if latest["Change5Days"] >= 5:
+    if latest["MA25Deviation"]:
 
         reasons.append(
-            f"5日上昇{latest['Change5Days']}%"
-        )
-
-
-
-    if latest["Change20Days"] >= 10:
-
-        reasons.append(
-            f"20日上昇{latest['Change20Days']}%"
-        )
-
-
-
-    if latest["ConsecutiveUpDays"] >= 3:
-
-        reasons.append(
-            f"{latest['ConsecutiveUpDays']}日連続上昇"
+            f"25日線乖離{latest['MA25Deviation']}%"
         )
 
 
@@ -422,36 +468,18 @@ def make_analysis_comment(
     )
 
 
-    comments.append(
-        f"短期{short_trend}"
-    )
-
-
-    comments.append(
-        f"中期{middle_trend}"
-    )
-
-
-    comments.append(
-        f"長期{long_trend}"
-    )
-
-
-
-    if latest["Change5Days"]:
+    if latest["InitialMoveSignal"]:
 
         comments.append(
-            f"5日騰落率{latest['Change5Days']}%"
+            "初動検出"
         )
 
 
-
-    if latest["Change20Days"]:
+    if latest["PullbackSignal"]:
 
         comments.append(
-            f"20日騰落率{latest['Change20Days']}%"
+            "押し目"
         )
-
 
 
     comments.append(
@@ -476,6 +504,7 @@ def analyze_stock(stock):
 
 
     df = get_history(code)
+
 
 
     if df is None or df.empty:
@@ -533,7 +562,6 @@ def analyze_stock(stock):
     return {
 
 
-
         "コード":
             code,
 
@@ -567,6 +595,16 @@ def analyze_stock(stock):
 
 
 
+        "25日線乖離率%":
+            latest["MA25Deviation"],
+
+
+
+        "MA収束度%":
+            latest["MAConvergence"],
+
+
+
         "トレンド評価":
             latest["TrendEvaluation"],
 
@@ -574,6 +612,16 @@ def analyze_stock(stock):
 
         "MA並び":
             latest["MAAlignment"],
+
+
+
+        "初動シグナル":
+            "○" if latest["InitialMoveSignal"] else "",
+
+
+
+        "押し目判定":
+            "○" if latest["PullbackSignal"] else "",
 
 
 
