@@ -95,15 +95,41 @@ def make_price_position(distance):
 
 
 def make_trend(value):
-    """
-    トレンド表示
-    """
 
     if value:
         return "強い"
 
     else:
         return "弱い"
+
+
+
+def make_total_judgement(
+        rank,
+        score,
+        short_trend,
+        middle_trend,
+        position):
+    """
+    総合判定
+    """
+
+    if (
+        rank == "A"
+        and score >= 8
+        and short_trend == "強い"
+        and middle_trend == "強い"
+        and position != "高値圏"
+    ):
+        return "買い候補"
+
+
+    elif rank in ["A", "B"]:
+        return "監視継続"
+
+
+    else:
+        return "様子見"
 
 
 
@@ -114,7 +140,8 @@ def make_analysis_comment(
         position,
         short_trend,
         middle_trend,
-        long_trend):
+        long_trend,
+        judgement):
 
     comments = []
 
@@ -151,6 +178,9 @@ def make_analysis_comment(
 
     if position:
         comments.append(position)
+
+
+    comments.append(judgement)
 
 
     return " / ".join(comments)
@@ -195,6 +225,15 @@ def analyze_stock(stock):
     )
 
 
+    judgement = make_total_judgement(
+        rank,
+        score,
+        short_trend,
+        middle_trend,
+        position
+    )
+
+
     return {
 
         "コード": code,
@@ -224,29 +263,23 @@ def analyze_stock(stock):
         "株価位置": position,
 
 
-        "5日線": (
-            round(float(latest["MA5"]), 2)
-            if pd.notna(latest["MA5"])
-            else None
-        ),
+        "5日線": round(float(latest["MA5"]),2)
+        if pd.notna(latest["MA5"])
+        else None,
 
-        "25日線": (
-            round(float(latest["MA25"]), 2)
-            if pd.notna(latest["MA25"])
-            else None
-        ),
+        "25日線": round(float(latest["MA25"]),2)
+        if pd.notna(latest["MA25"])
+        else None,
 
-        "75日線": (
-            round(float(latest["MA75"]), 2)
-            if pd.notna(latest["MA75"])
-            else None
-        ),
+        "75日線": round(float(latest["MA75"]),2)
+        if pd.notna(latest["MA75"])
+        else None,
 
 
         "出来高": int(latest["Volume"]),
 
         "出来高倍率": (
-            round(float(latest["VolumeRatio"]), 2)
+            round(float(latest["VolumeRatio"]),2)
             if pd.notna(latest["VolumeRatio"])
             else None
         ),
@@ -279,6 +312,8 @@ def analyze_stock(stock):
 
         "監視ランク": rank,
 
+        "総合判定": judgement,
+
 
         "分析コメント": make_analysis_comment(
             latest,
@@ -287,6 +322,7 @@ def analyze_stock(stock):
             position,
             short_trend,
             middle_trend,
-            long_trend
+            long_trend,
+            judgement
         ),
     }
