@@ -121,6 +121,36 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
+    # 1.22 連続上昇日数
+    # =====================
+
+    up_flag = (
+        df["Close"]
+        >
+        df["Close"].shift(1)
+    )
+
+
+    count = []
+
+    current = 0
+
+    for value in up_flag:
+
+        if value:
+            current += 1
+
+        else:
+            current = 0
+
+        count.append(current)
+
+
+    df["ConsecutiveUpDays"] = count
+
+
+
+    # =====================
     # MACD
     # =====================
 
@@ -178,9 +208,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-
-    # 高値更新判定
-
     prev30high = (
         df["High"]
         .shift(1)
@@ -198,7 +225,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
-    # 1.15 高値余地
+    # 高値余地
     # =====================
 
     df["High30Distance"] = (
@@ -219,7 +246,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # =====================
-    # 1.21 値動き評価
+    # 値動き評価
     # =====================
 
     def judge_price_change(value):
