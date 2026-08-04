@@ -24,11 +24,13 @@ def run_screener(start=0, limit=10):
         if result is not None:
             results.append(result)
 
+
     # ==========================
     # DataFrame作成
     # ==========================
 
     result_df = pd.DataFrame(results)
+
 
     # ==========================
     # 全データ保存
@@ -45,6 +47,7 @@ def run_screener(start=0, limit=10):
     print()
     print(f"保存しました : {price_path}")
 
+
     # ==========================
     # スクリーニング
     # ==========================
@@ -57,6 +60,7 @@ def run_screener(start=0, limit=10):
         "出来高倍率",
         ascending=False
     )
+
 
     # ==========================
     # 結果保存
@@ -72,11 +76,49 @@ def run_screener(start=0, limit=10):
 
     print(f"保存しました : {screening_path}")
 
+
+    # ==========================
+    # 1.12 注目銘柄リスト作成
+    # ==========================
+
+    watchlist_df = result_df[
+        (result_df["監視ランク"] == "A")
+        |
+        (result_df["MACD GC"] == "○")
+        |
+        (result_df["30日高値更新"] == "○")
+    ].sort_values(
+        "強気度",
+        ascending=False
+    )
+
+
+    watchlist_path = Path(config.DATA_DIR) / "watchlist.csv"
+
+    watchlist_df.to_csv(
+        watchlist_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print(f"保存しました : {watchlist_path}")
+
+
     print()
 
     if screening_df.empty:
         print("条件に一致する銘柄はありませんでした。")
     else:
         print(screening_df)
+
+
+    print()
+
+    if watchlist_df.empty:
+        print("注目銘柄はありませんでした。")
+    else:
+        print("=== 注目銘柄 ===")
+        print(watchlist_df)
+
 
     return screening_df
