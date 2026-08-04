@@ -79,9 +79,6 @@ def make_rank(score):
 
 
 def make_price_position(distance):
-    """
-    株価位置判定
-    """
 
     if pd.isna(distance):
         return ""
@@ -97,24 +94,52 @@ def make_price_position(distance):
 
 
 
-def make_analysis_comment(latest, score, rank, position):
+def make_trend(value):
+    """
+    トレンド表示
+    """
+
+    if value:
+        return "強い"
+
+    else:
+        return "弱い"
+
+
+
+def make_analysis_comment(
+        latest,
+        score,
+        rank,
+        position,
+        short_trend,
+        middle_trend,
+        long_trend):
 
     comments = []
 
     comments.append(f"{rank}ランク")
     comments.append(f"強気度{score}点")
 
-    if latest["AboveMA25"]:
-        comments.append("25日線上")
+    comments.append(
+        f"短期{short_trend}"
+    )
 
-    if latest["AboveMA75"]:
-        comments.append("75日線上")
+    comments.append(
+        f"中期{middle_trend}"
+    )
+
+    comments.append(
+        f"長期{long_trend}"
+    )
+
 
     if latest["MACD_GC"]:
         comments.append("MACD GC")
 
     if latest["New30High"]:
         comments.append("30日高値更新")
+
 
     if pd.notna(latest["VolumeRatio"]):
 
@@ -123,8 +148,10 @@ def make_analysis_comment(latest, score, rank, position):
                 f"出来高{round(float(latest['VolumeRatio']),2)}倍"
             )
 
+
     if position:
         comments.append(position)
+
 
     return " / ".join(comments)
 
@@ -152,6 +179,19 @@ def analyze_stock(stock):
 
     position = make_price_position(
         latest["High30Distance"]
+    )
+
+
+    short_trend = make_trend(
+        latest["AboveMA5"]
+    )
+
+    middle_trend = make_trend(
+        latest["AboveMA25"]
+    )
+
+    long_trend = make_trend(
+        latest["AboveMA75"]
     )
 
 
@@ -221,6 +261,13 @@ def analyze_stock(stock):
         "75日線上": "○" if latest["AboveMA75"] else "",
 
 
+        "短期トレンド": short_trend,
+
+        "中期トレンド": middle_trend,
+
+        "長期トレンド": long_trend,
+
+
         "MACD GC": "○" if latest["MACD_GC"] else "",
 
         "30日高値更新": "○" if latest["New30High"] else "",
@@ -237,6 +284,9 @@ def analyze_stock(stock):
             latest,
             score,
             rank,
-            position
+            position,
+            short_trend,
+            middle_trend,
+            long_trend
         ),
     }
