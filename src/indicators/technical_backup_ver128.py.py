@@ -1,14 +1,14 @@
 import pandas as pd
-import numpy as np
+
 
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     テクニカル指標を追加する
-    Ver3.0
     """
 
     df = df.copy()
+
 
 
     # =====================
@@ -39,6 +39,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+
+
     # =====================
     # 出来高
     # =====================
@@ -51,14 +53,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-    df["VolumeMA20"] = (
-        df["Volume"]
-        .rolling(20)
-        .mean()
-        .round()
-    )
-
-
     df["VolumeRatio"] = (
         df["Volume"]
         /
@@ -66,11 +60,6 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ).round(2)
 
 
-    df["VolumeRatio20"] = (
-        df["Volume"]
-        /
-        df["VolumeMA20"]
-    ).round(2)
 
 
     # =====================
@@ -80,6 +69,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["PreviousClose"] = (
         df["Close"]
         .shift(1)
+        .round(2)
     )
 
 
@@ -91,12 +81,17 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
     df["ChangePercent"] = (
-        df["Change"]
-        /
-        df["PreviousClose"]
-        *
-        100
-    ).round(2)
+        (
+            df["Change"]
+            /
+            df["PreviousClose"]
+            *
+            100
+        )
+        .round(2)
+    )
+
+
 
 
     # =====================
@@ -105,32 +100,40 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     df["Change5Days"] = (
         (
-            df["Close"]
-            -
+            (
+                df["Close"]
+                -
+                df["Close"].shift(5)
+            )
+            /
             df["Close"].shift(5)
+            *
+            100
         )
-        /
-        df["Close"].shift(5)
-        *
-        100
-    ).round(2)
+        .round(2)
+    )
 
 
     df["Change20Days"] = (
         (
-            df["Close"]
-            -
+            (
+                df["Close"]
+                -
+                df["Close"].shift(20)
+            )
+            /
             df["Close"].shift(20)
+            *
+            100
         )
-        /
-        df["Close"].shift(20)
-        *
-        100
-    ).round(2)
+        .round(2)
+    )
+
+
 
 
     # =====================
-    # 株価位置
+    # 株価判定
     # =====================
 
     df["PriceUp"] = (
@@ -161,6 +164,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+
+
     # =====================
     # 連続上昇日数
     # =====================
@@ -180,15 +185,20 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     for value in up_flag:
 
         if value:
+
             current += 1
 
         else:
+
             current = 0
+
 
         count.append(current)
 
 
     df["ConsecutiveUpDays"] = count
+
+
 
 
     # =====================
@@ -210,10 +220,13 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     for value in volume_flag:
 
         if value:
+
             current += 1
 
         else:
+
             current = 0
+
 
         volume_count.append(current)
 
@@ -270,6 +283,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
     # 30日高値
     # =====================
@@ -297,177 +312,33 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+
+
+
+    # =====================
+    # 高値余地
+    # =====================
+
     df["High30Distance"] = (
         (
-            df["High30"]
-            -
-            df["Close"]
-        )
-        /
-        df["Close"]
-        *
-        100
-    ).round(2)
-
-
-
-    # =====================
-    # 年初来高値（250営業日）
-    # =====================
-
-    df["YearHigh"] = (
-        df["High"]
-        .rolling(250)
-        .max()
-        .round(2)
-    )
-
-
-    df["NewYearHigh"] = (
-        df["High"]
-        >=
-        df["YearHigh"]
-    )
-
-
-
-    # =====================
-    # RSI 14日
-    # =====================
-
-    delta = (
-        df["Close"]
-        .diff()
-    )
-
-
-    gain = (
-        delta
-        .clip(lower=0)
-    )
-
-
-    loss = (
-        -delta
-        .clip(upper=0)
-    )
-
-
-    avg_gain = (
-        gain
-        .rolling(14)
-        .mean()
-    )
-
-
-    avg_loss = (
-        loss
-        .rolling(14)
-        .mean()
-    )
-
-
-    rs = (
-        avg_gain
-        /
-        avg_loss
-    )
-
-
-    df["RSI"] = (
-        100
-        -
-        (
-            100
+            (
+                df["High30"]
+                -
+                df["Close"]
+            )
             /
-            (1 + rs)
+            df["Close"]
+            *
+            100
         )
-    ).round(2)
-
-
-
-    # =====================
-    # ATR（14日）
-    # =====================
-
-    high_low = (
-        df["High"]
-        -
-        df["Low"]
-    )
-
-
-    high_close = (
-        abs(
-            df["High"]
-            -
-            df["Close"].shift(1)
-        )
-    )
-
-
-    low_close = (
-        abs(
-            df["Low"]
-            -
-            df["Close"].shift(1)
-        )
-    )
-
-
-    true_range = pd.concat(
-        [
-            high_low,
-            high_close,
-            low_close
-        ],
-        axis=1
-    ).max(axis=1)
-
-
-    df["ATR"] = (
-        true_range
-        .rolling(14)
-        .mean()
         .round(2)
     )
 
 
 
-    # =====================
-    # ブレイクアウト判定
-    # =====================
-
-    previous_high20 = (
-        df["High"]
-        .shift(1)
-        .rolling(20)
-        .max()
-    )
-
-
-    df["BreakoutSignal"] = (
-        df["Close"]
-        >
-        previous_high20
-    )
-
 
 
     # =====================
-    # ブレイク初日
-    # =====================
-
-    df["BreakoutFirstDay"] = (
-        df["BreakoutSignal"]
-        &
-        (
-            ~df["BreakoutSignal"]
-            .shift(1)
-            .fillna(False)
-        )
-    )
-        # =====================
     # 値動き評価
     # =====================
 
@@ -506,8 +377,10 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
-    # トレンド評価
+    # Ver1.27 トレンド評価
     # =====================
 
     def judge_trend(row):
@@ -561,6 +434,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
     # MA並び
     # =====================
@@ -609,44 +484,56 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
-    # 25日線乖離率
+    # Ver1.28 25日線乖離率
     # =====================
 
     df["MA25Deviation"] = (
         (
-            df["Close"]
-            -
+            (
+                df["Close"]
+                -
+                df["MA25"]
+            )
+            /
             df["MA25"]
+            *
+            100
         )
-        /
-        df["MA25"]
-        *
-        100
-    ).round(2)
+        .round(2)
+    )
+
+
 
 
 
     # =====================
-    # MA収束度
+    # Ver1.28 MA収束度
     # =====================
 
     df["MAConvergence"] = (
-        abs(
-            df["MA5"]
-            -
+        (
+            abs(
+                df["MA5"]
+                -
+                df["MA25"]
+            )
+            /
             df["MA25"]
+            *
+            100
         )
-        /
-        df["MA25"]
-        *
-        100
-    ).round(2)
+        .round(2)
+    )
+
+
 
 
 
     # =====================
-    # 初動シグナル Ver3
+    # Ver1.28 初動シグナル
     # =====================
 
     df["InitialMoveSignal"] = (
@@ -669,59 +556,31 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+
+
     # =====================
-    # 押し目判定 Ver3
+    # Ver1.28 押し目判定
     # =====================
 
     df["PullbackSignal"] = (
 
-        df["TrendEvaluation"]
-        .isin(
+        (df["TrendEvaluation"].isin(
             [
                 "強い上昇",
                 "上昇継続"
             ]
-        )
+        ))
 
         &
 
-        (
-            df["Close"]
-            <=
-            df["MA5"] * 1.02
-        )
+        (df["Close"] <= df["MA5"] * 1.02)
 
         &
 
-        (
-            df["Close"]
-            >=
-            df["MA25"]
-        )
+        (df["Close"] >= df["MA25"])
 
     )
 
 
-
-    # =====================
-    # RSI判定
-    # =====================
-
-    df["RSI_Strong"] = (
-        (df["RSI"] >= 50)
-        &
-        (df["RSI"] <= 70)
-    )
-
-
-    df["RSI_OverBought"] = (
-        df["RSI"] >= 80
-    )
-
-
-
-    # =====================
-    # return
-    # =====================
 
     return df

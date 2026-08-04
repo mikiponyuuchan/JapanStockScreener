@@ -5,8 +5,6 @@ from indicators.technical import add_indicators
 
 
 
-
-
 # ==========================
 # 注目ポイント
 # ==========================
@@ -17,64 +15,72 @@ def make_comment(latest):
 
 
     if latest["PriceUp"]:
-
         comments.append("株価上昇")
 
 
     if latest["AboveMA5"]:
-
         comments.append("5日線上")
 
 
     if latest["AboveMA25"]:
-
         comments.append("25日線上")
 
 
     if latest["AboveMA75"]:
-
         comments.append("75日線上")
 
 
     if latest["TrendEvaluation"]:
-
         comments.append(
             latest["TrendEvaluation"]
         )
 
 
     if latest["MAAlignment"]:
-
         comments.append(
             latest["MAAlignment"]
         )
 
 
     if latest["InitialMoveSignal"]:
-
         comments.append(
             "初動シグナル"
         )
 
 
     if latest["PullbackSignal"]:
-
         comments.append(
             "押し目候補"
         )
 
 
     if latest["MACD_GC"]:
-
         comments.append(
             "MACD GC"
         )
 
 
     if latest["New30High"]:
-
         comments.append(
             "30日高値更新"
+        )
+
+
+    if latest["NewYearHigh"]:
+        comments.append(
+            "年初来高値更新"
+        )
+
+
+    if latest["BreakoutSignal"]:
+        comments.append(
+            "ブレイクアウト"
+        )
+
+
+    if latest["BreakoutFirstDay"]:
+        comments.append(
+            "ブレイク初日"
         )
 
 
@@ -87,13 +93,20 @@ def make_comment(latest):
             )
 
 
+    if pd.notna(latest["VolumeRatio20"]):
+
+        if latest["VolumeRatio20"] >= 2:
+
+            comments.append(
+                "20日平均出来高超"
+            )
+
 
     if latest["Change5Days"] >= 5:
 
         comments.append(
             f"5日上昇{latest['Change5Days']}%"
         )
-
 
 
     if latest["Change20Days"] >= 10:
@@ -103,13 +116,18 @@ def make_comment(latest):
         )
 
 
-
     if latest["ConsecutiveUpDays"] > 0:
 
         comments.append(
             f"{latest['ConsecutiveUpDays']}日連続上昇"
         )
 
+
+    if pd.notna(latest["RSI"]):
+
+        comments.append(
+            f"RSI {latest['RSI']}"
+        )
 
 
     return " / ".join(comments)
@@ -118,10 +136,8 @@ def make_comment(latest):
 
 
 
-
-
 # ==========================
-# スコア計算
+# スコア計算 Ver3.0
 # ==========================
 
 def calculate_score(latest):
@@ -129,65 +145,68 @@ def calculate_score(latest):
     score = 0
 
 
-
     if latest["PriceUp"]:
-
         score += 1
 
 
     if latest["AboveMA5"]:
-
         score += 1
 
 
     if latest["AboveMA25"]:
-
         score += 2
 
 
     if latest["AboveMA75"]:
-
         score += 2
 
 
     if latest["MACD_GC"]:
-
         score += 2
 
 
     if latest["New30High"]:
+        score += 2
 
+
+    if latest["NewYearHigh"]:
+        score += 2
+
+
+    if latest["BreakoutSignal"]:
         score += 2
 
 
     if latest["VolumeRatio"] >= 2:
+        score += 1
 
+
+    if latest["VolumeRatio20"] >= 2:
         score += 1
 
 
     if latest["VolumeIncreaseDays"] >= 3:
-
         score += 1
 
 
     if latest["ConsecutiveUpDays"] >= 3:
-
         score += 1
 
 
     if latest["Change5Days"] >= 5:
-
         score += 1
 
 
     if latest["Change20Days"] >= 10:
+        score += 1
 
+
+    if latest["RSI_Strong"]:
         score += 1
 
 
 
-
-    # Ver1.27
+    # トレンド評価
 
     if latest["TrendEvaluation"] == "強い上昇":
 
@@ -200,13 +219,12 @@ def calculate_score(latest):
 
 
 
-
-
-    # Ver1.28
+    # 初動
 
     if latest["InitialMoveSignal"]:
 
         score += 2
+
 
 
     if latest["PullbackSignal"]:
@@ -216,23 +234,18 @@ def calculate_score(latest):
 
 
     return score
-
-
-
-
-
 # ==========================
 # ランク
 # ==========================
 
 def make_rank(score):
 
-    if score >= 14:
+    if score >= 18:
 
         return "A"
 
 
-    elif score >= 7:
+    elif score >= 9:
 
         return "B"
 
@@ -306,7 +319,7 @@ def make_total_judgement(
 
     if (
         rank == "A"
-        and score >= 12
+        and score >= 15
         and short_trend == "強い"
         and middle_trend == "強い"
         and position != "高値圏"
@@ -325,7 +338,12 @@ def make_total_judgement(
     else:
 
         return "様子見"
-    # ==========================
+
+
+
+
+
+# ==========================
 # 買い候補理由
 # ==========================
 
@@ -342,14 +360,12 @@ def make_buy_reason(
         return ""
 
 
-
     reasons = []
 
 
     reasons.append(
         f"{rank}ランク 強気度{score}点"
     )
-
 
 
     if latest["TrendEvaluation"]:
@@ -359,13 +375,11 @@ def make_buy_reason(
         )
 
 
-
     if latest["MAAlignment"]:
 
         reasons.append(
             latest["MAAlignment"]
         )
-
 
 
     if latest["InitialMoveSignal"]:
@@ -375,13 +389,11 @@ def make_buy_reason(
         )
 
 
-
     if latest["PullbackSignal"]:
 
         reasons.append(
             "押し目判定"
         )
-
 
 
     if latest["MACD_GC"]:
@@ -391,13 +403,25 @@ def make_buy_reason(
         )
 
 
-
     if latest["New30High"]:
 
         reasons.append(
             "30日高値更新"
         )
 
+
+    if latest["NewYearHigh"]:
+
+        reasons.append(
+            "年初来高値更新"
+        )
+
+
+    if latest["BreakoutSignal"]:
+
+        reasons.append(
+            "ブレイクアウト"
+        )
 
 
     if latest["VolumeRatio"] >= 2:
@@ -407,6 +431,12 @@ def make_buy_reason(
         )
 
 
+    if latest["RSI_Strong"]:
+
+        reasons.append(
+            f"RSI良好({latest['RSI']})"
+        )
+
 
     if latest["MA25Deviation"]:
 
@@ -415,13 +445,11 @@ def make_buy_reason(
         )
 
 
-
     if position:
 
         reasons.append(
             f"株価位置:{position}"
         )
-
 
 
     return " / ".join(reasons)
@@ -458,14 +486,18 @@ def make_analysis_comment(
     )
 
 
-    comments.append(
-        latest["TrendEvaluation"]
-    )
+    if latest["TrendEvaluation"]:
+
+        comments.append(
+            latest["TrendEvaluation"]
+        )
 
 
-    comments.append(
-        latest["MAAlignment"]
-    )
+    if latest["MAAlignment"]:
+
+        comments.append(
+            latest["MAAlignment"]
+        )
 
 
     if latest["InitialMoveSignal"]:
@@ -482,17 +514,40 @@ def make_analysis_comment(
         )
 
 
+    if latest["MACD_GC"]:
+
+        comments.append(
+            "MACD GC"
+        )
+
+
+    if latest["NewYearHigh"]:
+
+        comments.append(
+            "年初来高値"
+        )
+
+
+    if latest["BreakoutSignal"]:
+
+        comments.append(
+            "ブレイク"
+        )
+
+
+    if pd.notna(latest["RSI"]):
+
+        comments.append(
+            f"RSI{latest['RSI']}"
+        )
+
+
     comments.append(
         judgement
     )
 
 
     return " / ".join(comments)
-
-
-
-
-
 # ==========================
 # 銘柄分析
 # ==========================
@@ -600,6 +655,21 @@ def analyze_stock(stock):
 
 
 
+        "RSI":
+            latest["RSI"],
+
+
+
+        "RSI判定":
+            "良好" if latest["RSI_Strong"] else "",
+
+
+
+        "ATR":
+            latest["ATR"],
+
+
+
         "MA収束度%":
             latest["MAConvergence"],
 
@@ -645,6 +715,11 @@ def analyze_stock(stock):
 
 
 
+        "20日出来高倍率":
+            latest["VolumeRatio20"],
+
+
+
         "30日高値":
             latest["High30"],
 
@@ -652,6 +727,26 @@ def analyze_stock(stock):
 
         "30日高値までの距離%":
             latest["High30Distance"],
+
+
+
+        "年初来高値":
+            latest["YearHigh"],
+
+
+
+        "年初来高値更新":
+            "○" if latest["NewYearHigh"] else "",
+
+
+
+        "ブレイクアウト":
+            "○" if latest["BreakoutSignal"] else "",
+
+
+
+        "ブレイク初日":
+            "○" if latest["BreakoutFirstDay"] else "",
 
 
 
