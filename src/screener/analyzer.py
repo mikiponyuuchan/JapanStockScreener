@@ -1,4 +1,5 @@
 import pandas as pd
+import time
 
 from services.yahoo_service import get_history
 from indicators.technical import add_indicators
@@ -582,15 +583,47 @@ def analyze_stock(stock):
 
     code = stock["コード"]
 
+
+    # ==========================
+    # データ取得計測
+    # ==========================
+
+    data_start = time.time()
+
     df = get_history(code)
+
+    data_time = time.time() - data_start
+
 
     if df is None or df.empty:
         return None
 
 
+
+    # ==========================
+    # 指標計算計測
+    # ==========================
+
+    indicator_start = time.time()
+
     df = add_indicators(df)
 
+    indicator_time = (
+        time.time()
+        -
+        indicator_start
+    )
+
+
     latest = df.iloc[-1]
+
+
+
+    # ==========================
+    # 判定作成計測
+    # ==========================
+
+    judge_start = time.time()
 
 
     score = calculate_score(latest)
@@ -624,6 +657,7 @@ def analyze_stock(stock):
         position,
         latest
     )
+
 
 
     return {
@@ -689,14 +723,29 @@ def analyze_stock(stock):
             judgement,
 
         "分析コメント":
-            make_analysis_comment(
-                latest,
-                score,
-                rank,
-                position,
-                short_trend,
-                middle_trend,
-                long_trend,
-                judgement
-            )
-    }
+    make_analysis_comment(
+        latest,
+        score,
+        rank,
+        position,
+        short_trend,
+        middle_trend,
+        long_trend,
+        judgement
+    ),
+
+
+# ==========================
+# Sprint2 計測データ
+# ==========================
+
+"_data_time":
+    data_time,
+
+"_indicator_time":
+    indicator_time,
+
+"_judge_time":
+    time.time() - judge_start
+
+}

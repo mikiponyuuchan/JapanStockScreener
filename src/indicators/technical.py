@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
-
+import time
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     テクニカル指標を追加する
     Ver3.0
     """
+
+    start_time = time.time()
 
     df = df.copy()
 
@@ -723,5 +725,12 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # =====================
     # return
     # =====================
+
+
+    elapsed = time.time() - start_time
+
+    print(
+        f"指標計算        : {elapsed:.1f} 秒"
+    )
 
     return df

@@ -52,6 +52,8 @@ def get_price(code: str):
 
 def get_history(code: str, period="6mo"):
 
+    start_time = time.time()
+
     cache_file = CACHE_DIR / f"{code}.csv"
 
     # ==========================
@@ -73,6 +75,12 @@ def get_history(code: str, period="6mo"):
                 df = pd.read_csv(
                     cache_file,
                     parse_dates=["Date"]
+                )
+
+                elapsed = time.time() - start_time
+
+                print(
+                    f"データ取得(Cache) : {elapsed:.2f} 秒"
                 )
 
                 return df
@@ -113,6 +121,13 @@ def get_history(code: str, period="6mo"):
 
             except Exception:
                 pass
+
+            elapsed = time.time() - start_time
+
+            print(
+                f"データ取得(Yahoo) : {elapsed:.2f} 秒"
+            )
+
 
             return df
 

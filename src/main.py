@@ -155,12 +155,63 @@ def main():
 
     save_end = time.time()
 
-    elapsed = time.time() - start_time
+
+    # ==========================
+    # Sprint2 時間集計
+    # ==========================
+
+    data_total = (
+        df["_data_time"]
+        .sum()
+    )
+
+
+    indicator_total = (
+        df["_indicator_time"]
+        .sum()
+    )
+
+
+    judge_total = (
+        df["_judge_time"]
+        .sum()
+    )
+
+
+    total_time = (
+        time.time()
+        -
+        start_time
+    )
+
 
     print()
-    print(f"分析時間 : {analysis_end - analysis_start:.1f} 秒")
-    print(f"保存時間 : {save_end - save_start:.1f} 秒")
-    print(f"処理時間 : {elapsed:.1f} 秒")
+
+    print("==============================")
+    print(" 処理時間内訳 ")
+    print("==============================")
+
+    print(
+        f"データ取得      : {data_total:6.1f} 秒"
+    )
+
+    print(
+        f"指標計算        : {indicator_total:6.1f} 秒"
+    )
+
+    print(
+        f"判定作成        : {judge_total:6.1f} 秒"
+    )
+
+    print(
+        f"保存            : {save_end - save_start:6.1f} 秒"
+    )
+
+    print()
+
+    print(
+        f"合計            : {total_time:6.1f} 秒"
+    )
 
 
 if __name__ == "__main__":
