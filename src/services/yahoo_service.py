@@ -1,9 +1,19 @@
 import time
+from pathlib import Path
+
+import pandas as pd
 import yfinance as yf
 
 
 RETRY_COUNT = 3
 RETRY_WAIT = 1
+
+# ==========================
+# キャッシュフォルダ
+# ==========================
+
+CACHE_DIR = Path("data/cache")
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_price(code: str):
@@ -41,6 +51,30 @@ def get_price(code: str):
 
 def get_history(code: str, period="6mo"):
 
+    cache_file = CACHE_DIR / f"{code}.csv"
+
+    # ==========================
+    # キャッシュがあれば読む
+    # ==========================
+
+    if cache_file.exists():
+
+        try:
+
+            df = pd.read_csv(
+                cache_file,
+                parse_dates=["Date"]
+            )
+
+            return df
+
+        except Exception:
+            pass
+
+    # ==========================
+    # Yahooから取得
+    # ==========================
+
     ticker = f"{code}.T"
 
     for attempt in range(RETRY_COUNT):
@@ -54,7 +88,24 @@ def get_history(code: str, period="6mo"):
             if df.empty:
                 return None
 
-            return df.reset_index()
+            df = df.reset_index()
+
+            # ==========================
+            # キャッシュ保存
+            # ==========================
+
+            try:
+
+                df.to_csv(
+                    cache_file,
+                    index=False,
+                    encoding="utf-8-sig"
+                )
+
+            except Exception:
+                pass
+
+            return df
 
         except Exception:
 

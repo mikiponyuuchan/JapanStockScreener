@@ -15,8 +15,9 @@ def run_screener(start=0, limit=None):
     stocks = load_stock_list(start, limit)
 
     results = []
+    error_list = []
 
-    total = len(stocks)
+total = len(stocks)
 
 
 MAX_WORKERS = 10
@@ -50,13 +51,46 @@ with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         except Exception as e:
 
             print(
-                f"ERROR {stock['コード']} : {e}"
+               f"ERROR {stock['コード']} : {e}"
             )
+
+            error_list.append(
+                {
+                     "コード": stock["コード"],
+                     "銘柄名": stock["銘柄名"],
+                     "エラー内容": str(e)
+                }
+           )
 
 
 
     result_df = pd.DataFrame(results)
 
+if result_df.empty:
+
+    print()
+
+    print("取得できた銘柄がありませんでした。")
+
+    if error_list:
+
+        error_df = pd.DataFrame(error_list)
+
+        error_path = (
+            Path(config.DATA_DIR)
+            /
+            "error_log.csv"
+        )
+
+        error_df.to_csv(
+            error_path,
+            index=False,
+            encoding="utf-8-sig"
+        )
+
+        print(f"保存しました : {error_path}")
+
+    return result_df
 
 
     # ==========================
@@ -391,6 +425,28 @@ with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 
         print(buy_candidate_df)
 
+# ==========================
+# エラーログ保存
+# ==========================
 
+if error_list:
+
+    error_df = pd.DataFrame(error_list)
+
+    error_path = (
+        Path(config.DATA_DIR)
+        /
+        "error_log.csv"
+    )
+
+    error_df.to_csv(
+        error_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print(f"保存しました : {error_path}")
+
+    print(f"取得エラー : {len(error_list)} 件")
 
     return screening_df
