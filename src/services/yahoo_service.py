@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -54,19 +55,27 @@ def get_history(code: str, period="6mo"):
     cache_file = CACHE_DIR / f"{code}.csv"
 
     # ==========================
-    # キャッシュがあれば読む
+    # 今日のキャッシュがあれば利用
     # ==========================
 
     if cache_file.exists():
 
         try:
 
-            df = pd.read_csv(
-                cache_file,
-                parse_dates=["Date"]
-            )
+            cache_date = datetime.fromtimestamp(
+                cache_file.stat().st_mtime
+            ).date()
 
-            return df
+            today = datetime.now().date()
+
+            if cache_date == today:
+
+                df = pd.read_csv(
+                    cache_file,
+                    parse_dates=["Date"]
+                )
+
+                return df
 
         except Exception:
             pass
@@ -113,3 +122,5 @@ def get_history(code: str, period="6mo"):
                 return None
 
             time.sleep(RETRY_WAIT)
+
+    return None
