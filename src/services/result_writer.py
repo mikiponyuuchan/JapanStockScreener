@@ -2,7 +2,12 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import (
+    Font,
+    PatternFill,
+    Alignment
+)
+
 from openpyxl.utils import get_column_letter
 
 
@@ -56,7 +61,8 @@ def save_result(df):
             # ----------------------
 
             top20 = (
-                df.sort_values(
+                df
+                .sort_values(
                     "強気度",
                     ascending=False
                 )
@@ -82,34 +88,69 @@ def save_result(df):
                 sheet_name="買い候補",
                 index=False
             )
-                        # ==========================
-            # Excel見やすさ改善
-            # ==========================
 
             workbook = writer.book
 
+            # ==========================
             # 色定義
+            # ==========================
+
             green_fill = PatternFill(
                 fill_type="solid",
                 start_color="CCFFCC",
                 end_color="CCFFCC"
             )
 
-            blue_font = Font(color="0000FF")
-            red_font = Font(color="FF0000")
-            purple_font = Font(color="800080")
+            header_fill = PatternFill(
+                fill_type="solid",
+                start_color="1F4E78",
+                end_color="1F4E78"
+            )
+
+            blue_fill = PatternFill(
+                fill_type="solid",
+                start_color="DDEBF7",
+                end_color="DDEBF7"
+            )
+
+            blue_font = Font(
+                color="0000FF"
+            )
+
+            red_font = Font(
+                color="FF0000",
+                bold=True
+            )
+
+            purple_font = Font(
+                color="800080"
+            )
+
             orange_font = Font(
                 color="FF6600",
                 bold=True
             )
 
+            header_font = Font(
+                color="FFFFFF",
+                bold=True
+            )
+
+            center = Alignment(
+                horizontal="center"
+            )
+
+            # ==========================
+            # 全シート共通処理
+            # ==========================
+
             for sheet in workbook.worksheets:
 
                 # ----------------------
-                # 先頭行固定
+                # A・B列固定＋1行目固定
                 # ----------------------
 
-                sheet.freeze_panes = "A2"
+                sheet.freeze_panes = "C2"
 
                 # ----------------------
                 # フィルター
@@ -118,11 +159,16 @@ def save_result(df):
                 sheet.auto_filter.ref = sheet.dimensions
 
                 # ----------------------
-                # ヘッダー太字
+                # ヘッダー装飾
                 # ----------------------
 
                 for cell in sheet[1]:
-                    cell.font = Font(bold=True)
+
+                    cell.font = header_font
+
+                    cell.fill = header_fill
+
+                    cell.alignment = center
 
                 # ----------------------
                 # 列幅自動調整
@@ -152,18 +198,25 @@ def save_result(df):
                         if length > max_length:
                             max_length = length
 
-                    sheet.column_dimensions[column].width = min(
+                    sheet.column_dimensions[
+                        column
+                    ].width = min(
                         max_length + 3,
                         40
                     )
 
                 # ----------------------
-                # 色付け
+                # 行ごとの色付け
                 # ----------------------
 
-                for row in range(2, sheet.max_row + 1):
-
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
+                                        # ======================
                     # 買い候補 → 行全体を薄緑
+                    # ======================
+
                     if "総合判定" in headers:
 
                         cell = sheet.cell(
@@ -183,7 +236,22 @@ def save_result(df):
                                     col
                                 ).fill = green_fill
 
-                    # Aランク → 青文字
+                        elif cell.value == "監視強化":
+
+                            for col in range(
+                                1,
+                                sheet.max_column + 1
+                            ):
+
+                                sheet.cell(
+                                    row,
+                                    col
+                                ).fill = blue_fill
+
+                    # ======================
+                    # Aランク
+                    # ======================
+
                     if "監視ランク" in headers:
 
                         cell = sheet.cell(
@@ -195,7 +263,10 @@ def save_result(df):
 
                             cell.font = blue_font
 
-                    # RSI75以上 → 赤文字
+                    # ======================
+                    # RSI75以上
+                    # ======================
+
                     if "RSI" in headers:
 
                         cell = sheet.cell(
@@ -212,19 +283,25 @@ def save_result(df):
                         except Exception:
                             pass
 
-                    # ブレイクアウト → 紫文字
-                    if "ブレイクアウト" in headers:
+                    # ======================
+                    # ブレイク
+                    # ======================
+
+                    if "ブレイク" in headers:
 
                         cell = sheet.cell(
                             row,
-                            headers["ブレイクアウト"]
+                            headers["ブレイク"]
                         )
 
-                        if cell.value:
+                        if str(cell.value) == "○":
 
                             cell.font = purple_font
 
-                    # 強気度20以上 → オレンジ太字
+                    # ======================
+                    # 強気度20以上
+                    # ======================
+
                     if "強気度" in headers:
 
                         cell = sheet.cell(
@@ -234,12 +311,27 @@ def save_result(df):
 
                         try:
 
-                            if int(cell.value) >= 20:
+                            score = int(cell.value)
+
+                            if score >= 22:
+
+                                cell.font = Font(
+                                    color="FF0000",
+                                    bold=True
+                                )
+
+                            elif score >= 20:
 
                                 cell.font = orange_font
 
                         except Exception:
                             pass
+
+            # ==========================
+            # 最初に開くシート
+            # ==========================
+
+            workbook.active = 1
 
     except PermissionError:
 
