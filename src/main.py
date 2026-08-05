@@ -30,6 +30,7 @@ def main():
     total = len(stocks)
 
     results = []
+    analysis_start = time.time()
 
     # ==========================
     # 並列分析開始
@@ -105,6 +106,7 @@ def main():
 
         print("分析結果なし")
         return
+    analysis_end = time.time()
 
     # ==========================
     # DataFrame
@@ -143,11 +145,21 @@ def main():
     # 保存
     # ==========================
 
+# ==========================
+# 保存時間計測
+# ==========================
+
+    save_start = time.time()
+
     save_result(df)
+
+    save_end = time.time()
 
     elapsed = time.time() - start_time
 
     print()
+    print(f"分析時間 : {analysis_end - analysis_start:.1f} 秒")
+    print(f"保存時間 : {save_end - save_start:.1f} 秒")
     print(f"処理時間 : {elapsed:.1f} 秒")
 
 
