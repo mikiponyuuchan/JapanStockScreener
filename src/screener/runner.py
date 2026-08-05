@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from pathlib import Path
 
 import pandas as pd
@@ -17,16 +19,39 @@ def run_screener(start=0, limit=None):
     total = len(stocks)
 
 
-    for i, (_, stock) in enumerate(stocks.iterrows(), start=1):
+MAX_WORKERS = 10
+
+completed = 0
+
+with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+
+    futures = {
+        executor.submit(analyze_stock, stock): stock
+        for _, stock in stocks.iterrows()
+    }
+
+    for future in as_completed(futures):
+
+        stock = futures[future]
+        completed += 1
 
         print(
-            f"[{i}/{total}] {stock['コード']} {stock['銘柄名']}"
+            f"[{completed}/{total}] "
+            f"{stock['コード']} {stock['銘柄名']}"
         )
 
-        result = analyze_stock(stock)
+        try:
 
-        if result is not None:
-            results.append(result)
+            result = future.result()
+
+            if result is not None:
+                results.append(result)
+
+        except Exception as e:
+
+            print(
+                f"ERROR {stock['コード']} : {e}"
+            )
 
 
 
