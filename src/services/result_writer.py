@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 
@@ -82,26 +82,58 @@ def save_result(df):
                 sheet_name="買い候補",
                 index=False
             )
-
-            # ==========================
+                        # ==========================
             # Excel見やすさ改善
             # ==========================
 
             workbook = writer.book
 
+            # 色定義
+            green_fill = PatternFill(
+                fill_type="solid",
+                start_color="CCFFCC",
+                end_color="CCFFCC"
+            )
+
+            blue_font = Font(color="0000FF")
+            red_font = Font(color="FF0000")
+            purple_font = Font(color="800080")
+            orange_font = Font(
+                color="FF6600",
+                bold=True
+            )
+
             for sheet in workbook.worksheets:
 
+                # ----------------------
                 # 先頭行固定
+                # ----------------------
+
                 sheet.freeze_panes = "A2"
 
-                # オートフィルター
+                # ----------------------
+                # フィルター
+                # ----------------------
+
                 sheet.auto_filter.ref = sheet.dimensions
 
+                # ----------------------
                 # ヘッダー太字
+                # ----------------------
+
                 for cell in sheet[1]:
                     cell.font = Font(bold=True)
 
+                # ----------------------
                 # 列幅自動調整
+                # ----------------------
+
+                headers = {}
+
+                for cell in sheet[1]:
+
+                    headers[cell.value] = cell.column
+
                 for column_cells in sheet.columns:
 
                     column = get_column_letter(
@@ -124,6 +156,90 @@ def save_result(df):
                         max_length + 3,
                         40
                     )
+
+                # ----------------------
+                # 色付け
+                # ----------------------
+
+                for row in range(2, sheet.max_row + 1):
+
+                    # 買い候補 → 行全体を薄緑
+                    if "総合判定" in headers:
+
+                        cell = sheet.cell(
+                            row,
+                            headers["総合判定"]
+                        )
+
+                        if cell.value == "買い候補":
+
+                            for col in range(
+                                1,
+                                sheet.max_column + 1
+                            ):
+
+                                sheet.cell(
+                                    row,
+                                    col
+                                ).fill = green_fill
+
+                    # Aランク → 青文字
+                    if "監視ランク" in headers:
+
+                        cell = sheet.cell(
+                            row,
+                            headers["監視ランク"]
+                        )
+
+                        if str(cell.value).startswith("A"):
+
+                            cell.font = blue_font
+
+                    # RSI75以上 → 赤文字
+                    if "RSI" in headers:
+
+                        cell = sheet.cell(
+                            row,
+                            headers["RSI"]
+                        )
+
+                        try:
+
+                            if float(cell.value) >= 75:
+
+                                cell.font = red_font
+
+                        except Exception:
+                            pass
+
+                    # ブレイクアウト → 紫文字
+                    if "ブレイクアウト" in headers:
+
+                        cell = sheet.cell(
+                            row,
+                            headers["ブレイクアウト"]
+                        )
+
+                        if cell.value:
+
+                            cell.font = purple_font
+
+                    # 強気度20以上 → オレンジ太字
+                    if "強気度" in headers:
+
+                        cell = sheet.cell(
+                            row,
+                            headers["強気度"]
+                        )
+
+                        try:
+
+                            if int(cell.value) >= 20:
+
+                                cell.font = orange_font
+
+                        except Exception:
+                            pass
 
     except PermissionError:
 
