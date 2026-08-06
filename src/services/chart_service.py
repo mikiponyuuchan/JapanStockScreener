@@ -11,7 +11,7 @@ from services.yahoo_service import get_history
 def save_chart(code):
 
     """
-    チャート画像保存
+    株価チャート画像保存
     """
 
     df = get_history(code)
@@ -61,12 +61,22 @@ def save_chart(code):
     # チャート作成
     # ==========================
 
-    plt.figure(
-        figsize=(8, 4)
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(8, 6),
+        sharex=True,
+        gridspec_kw={
+            "height_ratios": [3, 1]
+        }
     )
 
 
-    plt.plot(
+    # ==========================
+    # 株価チャート
+    # ==========================
+
+    axes[0].plot(
         df["Date"],
         df["Close"],
         linewidth=2,
@@ -74,7 +84,7 @@ def save_chart(code):
     )
 
 
-    plt.plot(
+    axes[0].plot(
         df["Date"],
         df["MA5"],
         linewidth=1.5,
@@ -82,7 +92,7 @@ def save_chart(code):
     )
 
 
-    plt.plot(
+    axes[0].plot(
         df["Date"],
         df["MA25"],
         linewidth=1.5,
@@ -90,16 +100,40 @@ def save_chart(code):
     )
 
 
-    plt.title(
+    axes[0].set_title(
         code
     )
 
 
-    plt.legend()
+    axes[0].legend()
 
 
-    plt.grid(True)
+    axes[0].grid(True)
 
+
+    # ==========================
+    # 出来高チャート
+    # ==========================
+
+    if "Volume" in df.columns:
+
+        axes[1].bar(
+            df["Date"],
+            df["Volume"]
+        )
+
+
+    axes[1].set_ylabel(
+        "Volume"
+    )
+
+
+    axes[1].grid(True)
+
+
+    # ==========================
+    # 保存
+    # ==========================
 
     plt.tight_layout()
 
