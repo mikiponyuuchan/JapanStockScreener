@@ -79,9 +79,6 @@ def get_history(code: str, period="6mo"):
 
                 elapsed = time.time() - start_time
 
-                print(
-                    f"データ取得(Cache) : {elapsed:.2f} 秒"
-                )
 
                 return df
 

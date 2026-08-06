@@ -727,10 +727,5 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # =====================
 
 
-    elapsed = time.time() - start_time
-
-    print(
-        f"指標計算        : {elapsed:.1f} 秒"
-    )
 
     return df

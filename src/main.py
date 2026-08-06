@@ -17,7 +17,7 @@ def main():
     start_time = time.time()
 
     print("==============================")
-    print(" 日本株スクリーナー Ver4.0 ")
+    print(" 日本株スクリーナー Ver5.3 ")
     print("==============================")
     print()
 
@@ -74,8 +74,9 @@ def main():
 
                 print(f"ERROR: {code} {e}")
 
+
             # --------------------------
-            # 進捗表示
+            # 進捗表示（20銘柄ごと）
             # --------------------------
 
             percent = completed / total * 100
@@ -92,12 +93,14 @@ def main():
 
                 remain = 0
 
-            print(
-                f"[{completed}/{total}] "
-                f"{percent:5.1f}% "
-                f"残り約 {remain:5.0f} 秒",
-                end="\r"
-            )
+            if completed % 20 == 0 or completed == total:
+
+                print(
+                    f"[{completed}/{total}] "
+                    f"{percent:5.1f}% "
+                    f"残り約 {remain:5.0f} 秒",
+                    end="\r"
+                )
 
     print()
     print()
@@ -120,26 +123,33 @@ def main():
     )
 
     # ==========================
+    # 内部計測列を非表示
+    # ==========================
+
+    display_df = df.drop(
+        columns=[
+            "_data_time",
+            "_indicator_time",
+            "_judge_time"
+        ],
+        errors="ignore"
+    )
+
+    # ==========================
     # TOP20
     # ==========================
 
-    top20 = df.head(20)
+    top20 = display_df.head(20)
 
-    print("=== 本日の注目銘柄 TOP20 ===")
-    print(top20)
-    print()
 
     # ==========================
     # 買い候補
     # ==========================
 
-    buy_df = df[
-        df["総合判定"] == "買い候補"
+    buy_df = display_df[
+        display_df["総合判定"] == "買い候補"
     ]
 
-    print("=== 買い候補 ===")
-    print(buy_df)
-    print()
 
     # ==========================
     # 保存
