@@ -3,7 +3,6 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
 import mplfinance as mpf
 
 from services.yahoo_service import get_history
@@ -15,7 +14,14 @@ def save_chart(code):
     ローソク足チャート画像保存
     """
 
-    df = get_history(code)
+    # ==========================
+    # 1年分取得（年初来高値用）
+    # ==========================
+
+    df = get_history(
+        code,
+        period="1y"
+    )
 
     if df is None or df.empty:
         return None
@@ -40,7 +46,17 @@ def save_chart(code):
 
 
     # ==========================
-    # mplfinance用データ
+    # 年初来高値計算
+    # ==========================
+
+    year_high = (
+        df["High"]
+        .max()
+    )
+
+
+    # ==========================
+    # mplfinance用
     # ==========================
 
     chart_df = df.copy()
@@ -78,23 +94,28 @@ def save_chart(code):
     add_plots = [
 
         mpf.make_addplot(
-            chart_df["MA5"],
-            color="blue"
+            chart_df["MA5"]
         ),
 
         mpf.make_addplot(
-            chart_df["MA25"],
-            color="red"
+            chart_df["MA25"]
+        ),
+
+        mpf.make_addplot(
+            [year_high] * len(chart_df),
+            color="green",
+            linestyle="--"
         )
 
     ]
 
 
     # ==========================
-    # ローソク足作成
+    # ローソク足チャート
     # ==========================
 
     mpf.plot(
+
         chart_df,
 
         type="candle",
