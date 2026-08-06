@@ -4,6 +4,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import mplfinance as mpf
 
 from services.yahoo_service import get_history
 
@@ -11,7 +12,7 @@ from services.yahoo_service import get_history
 def save_chart(code):
 
     """
-    株価チャート画像保存
+    ローソク足チャート画像保存
     """
 
     df = get_history(code)
@@ -39,10 +40,23 @@ def save_chart(code):
 
 
     # ==========================
+    # mplfinance用データ
+    # ==========================
+
+    chart_df = df.copy()
+
+    chart_df = chart_df.set_index(
+        "Date"
+    )
+
+
+    # ==========================
     # 保存フォルダ
     # ==========================
 
-    folder = Path("results/charts")
+    folder = Path(
+        "results/charts"
+    )
 
     folder.mkdir(
         parents=True,
@@ -58,93 +72,48 @@ def save_chart(code):
 
 
     # ==========================
-    # チャート作成
+    # 追加ライン
     # ==========================
 
-    fig, axes = plt.subplots(
-        2,
-        1,
-        figsize=(8, 6),
-        sharex=True,
-        gridspec_kw={
-            "height_ratios": [3, 1]
-        }
-    )
+    add_plots = [
 
+        mpf.make_addplot(
+            chart_df["MA5"],
+            color="blue"
+        ),
 
-    # ==========================
-    # 株価チャート
-    # ==========================
-
-    axes[0].plot(
-        df["Date"],
-        df["Close"],
-        linewidth=2,
-        label="Close"
-    )
-
-
-    axes[0].plot(
-        df["Date"],
-        df["MA5"],
-        linewidth=1.5,
-        label="MA5"
-    )
-
-
-    axes[0].plot(
-        df["Date"],
-        df["MA25"],
-        linewidth=1.5,
-        label="MA25"
-    )
-
-
-    axes[0].set_title(
-        code
-    )
-
-
-    axes[0].legend()
-
-
-    axes[0].grid(True)
-
-
-    # ==========================
-    # 出来高チャート
-    # ==========================
-
-    if "Volume" in df.columns:
-
-        axes[1].bar(
-            df["Date"],
-            df["Volume"]
+        mpf.make_addplot(
+            chart_df["MA25"],
+            color="red"
         )
 
-
-    axes[1].set_ylabel(
-        "Volume"
-    )
-
-
-    axes[1].grid(True)
+    ]
 
 
     # ==========================
-    # 保存
+    # ローソク足作成
     # ==========================
 
-    plt.tight_layout()
+    mpf.plot(
+        chart_df,
 
+        type="candle",
 
-    plt.savefig(
-        filename,
-        dpi=120
+        volume=True,
+
+        addplot=add_plots,
+
+        figsize=(8, 6),
+
+        style="yahoo",
+
+        savefig=dict(
+            fname=filename,
+            dpi=120,
+            bbox_inches="tight"
+        )
+
     )
-
-
-    plt.close()
 
 
     return filename
