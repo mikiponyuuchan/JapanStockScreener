@@ -11,12 +11,8 @@ from services.yahoo_service import get_history
 def save_chart(code):
 
     """
-    ローソク足チャート画像保存
+    ローソク足 + 出来高 + MA + 年初来高値
     """
-
-    # ==========================
-    # 1年分取得（年初来高値用）
-    # ==========================
 
     df = get_history(
         code,
@@ -28,7 +24,7 @@ def save_chart(code):
 
 
     # ==========================
-    # 移動平均計算
+    # 指標
     # ==========================
 
     df["MA5"] = (
@@ -44,10 +40,6 @@ def save_chart(code):
         .mean()
     )
 
-
-    # ==========================
-    # 年初来高値計算
-    # ==========================
 
     year_high = (
         df["High"]
@@ -67,7 +59,7 @@ def save_chart(code):
 
 
     # ==========================
-    # 保存フォルダ
+    # 保存先
     # ==========================
 
     folder = Path(
@@ -103,7 +95,6 @@ def save_chart(code):
 
         mpf.make_addplot(
             [year_high] * len(chart_df),
-            color="green",
             linestyle="--"
         )
 
@@ -111,7 +102,7 @@ def save_chart(code):
 
 
     # ==========================
-    # ローソク足チャート
+    # チャート
     # ==========================
 
     mpf.plot(
@@ -120,13 +111,15 @@ def save_chart(code):
 
         type="candle",
 
-        volume=True,
+        style="yahoo",
 
         addplot=add_plots,
 
-        figsize=(8, 6),
+        volume=True,
 
-        style="yahoo",
+        figsize=(8,5),
+
+        tight_layout=True,
 
         savefig=dict(
             fname=filename,
