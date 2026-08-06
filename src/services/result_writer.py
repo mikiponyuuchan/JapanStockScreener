@@ -19,8 +19,6 @@ def save_result(df):
 
     csv_file = folder / f"{today}_stock_result.csv"
     excel_file = folder / f"{today}_stock_result.xlsx"
-
-    # NEW
     top20_csv = folder / f"{today}_top20.csv"
 
     # ==========================
@@ -34,6 +32,22 @@ def save_result(df):
     )
 
     # ==========================
+    # TOP20作成
+    # ==========================
+
+    top20 = (
+        df.sort_values(
+            "強気度",
+            ascending=False
+        )
+        .head(20)
+    )
+
+    buy_df = df[
+        df["総合判定"] == "買い候補"
+    ]
+
+    # ==========================
     # Excel保存
     # ==========================
 
@@ -44,26 +58,10 @@ def save_result(df):
             engine="openpyxl"
         ) as writer:
 
-            # ----------------------
-            # 全銘柄
-            # ----------------------
-
             df.to_excel(
                 writer,
                 sheet_name="全銘柄",
                 index=False
-            )
-
-            # ----------------------
-            # TOP20
-            # ----------------------
-
-            top20 = (
-                df.sort_values(
-                    "強気度",
-                    ascending=False
-                )
-                .head(20)
             )
 
             top20.to_excel(
@@ -72,14 +70,6 @@ def save_result(df):
                 index=False
             )
 
-            # ----------------------
-            # 買い候補
-            # ----------------------
-
-            buy_df = df[
-                df["総合判定"] == "買い候補"
-            ]
-
             buy_df.to_excel(
                 writer,
                 sheet_name="買い候補",
@@ -87,7 +77,11 @@ def save_result(df):
             )
 
             workbook = writer.book
-                        # 色定義
+
+            # ----------------------
+            # 色設定
+            # ----------------------
+
             green_fill = PatternFill(
                 fill_type="solid",
                 start_color="CCFFCC",
@@ -95,42 +89,39 @@ def save_result(df):
             )
 
             blue_font = Font(color="0000FF")
+
             red_font = Font(color="FF0000")
+
             purple_font = Font(color="800080")
+
             orange_font = Font(
                 color="FF6600",
                 bold=True
             )
 
-            for sheet in workbook.worksheets:
+            # ======================
+            # 全シート共通設定
+            # ======================
 
-                # ----------------------
-                # A・B列固定
-                # ----------------------
+            for sheet in workbook.worksheets:
 
                 sheet.freeze_panes = "C2"
 
-                # ----------------------
-                # フィルター
-                # ----------------------
-
                 sheet.auto_filter.ref = sheet.dimensions
 
-                # ----------------------
                 # ヘッダー
-                # ----------------------
 
                 for cell in sheet[1]:
                     cell.font = Font(bold=True)
 
-                # ----------------------
-                # 列幅自動
-                # ----------------------
+                # 列番号取得
 
                 headers = {}
 
                 for cell in sheet[1]:
                     headers[cell.value] = cell.column
+
+                # 列幅自動
 
                 for column_cells in sheet.columns:
 
@@ -155,11 +146,16 @@ def save_result(df):
                         40
                     )
 
-                # ----------------------
-                # 色付け
-                # ----------------------
+                # ------------------
+                # 行ごとの色付け
+                # ------------------
 
-                for row in range(2, sheet.max_row + 1):
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
+
+                    # 買い候補
 
                     if "総合判定" in headers:
 
@@ -180,6 +176,8 @@ def save_result(df):
                                     col
                                 ).fill = green_fill
 
+                    # Aランク
+
                     if "監視ランク" in headers:
 
                         cell = sheet.cell(
@@ -191,6 +189,8 @@ def save_result(df):
 
                             cell.font = blue_font
 
+                    # RSI
+
                     if "RSI" in headers:
 
                         cell = sheet.cell(
@@ -201,11 +201,12 @@ def save_result(df):
                         try:
 
                             if float(cell.value) >= 75:
-
                                 cell.font = red_font
 
                         except Exception:
                             pass
+
+                    # ブレイク
 
                     if "ブレイク" in headers:
 
@@ -215,8 +216,9 @@ def save_result(df):
                         )
 
                         if cell.value:
-
                             cell.font = purple_font
+
+                    # 強気度
 
                     if "強気度" in headers:
 
@@ -228,15 +230,13 @@ def save_result(df):
                         try:
 
                             if int(cell.value) >= 20:
-
                                 cell.font = orange_font
 
                         except Exception:
                             pass
 
         # ==========================
-        # NEW Ver4.2
-        # TOP20を毎日保存
+        # TOP20 CSV保存
         # ==========================
 
         top20.to_csv(
@@ -248,12 +248,15 @@ def save_result(df):
     except PermissionError:
 
         print()
-        print("==============================================")
-        print(f"保存できません：{excel_file.name}")
-        print("Excelで開いている可能性があります。")
-        print("閉じてからもう一度実行してください。")
-        print("==============================================")
+        print("====================================")
+        print("Excelファイルを閉じてください")
+        print(excel_file.name)
+        print("====================================")
         return
+
+    # ==========================
+    # 保存結果表示
+    # ==========================
 
     print()
     print("CSV保存   :", csv_file)
