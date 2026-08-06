@@ -2,6 +2,7 @@ import pandas as pd
 import time
 
 from services.yahoo_service import get_history
+from services.chart_service import save_chart
 from indicators.technical import add_indicators
 
 

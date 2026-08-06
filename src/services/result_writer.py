@@ -4,6 +4,9 @@ from pathlib import Path
 
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.drawing.image import Image
+
+from services.chart_service import save_chart
 
 
 def save_result(df):
@@ -13,13 +16,34 @@ def save_result(df):
     # ==========================
 
     folder = Path("results")
-    folder.mkdir(exist_ok=True)
+    folder.mkdir(
+        exist_ok=True
+    )
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    chart_folder = folder / "charts"
+    chart_folder.mkdir(
+        exist_ok=True
+    )
 
-    csv_file = folder / f"{today}_stock_result.csv"
-    excel_file = folder / f"{today}_stock_result.xlsx"
-    top20_csv = folder / f"{today}_top20.csv"
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
+
+    csv_file = (
+        folder /
+        f"{today}_stock_result.csv"
+    )
+
+    excel_file = (
+        folder /
+        f"{today}_stock_result.xlsx"
+    )
+
+    top20_csv = (
+        folder /
+        f"{today}_top20.csv"
+    )
+
 
     # ==========================
     # CSV保存
@@ -30,6 +54,7 @@ def save_result(df):
         index=False,
         encoding="utf-8-sig"
     )
+
 
     # ==========================
     # TOP20作成
@@ -43,9 +68,37 @@ def save_result(df):
         .head(20)
     )
 
+
+    # ==========================
+    # TOP20チャート作成
+    # ==========================
+
+    chart_files = {}
+
+    for _, row in top20.iterrows():
+
+        code = str(
+            row["コード"]
+        )
+
+        chart = save_chart(
+            code
+        )
+
+        if chart:
+
+            chart_files[code] = chart
+
+
+
+    # ==========================
+    # 買い候補
+    # ==========================
+
     buy_df = df[
         df["総合判定"] == "買い候補"
     ]
+
 
     # ==========================
     # Excel保存
@@ -58,11 +111,21 @@ def save_result(df):
             engine="openpyxl"
         ) as writer:
 
+
+            # ----------------------
+            # 全銘柄
+            # ----------------------
+
             df.to_excel(
                 writer,
                 sheet_name="全銘柄",
                 index=False
             )
+
+
+            # ----------------------
+            # TOP20
+            # ----------------------
 
             top20.to_excel(
                 writer,
@@ -70,17 +133,23 @@ def save_result(df):
                 index=False
             )
 
+
+            # ----------------------
+            # 買い候補
+            # ----------------------
+
             buy_df.to_excel(
                 writer,
                 sheet_name="買い候補",
                 index=False
             )
 
+
             workbook = writer.book
 
-            # ----------------------
+            # ==========================
             # 色設定
-            # ----------------------
+            # ==========================
 
             green_fill = PatternFill(
                 fill_type="solid",
@@ -88,40 +157,58 @@ def save_result(df):
                 end_color="CCFFCC"
             )
 
-            blue_font = Font(color="0000FF")
+            blue_font = Font(
+                color="0000FF"
+            )
 
-            red_font = Font(color="FF0000")
+            red_font = Font(
+                color="FF0000"
+            )
 
-            purple_font = Font(color="800080")
+            purple_font = Font(
+                color="800080"
+            )
 
             orange_font = Font(
                 color="FF6600",
                 bold=True
             )
 
-            # ======================
-            # 全シート共通設定
-            # ======================
+
+            # ==========================
+            # シート整形
+            # ==========================
 
             for sheet in workbook.worksheets:
 
+
                 sheet.freeze_panes = "C2"
 
-                sheet.auto_filter.ref = sheet.dimensions
 
-                # ヘッダー
+                sheet.auto_filter.ref = (
+                    sheet.dimensions
+                )
+
 
                 for cell in sheet[1]:
-                    cell.font = Font(bold=True)
 
-                # 列番号取得
+                    cell.font = Font(
+                        bold=True
+                    )
+
 
                 headers = {}
 
                 for cell in sheet[1]:
-                    headers[cell.value] = cell.column
 
-                # 列幅自動
+                    headers[cell.value] = (
+                        cell.column
+                    )
+
+
+                # ----------------------
+                # 列幅調整
+                # ----------------------
 
                 for column_cells in sheet.columns:
 
@@ -131,31 +218,40 @@ def save_result(df):
 
                     max_length = 0
 
+
                     for cell in column_cells:
 
                         if cell.value is None:
                             continue
 
-                        length = len(str(cell.value))
+
+                        length = len(
+                            str(cell.value)
+                        )
+
 
                         if length > max_length:
+
                             max_length = length
 
-                    sheet.column_dimensions[column].width = min(
+
+                    sheet.column_dimensions[
+                        column
+                    ].width = min(
                         max_length + 3,
                         40
                     )
 
-                # ------------------
-                # 行ごとの色付け
-                # ------------------
+
+                # ----------------------
+                # 色付け
+                # ----------------------
 
                 for row in range(
                     2,
                     sheet.max_row + 1
                 ):
 
-                    # 買い候補
 
                     if "総合判定" in headers:
 
@@ -163,6 +259,7 @@ def save_result(df):
                             row,
                             headers["総合判定"]
                         )
+
 
                         if cell.value == "買い候補":
 
@@ -176,7 +273,7 @@ def save_result(df):
                                     col
                                 ).fill = green_fill
 
-                    # Aランク
+
 
                     if "監視ランク" in headers:
 
@@ -185,11 +282,14 @@ def save_result(df):
                             headers["監視ランク"]
                         )
 
-                        if str(cell.value).startswith("A"):
+
+                        if str(
+                            cell.value
+                        ).startswith("A"):
 
                             cell.font = blue_font
 
-                    # RSI
+
 
                     if "RSI" in headers:
 
@@ -198,15 +298,20 @@ def save_result(df):
                             headers["RSI"]
                         )
 
+
                         try:
 
-                            if float(cell.value) >= 75:
+                            if float(
+                                cell.value
+                            ) >= 75:
+
                                 cell.font = red_font
 
                         except Exception:
+
                             pass
 
-                    # ブレイク
+
 
                     if "ブレイク" in headers:
 
@@ -215,10 +320,12 @@ def save_result(df):
                             headers["ブレイク"]
                         )
 
+
                         if cell.value:
+
                             cell.font = purple_font
 
-                    # 強気度
+
 
                     if "強気度" in headers:
 
@@ -227,16 +334,97 @@ def save_result(df):
                             headers["強気度"]
                         )
 
+
                         try:
 
-                            if int(cell.value) >= 20:
+                            if int(
+                                cell.value
+                            ) >= 20:
+
                                 cell.font = orange_font
 
+
                         except Exception:
+
                             pass
 
+
+
+            # ==========================
+            # TOP20チャート貼付
+            # ==========================
+
+            sheet = workbook[
+                "TOP20"
+            ]
+
+
+            chart_column = (
+                sheet.max_column + 2
+            )
+
+
+            sheet.cell(
+                1,
+                chart_column
+            ).value = "日足チャート"
+
+
+
+            for index, (_, row) in enumerate(
+                top20.iterrows(),
+                start=2
+            ):
+
+
+                code = str(
+                    row["コード"]
+                )
+
+
+                if code in chart_files:
+
+
+                    img = Image(
+                        str(
+                            chart_files[code]
+                        )
+                    )
+
+
+                    img.width = 320
+                    img.height = 160
+
+
+                    cell = (
+                        get_column_letter(
+                            chart_column
+                        )
+                        +
+                        str(index)
+                    )
+
+
+                    sheet.add_image(
+                        img,
+                        cell
+                    )
+
+
+                    sheet.row_dimensions[
+                        index
+                    ].height = 125
+
+
+
+            sheet.column_dimensions[
+                get_column_letter(chart_column)
+            ].width = 45
+
+
+
         # ==========================
-        # TOP20 CSV保存
+        # TOP20 CSV
         # ==========================
 
         top20.to_csv(
@@ -245,20 +433,42 @@ def save_result(df):
             encoding="utf-8-sig"
         )
 
+
     except PermissionError:
 
         print()
-        print("====================================")
-        print("Excelファイルを閉じてください")
-        print(excel_file.name)
-        print("====================================")
+        print(
+            "=============================================="
+        )
+        print(
+            f"保存できません：{excel_file.name}"
+        )
+        print(
+            "Excelで開いている可能性があります。"
+        )
+        print(
+            "閉じてから再実行してください。"
+        )
+        print(
+            "=============================================="
+        )
+
         return
 
-    # ==========================
-    # 保存結果表示
-    # ==========================
+
 
     print()
-    print("CSV保存   :", csv_file)
-    print("Excel保存 :", excel_file)
-    print("TOP20保存 :", top20_csv)
+    print(
+        "CSV保存   :",
+        csv_file
+    )
+
+    print(
+        "Excel保存 :",
+        excel_file
+    )
+
+    print(
+        "TOP20保存 :",
+        top20_csv
+    )
