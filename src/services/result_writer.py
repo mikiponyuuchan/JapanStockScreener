@@ -73,7 +73,14 @@ def save_result(df):
     # TOP20チャート作成
     # ==========================
 
+    # ==========================
+    # TOP20チャート作成
+    # ==========================
+
     chart_files = {}
+
+    print()
+    print("TOP20チャート作成開始")
 
     for _, row in top20.iterrows():
 
@@ -81,13 +88,21 @@ def save_result(df):
             row["コード"]
         )
 
+        print(f"チャート保存 : {code}")
+
         chart = save_chart(
-            code
+        code
         )
 
         if chart:
 
             chart_files[code] = chart
+
+            print(f"保存OK : {code}")
+
+        else:
+
+            print(f"保存失敗 : {code}")
 
 
 
