@@ -104,6 +104,13 @@ def save_result(df):
                 ]
             ].rename(columns={"終値": "株価"})
 
+
+            # Excelでは1項目ずつ改行表示
+            top20_display["分析コメント"] = (
+                top20_display["分析コメント"]
+                .str.replace(" / ", "\n", regex=False)
+            )
+
             top20_display.to_excel(writer, sheet_name="TOP20", index=False)
 
             # ----------------------
@@ -158,7 +165,7 @@ def save_result(df):
 
                 sheet.column_dimensions[
                     letter
-                ].width = 20
+                ].width = 10
 
                 for row in range(
                     2,
@@ -281,6 +288,12 @@ def save_result(df):
 
             sheet = workbook["TOP20"]
 
+            # コメント列
+            sheet.column_dimensions["E"].width = 15
+
+            # チャート列
+            sheet.column_dimensions["F"].width = 30
+
             headers = {}
 
             for cell in sheet[1]:
@@ -329,11 +342,19 @@ def save_result(df):
             for cell in sheet[1]:
                 headers[cell.value] = cell.column
 
+            
+            name_col = headers["銘柄名"]
+
+            sheet.column_dimensions[
+                get_column_letter(name_col)
+            ].width = 22
+
             comment_col = headers["分析コメント"]
 
             sheet.column_dimensions[
                 get_column_letter(comment_col)
-            ].width = 45
+            ].width = 15
+
 
             for row in range(2, sheet.max_row + 1):
 
@@ -366,7 +387,12 @@ def save_result(df):
 
                     sheet.row_dimensions[index].height = 125
 
-            sheet.column_dimensions[get_column_letter(chart_column)].width = 45
+            sheet.column_dimensions[get_column_letter(chart_column)].width = 30
+
+            # 最初にTOP20シートを開く
+            workbook.active = workbook.index(
+                workbook["TOP20"]
+            )
 
         # ==========================
         # TOP20 CSV
