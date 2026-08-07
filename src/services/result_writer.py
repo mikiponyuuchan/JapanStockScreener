@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image
 
 from services.chart_service import save_chart
-
+from services.news_service import get_top20_news
 
 def save_result(df):
 
@@ -71,6 +71,19 @@ def save_result(df):
 
     print("TOP20チャート作成完了")
 
+
+    # ==========================
+    # TOP20ニュース取得
+    # ==========================
+
+    print()
+    print("TOP20ニュース調査中...")
+
+    news_data = get_top20_news(top20)
+
+    print("TOP20ニュース調査完了")
+
+
     # ==========================
     # 買い候補
     # ==========================
@@ -112,6 +125,70 @@ def save_result(df):
             )
 
             top20_display.to_excel(writer, sheet_name="TOP20", index=False)
+
+
+            # ----------------------
+            # TOP20ニュース
+            # ----------------------
+
+            news_rows = []
+
+            for _, row in top20.iterrows():
+
+                code = str(row["コード"])
+                name = str(row["銘柄名"])
+
+                news_list = news_data.get(code, [])
+
+                if not news_list:
+
+                    news_rows.append(
+                        {
+                            "コード": code,
+                            "銘柄名": name,
+                            "強気度": row["強気度"],
+                            "前日比%": row["前日比%"],
+                            "ニュース日時": "",
+                            "ニュース元": "",
+                            "ニュースタイトル": "ニュースなし",
+                            "ニュースリンク": "",
+                        }
+                    )
+
+                else:
+
+                    for news in news_list:
+
+                        news_rows.append(
+                            {
+                                "コード": code,
+                                "銘柄名": name,
+                                "強気度": row["強気度"],
+                                "前日比%": row["前日比%"],
+                                "ニュース日時": news["published"],
+                                "ニュース元": news["source"],
+                                "ニュースタイトル": news["title"],
+                                "ニュースリンク": news["link"],
+                            }
+                        )
+
+            news_df = pd.DataFrame(news_rows)
+
+            news_df.to_excel(
+                writer,
+                sheet_name="TOP20ニュース",
+                index=False
+            )
+
+            # ----------------------
+            # 買い候補
+            # ----------------------
+
+            buy_df.to_excel(
+                writer,
+                sheet_name="買い候補",
+                index=False
+            )
 
             # ----------------------
             # 買い候補
