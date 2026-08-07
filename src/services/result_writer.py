@@ -12,7 +12,12 @@ from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image
 
 from services.chart_service import save_chart
-from services.news_service import get_top20_news
+
+from services.news_service import (
+    get_top20_news,
+    analyze_news_reason,
+)
+
 
 def save_result(df):
 
@@ -29,23 +34,42 @@ def save_result(df):
     today = datetime.now().strftime("%Y-%m-%d")
 
     csv_file = folder / f"{today}_stock_result.csv"
-
     excel_file = folder / f"{today}_stock_result.xlsx"
-
     top20_csv = folder / f"{today}_top20.csv"
 
     # ==========================
     # CSV保存
     # ==========================
 
-    df.to_csv(csv_file, index=False, encoding="utf-8-sig")
+    df.to_csv(
+        csv_file,
+        index=False,
+        encoding="utf-8-sig"
+    )
 
     # ==========================
     # TOP20作成
     # ==========================
 
-    top20 = df.sort_values("強気度", ascending=False).head(20)
+    top20 = (
+        df.sort_values(
+            "強気度",
+            ascending=False
+        )
+        .head(20)
+        .copy()
+    )
 
+    # ==========================
+    # TOP20ニュース取得
+    # ==========================
+
+    print()
+    print("TOP20ニュース取得中...")
+
+    news_data = get_top20_news(top20)
+
+    print("TOP20ニュース取得完了")
 
     # ==========================
     # TOP20チャート作成
@@ -58,37 +82,22 @@ def save_result(df):
 
     for _, row in top20.iterrows():
 
-        code = str(
-            row["コード"]
-        )
+        code = str(row["コード"])
 
-        chart = save_chart(
-            code
-        )
+        chart = save_chart(code)
 
         if chart:
             chart_files[code] = chart
 
     print("TOP20チャート作成完了")
 
-
-    # ==========================
-    # TOP20ニュース取得
-    # ==========================
-
-    print()
-    print("TOP20ニュース調査中...")
-
-    news_data = get_top20_news(top20)
-
-    print("TOP20ニュース調査完了")
-
-
     # ==========================
     # 買い候補
     # ==========================
 
-    buy_df = df[df["総合判定"] == "買い候補"]
+    buy_df = df[
+        df["総合判定"] == "買い候補"
+    ]
 
     # ==========================
     # Excel保存
@@ -96,16 +105,24 @@ def save_result(df):
 
     try:
 
-        with pd.ExcelWriter(excel_file, engine="openpyxl") as writer:
+        with pd.ExcelWriter(
+            excel_file,
+            engine="openpyxl"
+        ) as writer:
 
-            # ----------------------
+            # ======================
             # 全銘柄
-            # ----------------------
+            # ======================
 
-            df.to_excel(writer, sheet_name="全銘柄", index=False)
-            # ----------------------
-            # TOP20（表示用）
-            # ----------------------
+            df.to_excel(
+                writer,
+                sheet_name="全銘柄",
+                index=False
+            )
+
+            # ======================
+            # TOP20表示用
+            # ======================
 
             top20_display = top20[
                 [
@@ -115,21 +132,35 @@ def save_result(df):
                     "強気度",
                     "分析コメント",
                 ]
-            ].rename(columns={"終値": "株価"})
-
-
-            # Excelでは1項目ずつ改行表示
-            top20_display["分析コメント"] = (
-                top20_display["分析コメント"]
-                .str.replace(" / ", "\n", regex=False)
+            ].rename(
+                columns={
+                    "終値": "株価"
+                }
             )
 
-            top20_display.to_excel(writer, sheet_name="TOP20", index=False)
+            # 分析コメントを改行
+            top20_display[
+                "分析コメント"
+            ] = (
+                top20_display[
+                    "分析コメント"
+                ]
+                .str.replace(
+                    " / ",
+                    "\n",
+                    regex=False
+                )
+            )
 
+            top20_display.to_excel(
+                writer,
+                sheet_name="TOP20",
+                index=False
+            )
 
-            # ----------------------
+            # ======================
             # TOP20ニュース
-            # ----------------------
+            # ======================
 
             news_rows = []
 
@@ -138,7 +169,47 @@ def save_result(df):
                 code = str(row["コード"])
                 name = str(row["銘柄名"])
 
-                news_list = news_data.get(code, [])
+                news_list = news_data.get(
+                    code,
+                    []
+                )
+
+                # ------------------
+                # 急騰理由を判定
+                # ------------------
+
+                reason_data = analyze_news_reason(
+                    news_list
+                )
+
+                reason = reason_data.get(
+                    "reason",
+                    "明確な材料を確認できず"
+                )
+
+                main_title = reason_data.get(
+                    "main_title",
+                    ""
+                )
+
+                main_source = reason_data.get(
+                    "main_source",
+                    ""
+                )
+
+                main_published = reason_data.get(
+                    "main_published",
+                    ""
+                )
+
+                main_link = reason_data.get(
+                    "main_link",
+                    ""
+                )
+
+                # ------------------
+                # ニュースなし
+                # ------------------
 
                 if not news_list:
 
@@ -148,8 +219,10 @@ def save_result(df):
                             "銘柄名": name,
                             "強気度": row["強気度"],
                             "前日比%": row["前日比%"],
+                            "急騰理由": reason,
+                            "主な材料": "",
+                            "情報元": "",
                             "ニュース日時": "",
-                            "ニュース元": "",
                             "ニュースタイトル": "ニュースなし",
                             "ニュースリンク": "",
                         }
@@ -157,7 +230,37 @@ def save_result(df):
 
                 else:
 
+                    # ------------------
+                    # 主材料を先頭に
+                    # ------------------
+
+                    news_rows.append(
+                        {
+                            "コード": code,
+                            "銘柄名": name,
+                            "強気度": row["強気度"],
+                            "前日比%": row["前日比%"],
+                            "急騰理由": reason,
+                            "主な材料": main_title,
+                            "情報元": main_source,
+                            "ニュース日時": main_published,
+                            "ニュースタイトル": main_title,
+                            "ニュースリンク": main_link,
+                        }
+                    )
+
+                    # ------------------
+                    # その他ニュース
+                    # ------------------
+
                     for news in news_list:
+
+                        # 主材料と同じニュースは重複させない
+                        if (
+                            news.get("title", "")
+                            == main_title
+                        ):
+                            continue
 
                         news_rows.append(
                             {
@@ -165,14 +268,30 @@ def save_result(df):
                                 "銘柄名": name,
                                 "強気度": row["強気度"],
                                 "前日比%": row["前日比%"],
-                                "ニュース日時": news["published"],
-                                "ニュース元": news["source"],
-                                "ニュースタイトル": news["title"],
-                                "ニュースリンク": news["link"],
+                                "急騰理由": "",
+                                "主な材料": "",
+                                "情報元": news.get(
+                                    "source",
+                                    ""
+                                ),
+                                "ニュース日時": news.get(
+                                    "published",
+                                    ""
+                                ),
+                                "ニュースタイトル": news.get(
+                                    "title",
+                                    ""
+                                ),
+                                "ニュースリンク": news.get(
+                                    "link",
+                                    ""
+                                ),
                             }
                         )
 
-            news_df = pd.DataFrame(news_rows)
+            news_df = pd.DataFrame(
+                news_rows
+            )
 
             news_df.to_excel(
                 writer,
@@ -180,21 +299,15 @@ def save_result(df):
                 index=False
             )
 
-            # ----------------------
+            # ======================
             # 買い候補
-            # ----------------------
+            # ======================
 
             buy_df.to_excel(
                 writer,
                 sheet_name="買い候補",
                 index=False
             )
-
-            # ----------------------
-            # 買い候補
-            # ----------------------
-
-            buy_df.to_excel(writer, sheet_name="買い候補", index=False)
 
             workbook = writer.book
 
@@ -203,65 +316,76 @@ def save_result(df):
             # ==========================
 
             green_fill = PatternFill(
-                fill_type="solid", start_color="CCFFCC", end_color="CCFFCC"
+                fill_type="solid",
+                start_color="CCFFCC",
+                end_color="CCFFCC"
             )
 
-            blue_font = Font(color="0000FF")
+            blue_font = Font(
+                color="0000FF"
+            )
 
-            red_font = Font(color="FF0000")
+            red_font = Font(
+                color="FF0000"
+            )
 
-            purple_font = Font(color="800080")
-
-    
+            purple_font = Font(
+                color="800080"
+            )
 
             # ==========================
-            # シート整形
+            # 各シート基本整形
             # ==========================
 
             for sheet in workbook.worksheets:
 
                 sheet.freeze_panes = "C2"
 
-                sheet.auto_filter.ref = sheet.dimensions
+                sheet.auto_filter.ref = (
+                    sheet.dimensions
+                )
 
+                # ヘッダー太字
                 for cell in sheet[1]:
+                    cell.font = Font(
+                        bold=True
+                    )
 
-                    cell.font = Font(bold=True)
+                # ----------------------
+                # ヘッダー取得
+                # ----------------------
 
                 headers = {}
 
-            # ----------------------
-            # 分析コメント
-            # ----------------------
-
-            if "分析コメント" in headers:
-
-                comment_col = headers["分析コメント"]
-
-                letter = get_column_letter(comment_col)
-
-                sheet.column_dimensions[
-                    letter
-                ].width = 10
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        comment_col
-                    )
-
-                    cell.alignment = Alignment(
-                        wrap_text=True,
-                        vertical="top"
-                    )
-
                 for cell in sheet[1]:
+                    headers[cell.value] = (
+                        cell.column
+                    )
 
-                    headers[cell.value] = cell.column
+                # ----------------------
+                # 分析コメント
+                # ----------------------
+
+                if "分析コメント" in headers:
+
+                    comment_col = headers[
+                        "分析コメント"
+                    ]
+
+                    for row in range(
+                        2,
+                        sheet.max_row + 1
+                    ):
+
+                        cell = sheet.cell(
+                            row,
+                            comment_col
+                        )
+
+                        cell.alignment = Alignment(
+                            wrap_text=True,
+                            vertical="top"
+                        )
 
                 # ----------------------
                 # 列幅調整
@@ -269,7 +393,9 @@ def save_result(df):
 
                 for column_cells in sheet.columns:
 
-                    column = get_column_letter(column_cells[0].column)
+                    column = get_column_letter(
+                        column_cells[0].column
+                    )
 
                     max_length = 0
 
@@ -278,86 +404,121 @@ def save_result(df):
                         if cell.value is None:
                             continue
 
-                        length = len(str(cell.value))
+                        # 改行を考慮
+                        values = str(
+                            cell.value
+                        ).split("\n")
+
+                        length = max(
+                            len(value)
+                            for value in values
+                        )
 
                         if length > max_length:
-
                             max_length = length
 
-                    sheet.column_dimensions[column].width = min(max_length + 3, 40)
+                    sheet.column_dimensions[
+                        column
+                    ].width = min(
+                        max_length + 3,
+                        40
+                    )
 
                 # ----------------------
                 # 色付け
                 # ----------------------
 
-                for row in range(2, sheet.max_row + 1):
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
 
+                    # 買い候補
                     if "総合判定" in headers:
 
-                        cell = sheet.cell(row, headers["総合判定"])
+                        cell = sheet.cell(
+                            row,
+                            headers["総合判定"]
+                        )
 
                         if cell.value == "買い候補":
 
-                            for col in range(1, sheet.max_column + 1):
+                            for col in range(
+                                1,
+                                sheet.max_column + 1
+                            ):
 
-                                sheet.cell(row, col).fill = green_fill
+                                sheet.cell(
+                                    row,
+                                    col
+                                ).fill = green_fill
 
+                    # 監視ランク
                     if "監視ランク" in headers:
 
-                        cell = sheet.cell(row, headers["監視ランク"])
+                        cell = sheet.cell(
+                            row,
+                            headers["監視ランク"]
+                        )
 
-                        if str(cell.value).startswith("A"):
+                        if str(
+                            cell.value
+                        ).startswith("A"):
 
                             cell.font = blue_font
 
+                    # RSI
                     if "RSI" in headers:
 
-                        cell = sheet.cell(row, headers["RSI"])
+                        cell = sheet.cell(
+                            row,
+                            headers["RSI"]
+                        )
 
                         try:
 
-                            if float(cell.value) >= 75:
+                            if float(
+                                cell.value
+                            ) >= 75:
 
                                 cell.font = red_font
 
                         except Exception:
-
                             pass
 
+                    # ブレイク
                     if "ブレイク" in headers:
 
-                        cell = sheet.cell(row, headers["ブレイク"])
-
-                        if cell.value:
-
-                            cell.font = purple_font
-
-                    if "強気度" in headers:
-
-                        cell = sheet.cell(row, headers["強気度"])
-
-                    # ----------------------
-                    # 強気度グラデーション
-                    # ----------------------
-
-                    if "強気度" in headers:
-
-                        col = get_column_letter(
-                            headers["強気度"]
+                        cell = sheet.cell(
+                            row,
+                            headers["ブレイク"]
                         )
 
-                        sheet.conditional_formatting.add(
-                            f"{col}2:{col}{sheet.max_row}",
-                            ColorScaleRule(
-                                start_type="min",
-                                start_color="63BE7B",
-                                mid_type="percentile",
-                                mid_value=50,
-                                mid_color="FFEB84",
-                                end_type="max",
-                                end_color="F8696B",
-                            ),
-                        )    
+                        if cell.value:
+                            cell.font = purple_font
+
+                # ----------------------
+                # 強気度グラデーション
+                # ----------------------
+
+                if "強気度" in headers:
+
+                    col = get_column_letter(
+                        headers["強気度"]
+                    )
+
+                    sheet.conditional_formatting.add(
+                        f"{col}2:{col}{sheet.max_row}",
+                        ColorScaleRule(
+                            start_type="min",
+                            start_color="63BE7B",
+                            mid_type="percentile",
+                            mid_value=50,
+                            mid_color="FFEB84",
+                            end_type="max",
+                            end_color="F8696B",
+                        )
+                    )
 
             # ==========================
             # TOP20チャート貼付
@@ -366,74 +527,123 @@ def save_result(df):
             sheet = workbook["TOP20"]
 
             # コメント列
-            sheet.column_dimensions["E"].width = 15
+            sheet.column_dimensions[
+                "E"
+            ].width = 15
 
             # チャート列
-            sheet.column_dimensions["F"].width = 30
+            # 現在のTOP20レイアウトを維持
+            sheet.column_dimensions[
+                "F"
+            ].width = 30
 
             headers = {}
 
             for cell in sheet[1]:
-                headers[cell.value] = cell.column
+                headers[cell.value] = (
+                    cell.column
+                )
+
+            # ----------------------
+            # 強気度グラデーション
+            # ----------------------
 
             score_col = headers["強気度"]
 
             scores = []
 
-            for row in range(2, sheet.max_row + 1):
-                value = sheet.cell(row, score_col).value
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                value = sheet.cell(
+                    row,
+                    score_col
+                ).value
+
                 if value is not None:
-                    scores.append(int(value))
-
-            min_score = min(scores)
-            max_score = max(scores)
-
-            for row in range(2, sheet.max_row + 1):
-
-                cell = sheet.cell(row, score_col)
-
-                score = int(cell.value)
-
-                if max_score == min_score:
-                    ratio = 1
-                else:
-                    ratio = (
-                        score - min_score
-                    ) / (
-                        max_score - min_score
+                    scores.append(
+                        int(value)
                     )
 
-                red = 255
-                green = int(255 * (1 - ratio))
+            if scores:
 
-                color = f"FF{green:02X}00"
+                min_score = min(scores)
+                max_score = max(scores)
 
-                cell.fill = PatternFill(
-                    fill_type="solid",
-                    start_color=color,
-                    end_color=color,
-                )
-            
-            headers = {}
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
 
-            for cell in sheet[1]:
-                headers[cell.value] = cell.column
+                    cell = sheet.cell(
+                        row,
+                        score_col
+                    )
 
-            
-            name_col = headers["銘柄名"]
+                    score = int(
+                        cell.value
+                    )
+
+                    if max_score == min_score:
+
+                        ratio = 1
+
+                    else:
+
+                        ratio = (
+                            score - min_score
+                        ) / (
+                            max_score - min_score
+                        )
+
+                    red = 255
+
+                    green = int(
+                        255 * (1 - ratio)
+                    )
+
+                    color = (
+                        f"FF{green:02X}00"
+                    )
+
+                    cell.fill = PatternFill(
+                        fill_type="solid",
+                        start_color=color,
+                        end_color=color,
+                    )
+
+            # ----------------------
+            # 銘柄名
+            # ----------------------
+
+            name_col = headers[
+                "銘柄名"
+            ]
 
             sheet.column_dimensions[
                 get_column_letter(name_col)
             ].width = 22
 
-            comment_col = headers["分析コメント"]
+            # ----------------------
+            # コメント
+            # ----------------------
+
+            comment_col = headers[
+                "分析コメント"
+            ]
 
             sheet.column_dimensions[
-                get_column_letter(comment_col)
+                get_column_letter(
+                    comment_col
+                )
             ].width = 15
 
-
-            for row in range(2, sheet.max_row + 1):
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
 
                 sheet.cell(
                     row,
@@ -443,54 +653,204 @@ def save_result(df):
                     vertical="top"
                 )
 
-            chart_column = sheet.max_column + 1
+            # ----------------------
+            # チャート
+            # ----------------------
 
-            sheet.cell(1, chart_column).value = "日足チャート"
+            chart_column = (
+                sheet.max_column + 1
+            )
 
-            for index, (_, row) in enumerate(top20.iterrows(), start=2):
+            sheet.cell(
+                1,
+                chart_column
+            ).value = "日足チャート"
 
-                code = str(row["コード"])
+            for index, (_, row) in enumerate(
+                top20.iterrows(),
+                start=2
+            ):
+
+                code = str(
+                    row["コード"]
+                )
 
                 if code in chart_files:
 
-                    img = Image(str(chart_files[code]))
+                    img = Image(
+                        str(
+                            chart_files[code]
+                        )
+                    )
 
                     img.width = 320
                     img.height = 160
 
-                    cell = get_column_letter(chart_column) + str(index)
+                    cell = (
+                        get_column_letter(
+                            chart_column
+                        )
+                        + str(index)
+                    )
 
-                    sheet.add_image(img, cell)
+                    sheet.add_image(
+                        img,
+                        cell
+                    )
 
-                    sheet.row_dimensions[index].height = 125
+                    sheet.row_dimensions[
+                        index
+                    ].height = 125
 
-            sheet.column_dimensions[get_column_letter(chart_column)].width = 30
+            sheet.column_dimensions[
+                get_column_letter(
+                    chart_column
+                )
+            ].width = 30
 
-            # 最初にTOP20シートを開く
+            # ----------------------
+            # TOP20を最初に開く
+            # ----------------------
+
             workbook.active = workbook.index(
                 workbook["TOP20"]
             )
+
+            # ==========================
+            # TOP20ニュース整形
+            # ==========================
+
+            sheet = workbook[
+                "TOP20ニュース"
+            ]
+
+            sheet.freeze_panes = "A2"
+
+            sheet.auto_filter.ref = (
+                sheet.dimensions
+            )
+
+            # ヘッダー
+            for cell in sheet[1]:
+
+                cell.font = Font(
+                    bold=True
+                )
+
+            # 列幅
+            news_widths = {
+                "A": 10,   # コード
+                "B": 22,   # 銘柄名
+                "C": 10,   # 強気度
+                "D": 10,   # 前日比%
+                "E": 28,   # 急騰理由
+                "F": 45,   # 主な材料
+                "G": 18,   # 情報元
+                "H": 18,   # ニュース日時
+                "I": 55,   # ニュースタイトル
+                "J": 12,   # リンク
+            }
+
+            for column, width in news_widths.items():
+
+                sheet.column_dimensions[
+                    column
+                ].width = width
+
+            # 折り返し
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                for col in [
+                    5,
+                    6,
+                    9,
+                ]:
+
+                    sheet.cell(
+                        row,
+                        col
+                    ).alignment = Alignment(
+                        wrap_text=True,
+                        vertical="top"
+                    )
+
+            # リンクをクリック可能にする
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                cell = sheet.cell(
+                    row,
+                    10
+                )
+
+                if cell.value:
+
+                    cell.hyperlink = (
+                        cell.value
+                    )
+
+                    cell.style = (
+                        "Hyperlink"
+                    )
+
+            # 行の高さ
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                sheet.row_dimensions[
+                    row
+                ].height = 45
 
         # ==========================
         # TOP20 CSV
         # ==========================
 
-        top20.to_csv(top20_csv, index=False, encoding="utf-8-sig")
+        top20.to_csv(
+            top20_csv,
+            index=False,
+            encoding="utf-8-sig"
+        )
 
     except PermissionError:
 
         print()
-        print("==============================================")
-        print(f"保存できません：{excel_file.name}")
-        print("Excelで開いている可能性があります。")
-        print("閉じてから再実行してください。")
-        print("==============================================")
+        print(
+            "=============================================="
+        )
+        print(
+            f"保存できません：{excel_file.name}"
+        )
+        print(
+            "Excelで開いている可能性があります。"
+        )
+        print(
+            "閉じてから再実行してください。"
+        )
+        print(
+            "=============================================="
+        )
 
         return
 
     print()
-    print("CSV保存   :", csv_file)
+    print(
+        "CSV保存   :",
+        csv_file
+    )
 
-    print("Excel保存 :", excel_file)
+    print(
+        "Excel保存 :",
+        excel_file
+    )
 
-    print("TOP20保存 :", top20_csv)
+    print(
+        "TOP20保存 :",
+        top20_csv
+    )
