@@ -592,13 +592,13 @@ def save_result(df):
             # 列幅
             # ----------------------
 
-            sheet.column_dimensions["A"].width = 8    # コード
-            sheet.column_dimensions["B"].width = 18   # 銘柄名
+            sheet.column_dimensions["A"].width = 7    # コード
+            sheet.column_dimensions["B"].width = 16   # 銘柄名
             sheet.column_dimensions["C"].width = 8    # 株価
-            sheet.column_dimensions["D"].width = 8    # 強気度
+            sheet.column_dimensions["D"].width = 7    # 強気度
             sheet.column_dimensions["E"].width = 14   # 分析コメント
             sheet.column_dimensions["F"].width = 18   # 急騰理由
-            sheet.column_dimensions["G"].width = 22   # 主な材料
+            sheet.column_dimensions["G"].width = 20   # 主な材料
             sheet.column_dimensions["H"].width = 11   # ニュース日時
 
 
@@ -851,6 +851,31 @@ def save_result(df):
             ].width = 30
 
             # ----------------------
+            # TOP20全セルを上寄せ
+            # ----------------------
+
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                for col in range(
+                    1,
+                    sheet.max_column + 1
+                ):
+
+                    cell = sheet.cell(
+                        row,
+                        col
+                    )
+
+                    cell.alignment = Alignment(
+                        horizontal="left",
+                        vertical="top",
+                        wrap_text=True
+                    )
+
+            # ----------------------
             # TOP20を最初に開く
             # ----------------------
 
@@ -1005,9 +1030,9 @@ def save_result(df):
                 ].height = 60
 
 
-            # ==========================
-            # 上下位置
-            # ==========================
+            # ----------------------
+            # TOP20文字整形
+            # ----------------------
 
             for row in range(
                 2,
@@ -1016,7 +1041,7 @@ def save_result(df):
 
                 for col in range(
                     1,
-                    11
+                    sheet.max_column + 1
                 ):
 
                     cell = sheet.cell(
@@ -1024,12 +1049,11 @@ def save_result(df):
                         col
                     )
 
-                    if cell.alignment:
+                    cell.alignment = Alignment(
+                        wrap_text=True,
+                        vertical="top"
+                    )
 
-                        cell.alignment = Alignment(
-                            wrap_text=True,
-                            vertical="top"
-                        )
 
         # ==========================
         # TOP20 CSV
