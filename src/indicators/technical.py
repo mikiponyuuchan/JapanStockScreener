@@ -460,16 +460,20 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ブレイク初日
     # =====================
 
+    previous_signal = (
+        df["BreakoutSignal"]
+        .shift(1)
+        .fillna(False)
+        .astype(bool)
+    )
+
     df["BreakoutFirstDay"] = (
         df["BreakoutSignal"]
         &
-        (
-            ~df["BreakoutSignal"]
-            .shift(1)
-            .fillna(False)
-        )
+        (previous_signal == False)
     )
-        # =====================
+    
+    # =====================
     # 値動き評価
     # =====================
 
