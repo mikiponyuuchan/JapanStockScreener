@@ -146,6 +146,7 @@ def save_result(df):
                 index=False
             )
 
+
             # ======================
             # TOP20表示用
             # ======================
@@ -165,21 +166,37 @@ def save_result(df):
                     )
                 )
 
+                # ----------------------
+                # 分析コメントを整理
+                # ----------------------
+
+                comment = str(
+                    row["分析コメント"]
+                )
+
+                parts = comment.split(" / ")
+
+                parts = [
+                    part
+                    for part in parts
+                    if not part.startswith("Aランク")
+                    and not part.startswith("買い候補")
+                    and not part.startswith("強気度")
+                ]
+
+                clean_comment = "\n".join(parts)
+
+                # ----------------------
+                # TOP20表示データ
+                # ----------------------
+
                 top20_rows.append(
                     {
                         "コード": code,
                         "銘柄名": row["銘柄名"],
                         "株価": row["終値"],
                         "強気度": row["強気度"],
-                        "分析コメント": (
-                            str(
-                                row["分析コメント"]
-                            )
-                            .replace(
-                                " / ",
-                                "\n"
-                            )
-                        ),
+                        "分析コメント": clean_comment,
                         "急騰理由": reason_data.get(
                             "reason",
                             "明確な材料を確認できず"
@@ -204,6 +221,8 @@ def save_result(df):
                 sheet_name="TOP20",
                 index=False
             )
+            top20_rows = []
+
 
             # ======================
             # TOP20ニュース
