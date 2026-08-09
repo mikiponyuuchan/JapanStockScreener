@@ -18,6 +18,9 @@ from services.news_service import (
     analyze_news_reason,
 )
 
+from services.tracking_service import (
+    record_initial_move,
+)
 
 def save_result(df):
 
@@ -46,6 +49,12 @@ def save_result(df):
         index=False,
         encoding="utf-8-sig"
     )
+
+    # ==========================
+    # 初動銘柄追跡
+    # ==========================
+
+    record_initial_move(df)
 
     # ==========================
     # TOP20作成
@@ -816,7 +825,7 @@ def save_result(df):
 
                 sheet.row_dimensions[
                     row
-                ].height = 150
+                ].height = 120
 
             # ----------------------
             # 日足チャート

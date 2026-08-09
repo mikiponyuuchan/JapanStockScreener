@@ -134,7 +134,106 @@ def make_comment(latest):
 
     return " / ".join(comments)
 
+# ==========================
+# 初動スコア Ver1.0
+# ==========================
 
+def calculate_initial_score(latest):
+
+    score = 0
+
+
+    # --------------------------
+    # 出来高
+    # --------------------------
+
+    if pd.notna(latest["VolumeRatio"]):
+
+        if latest["VolumeRatio"] >= 2:
+
+            score += 4
+
+
+    if pd.notna(latest["VolumeRatio20"]):
+
+        if latest["VolumeRatio20"] >= 2:
+
+            score += 3
+
+
+    # --------------------------
+    # 初動シグナル
+    # --------------------------
+
+    if latest["InitialMoveSignal"]:
+
+        score += 5
+
+
+    # --------------------------
+    # MACDゴールデンクロス
+    # --------------------------
+
+    if latest["MACD_GC"]:
+
+        score += 3
+
+
+    # --------------------------
+    # 5日線上
+    # --------------------------
+
+    if latest["AboveMA5"]:
+
+        score += 2
+
+
+    # --------------------------
+    # 前日上昇
+    # --------------------------
+
+    if latest["PriceUp"]:
+
+        score += 2
+
+
+    # --------------------------
+    # ブレイク
+    # --------------------------
+
+    if latest["BreakoutSignal"]:
+
+        score += 3
+
+
+    # --------------------------
+    # ブレイク初日
+    # --------------------------
+
+    if latest["BreakoutFirstDay"]:
+
+        score += 4
+
+
+    # --------------------------
+    # 30日高値更新
+    # --------------------------
+
+    if latest["New30High"]:
+
+        score += 3
+
+
+    # --------------------------
+    # 年初来高値更新
+    # --------------------------
+
+    if latest["NewYearHigh"]:
+
+        score += 2
+
+
+    return score
 
 
 
@@ -629,6 +728,8 @@ def analyze_stock(stock):
 
     score = calculate_score(latest)
 
+    initial_score = calculate_initial_score(latest)
+
     rank = make_rank(score)
 
 
@@ -717,6 +818,9 @@ def analyze_stock(stock):
         "強気度":
             score,
 
+        "初動スコア":
+            initial_score,
+
         "監視ランク":
             rank,
 
@@ -724,29 +828,39 @@ def analyze_stock(stock):
             judgement,
 
         "分析コメント":
-    make_analysis_comment(
-        latest,
-        score,
-        rank,
-        position,
-        short_trend,
-        middle_trend,
-        long_trend,
-        judgement
-    ),
+            make_analysis_comment(
+                latest,
+                score,
+                rank,
+                position,
+                short_trend,
+                middle_trend,
+                long_trend,
+                judgement
+            ),
 
+        # ==========================
+        # Sprint2 計測データ
+        # ==========================
 
-# ==========================
-# Sprint2 計測データ
-# ==========================
+        "_data_date":
+            (
+                pd.to_datetime(
+                    df["Date"]
+                ).max().strftime("%Y-%m-%d")
+                if "Date" in df.columns
+                else pd.to_datetime(
+                    df.index
+                ).max().strftime("%Y-%m-%d")
+            ),
 
-"_data_time":
-    data_time,
+        "_data_time":
+            data_time,
 
-"_indicator_time":
-    indicator_time,
+        "_indicator_time":
+            indicator_time,
 
-"_judge_time":
-    time.time() - judge_start
+        "_judge_time":
+            time.time() - judge_start
 
-}
+    }
