@@ -34,21 +34,28 @@ def ensure_tracking_folder():
 
 def empty_tracking_dataframe():
 
+    columns = [
+        "検出日",
+        "コード",
+        "銘柄名",
+        "検出時株価",
+        "強気度",
+        "初動スコア",
+    ]
+
+    # 1日後～10日後
+    for day in range(1, 11):
+
+        columns.append(
+            f"{day}日後株価"
+        )
+
+        columns.append(
+            f"{day}日後騰落率%"
+        )
+
     return pd.DataFrame(
-        columns=[
-            "検出日",
-            "コード",
-            "銘柄名",
-            "検出時株価",
-            "強気度",
-            "初動スコア",
-            "翌日株価",
-            "翌日騰落率%",
-            "5日後株価",
-            "5日騰落率%",
-            "20日後株価",
-            "20日騰落率%",
-        ]
+        columns=columns
     )
 
 
@@ -69,13 +76,17 @@ def load_tracking():
         encoding="utf-8-sig"
     )
 
-    # --------------------------
-    # 古いCSVとの互換性
-    # --------------------------
+    # ==========================
+    # 必要列
+    # ==========================
 
     required_columns = (
         empty_tracking_dataframe().columns
     )
+
+    # ==========================
+    # 古いCSVとの互換性
+    # ==========================
 
     for column in required_columns:
 
@@ -83,7 +94,9 @@ def load_tracking():
 
             df[column] = ""
 
-    # 列順を統一
+    # ==========================
+    # 必要列だけに統一
+    # ==========================
 
     df = df[
         list(required_columns)
@@ -100,9 +113,13 @@ def add_business_days(
         date,
         days):
 
-    date = pd.Timestamp(date)
+    date = pd.Timestamp(
+        date
+    )
 
-    return date + pd.offsets.BDay(days)
+    return date + pd.offsets.BDay(
+        days
+    )
 
 
 # ==========================
@@ -133,13 +150,29 @@ def get_price_on_or_after(
 
     history = history.copy()
 
-    # --------------------------
-    # 日付を正規化
-    # --------------------------
+    # ==========================
+    # 日付列がある場合
+    # ==========================
 
-    history.index = pd.to_datetime(
-        history.index
-    )
+    if "Date" in history.columns:
+
+        history["Date"] = pd.to_datetime(
+            history["Date"]
+        )
+
+        history = history.set_index(
+            "Date"
+        )
+
+    else:
+
+        history.index = pd.to_datetime(
+            history.index
+        )
+
+    # ==========================
+    # タイムゾーン除去
+    # ==========================
 
     if getattr(
         history.index,
@@ -154,21 +187,24 @@ def get_price_on_or_after(
 
     target_date = pd.Timestamp(
         target_date
-    )
+    ).normalize()
 
-    # --------------------------
+    # ==========================
     # 対象日以降の最初の取引日
-    # --------------------------
+    # ==========================
 
     available = history[
-        history.index >= target_date
+        history.index.normalize()
+        >= target_date
     ]
 
     if available.empty:
 
         return None
 
-    price = available.iloc[0]["Close"]
+    price = available.iloc[0][
+        "Close"
+    ]
 
     if pd.isna(price):
 
@@ -241,10 +277,12 @@ def update_tracking_results(
         )
 
     print()
-    print("過去の初動銘柄を追跡中...")
+    print(
+        "過去の初動銘柄を追跡中..."
+    )
 
     # ==========================
-    # 未来の日付の誤登録を除外
+    # 未来日付の誤登録を除外
     # ==========================
 
     tracking_dates = pd.to_datetime(
@@ -256,7 +294,9 @@ def update_tracking_results(
         tracking_dates > market_date
     )
 
-    future_count = future_mask.sum()
+    future_count = int(
+        future_mask.sum()
+    )
 
     if future_count > 0:
 
@@ -314,160 +354,89 @@ def update_tracking_results(
             continue
 
         # ==========================
-        # 翌営業日
+        # 1日後～10日後
         # ==========================
 
-        next_business_day = (
-            add_business_days(
-                detection_date,
-                1
-            )
-        )
+        for day in range(1, 11):
 
-        if (
-            market_date >= next_business_day
-            and (
-                pd.isna(
-                    pd.to_numeric(
-                        row["翌日株価"],
-                        errors="coerce"
-                    )
-                )
+            target_date = add_business_days(
+                detection_date,
+                day
             )
-        ):
+
+            price_column = (
+                f"{day}日後株価"
+            )
+
+            change_column = (
+                f"{day}日後騰落率%"
+            )
+
+            # ======================
+            # まだ対象日になって
+            # いなければスキップ
+            # ======================
+
+            if market_date < target_date:
+
+                continue
+
+            # ======================
+            # すでに記録済みなら
+            # スキップ
+            # ======================
+
+            existing_price = pd.to_numeric(
+                row[price_column],
+                errors="coerce"
+            )
+
+            if pd.notna(existing_price):
+
+                continue
+
+            # ======================
+            # 株価取得
+            # ======================
 
             price = get_price_on_or_after(
                 code,
-                next_business_day
+                target_date
             )
 
-            if price is not None:
+            if price is None:
+
+                continue
+
+            # ======================
+            # 株価保存
+            # ======================
+
+            tracking_df.at[
+                index,
+                price_column
+            ] = round(
+                price,
+                2
+            )
+
+            # ======================
+            # 騰落率
+            # ======================
+
+            change = calculate_change(
+                base_price,
+                price
+            )
+
+            if change is not None:
 
                 tracking_df.at[
                     index,
-                    "翌日株価"
-                ] = round(
-                    price,
-                    2
-                )
+                    change_column
+                ] = change
 
-                change = calculate_change(
-                    base_price,
-                    price
-                )
-
-                if change is not None:
-
-                    tracking_df.at[
-                        index,
-                        "翌日騰落率%"
-                    ] = change
-
-                updated_count += 1
-
-        # ==========================
-        # 5営業日後
-        # ==========================
-
-        five_business_days = (
-            add_business_days(
-                detection_date,
-                5
-            )
-        )
-
-        if (
-            market_date >= five_business_days
-            and (
-                pd.isna(
-                    pd.to_numeric(
-                        row["5日後株価"],
-                        errors="coerce"
-                    )
-                )
-            )
-        ):
-
-            price = get_price_on_or_after(
-                code,
-                five_business_days
-            )
-
-            if price is not None:
-
-                tracking_df.at[
-                    index,
-                    "5日後株価"
-                ] = round(
-                    price,
-                    2
-                )
-
-                change = calculate_change(
-                    base_price,
-                    price
-                )
-
-                if change is not None:
-
-                    tracking_df.at[
-                        index,
-                        "5日騰落率%"
-                    ] = change
-
-                updated_count += 1
-
-        # ==========================
-        # 20営業日後
-        # ==========================
-
-        twenty_business_days = (
-            add_business_days(
-                detection_date,
-                20
-            )
-        )
-
-        if (
-            market_date >= twenty_business_days
-            and (
-                pd.isna(
-                    pd.to_numeric(
-                        row["20日後株価"],
-                        errors="coerce"
-                    )
-                )
-            )
-        ):
-
-            price = get_price_on_or_after(
-                code,
-                twenty_business_days
-            )
-
-            if price is not None:
-
-                tracking_df.at[
-                    index,
-                    "20日後株価"
-                ] = round(
-                    price,
-                    2
-                )
-
-                change = calculate_change(
-                    base_price,
-                    price
-                )
-
-                if change is not None:
-
-                    tracking_df.at[
-                        index,
-                        "20日騰落率%"
-                    ] = change
-
-                updated_count += 1
+            updated_count += 1
 
     # ==========================
     # 保存
@@ -499,7 +468,7 @@ def record_initial_move(df):
     tracking_df = load_tracking()
 
     # ==========================
-    # 実際の株価データ日を取得
+    # 実際の株価データ日
     # ==========================
 
     if "_data_date" in df.columns:
@@ -510,17 +479,20 @@ def record_initial_move(df):
 
     else:
 
-        data_date = datetime.now().strftime(
-            "%Y-%m-%d"
+        data_date = (
+            datetime.now()
+            .strftime("%Y-%m-%d")
         )
 
     # ==========================
     # まず過去銘柄を更新
     # ==========================
 
-    tracking_df = update_tracking_results(
-        tracking_df,
-        data_date
+    tracking_df = (
+        update_tracking_results(
+            tracking_df,
+            data_date
+        )
     )
 
     # ==========================
@@ -559,10 +531,10 @@ def record_initial_move(df):
             row["コード"]
         )
 
-        # ----------------------
+        # ======================
         # 同じ銘柄を同じ日に
         # 二重登録しない
-        # ----------------------
+        # ======================
 
         already_exists = (
             (
@@ -584,104 +556,44 @@ def record_initial_move(df):
 
             continue
 
+        new_row = {
+            "検出日":
+                data_date,
+
+            "コード":
+                code,
+
+            "銘柄名":
+                row["銘柄名"],
+
+            "検出時株価":
+                row["終値"],
+
+            "強気度":
+                row["強気度"],
+
+            "初動スコア":
+                row["初動スコア"],
+        }
+
+        # ======================
+        # 1日後～10日後の
+        # 空欄を作成
+        # ======================
+
+        for day in range(1, 11):
+
+            new_row[
+                f"{day}日後株価"
+            ] = ""
+
+            new_row[
+                f"{day}日後騰落率%"
+            ] = ""
+
         new_rows.append(
-            {
-                "検出日":
-                    data_date,
-
-                "コード":
-                    code,
-
-                "銘柄名":
-                    row["銘柄名"],
-
-                "検出時株価":
-                    row["終値"],
-
-                "強気度":
-                    row["強気度"],
-
-                "初動スコア":
-                    row["初動スコア"],
-
-                "翌日株価":
-                    "",
-
-                "翌日騰落率%":
-                    "",
-
-                "5日後株価":
-                    "",
-
-                "5日騰落率%":
-                    "",
-
-                "20日後株価":
-                    "",
-
-                "20日騰落率%":
-                    "",
-            }
+            new_row
         )
-
-    # ==========================
-    # 新規データ追加
-    # ==========================
-
-    if new_rows:
-
-        new_df = pd.DataFrame(
-            new_rows
-        )
-
-        tracking_df = pd.concat(
-            [
-                tracking_df,
-                new_df
-            ],
-            ignore_index=True
-        )
-
-    # ==========================
-    # 保存
-    # ==========================
-
-    tracking_df.to_csv(
-        TRACKING_FILE,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    print()
-    print(
-        "初動銘柄追跡保存 :",
-        TRACKING_FILE
-    )
-
-    print(
-        "今回の追跡登録数 :",
-        len(new_rows)
-    )
-
-    return tracking_df
-
-    # ==========================
-    # 結果表示
-    # ==========================
-
-    print()
-    print(
-        "初動銘柄追跡保存 :",
-        TRACKING_FILE
-    )
-
-    print(
-        "今回の追跡登録数 :",
-        len(new_rows)
-    )
-
-    return tracking_df
-
 
     # ==========================
     # 新規データ追加
