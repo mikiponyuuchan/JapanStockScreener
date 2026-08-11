@@ -123,8 +123,8 @@ def main():
     df = pd.DataFrame(results)
 
     df = df.sort_values(
-        "強気度",
-        ascending=False
+        ["強気度", "初動スコア", "コード"],
+        ascending=[False, False, True]
     )
 
     # ==========================
