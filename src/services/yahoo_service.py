@@ -141,6 +141,7 @@ def print_yahoo_stats():
 atexit.register(print_yahoo_stats)
 
 
+
 # ==========================
 # 最新の期待営業日
 # ==========================
@@ -149,80 +150,59 @@ def get_expected_market_date():
 
     now = datetime.now()
 
-    start_time = time.time()
-
-    # ==========================
-    # 日本の祝日
-    # ==========================
-
     jp_holidays = holidays.Japan(
-        years=now.year
+        years=[
+            now.year,
+            now.year - 1,
+            now.year + 1
+        ]
     )
 
-    today = now.date()
+    today = pd.Timestamp(
+        now.date()
+    ).normalize()
 
     # ==========================
-    # 土日・祝日
+    # 基準日を決める
+    #
+    # 平日15:30以降
+    # → 当日
+    #
+    # それ以外
+    # → 前日
     # ==========================
 
     if (
-        now.weekday() >= 5
-        or today in jp_holidays
+        now.weekday() < 5
+        and now.time() >= dt_time(15, 30)
+        and now.date() not in jp_holidays
     ):
 
-        date = (
-            pd.Timestamp(today)
-            - pd.offsets.BDay(1)
-        )
-
-        while (
-            date.weekday() >= 5
-            or date.date() in jp_holidays
-        ):
-
-            date = (
-                date
-                - pd.offsets.BDay(1)
-            )
-
-        result = date.normalize()
-
-        _add_stat(
-            "expected_date_time",
-            time.time() - start_time
-        )
-
-        return result
-
-    # ==========================
-    # 平日
-    #
-    # 15:30以降
-    # → 当日
-    #
-    # 15:30前
-    # → 前営業日
-    # ==========================
-
-    if now.time() >= dt_time(15, 30):
-
-        result = pd.Timestamp(
-            today
-        ).normalize()
+        date = today
 
     else:
 
-        result = (
-            pd.Timestamp(today)
-            - pd.offsets.BDay(1)
-        ).normalize()
+        date = (
+            today
+            - pd.Timedelta(days=1)
+        )
 
-    _add_stat(
-        "expected_date_time",
-        time.time() - start_time
-    )
+    # ==========================
+    # 土日・祝日を遡る
+    # ==========================
 
-    return result
+    while (
+        date.weekday() >= 5
+        or date.date() in jp_holidays
+    ):
+
+        date = (
+            date
+            - pd.Timedelta(days=1)
+        )
+
+    return date.normalize()
+
 
 
 # ==========================
