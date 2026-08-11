@@ -165,8 +165,9 @@ def get_price(code: str):
 # ==========================
 
 def get_history(
-        code: str,
-        period="6mo"):
+    code: str,
+    period="6mo"
+):
 
     start_time = time.time()
 
@@ -179,7 +180,6 @@ def get_history(
     expected_date = (
         get_expected_market_date()
     )
-
 
     # ==========================
     # キャッシュ確認
@@ -194,24 +194,18 @@ def get_history(
                 parse_dates=["Date"]
             )
 
-
             if "Date" in cached_df.columns:
 
-                cached_df["Date"] = (
-                    pd.to_datetime(
-                        cached_df["Date"],
-                        errors="coerce"
-                    )
+                cached_df["Date"] = pd.to_datetime(
+                    cached_df["Date"],
+                    errors="coerce"
                 )
 
                 cached_df = (
                     cached_df
-                    .dropna(
-                        subset=["Date"]
-                    )
+                    .dropna(subset=["Date"])
                     .sort_values("Date")
                 )
-
 
                 if not cached_df.empty:
 
@@ -221,19 +215,80 @@ def get_history(
                         .max()
                     )
 
-
                     # ==========================
-                    # 最新営業日まで取得済み
+                    # すでに最新営業日まである
                     # ==========================
 
-                    if (
-                        latest_cache_date
-                        >=
-                        expected_date
-                    ):
+                    if latest_cache_date >= expected_date:
+
+                        elapsed = (
+                            time.time()
+                            - start_time
+                        )
+
+                        print(
+                            f"キャッシュ利用 : "
+                            f"{elapsed:.2f} 秒"
+                        )
 
                         return cached_df
 
+                    # ==========================
+                    # キャッシュあり・更新が必要
+                    #
+                    # 6か月分を取り直さず
+                    # 直近10営業日程度だけ取得
+                    # ==========================
+
+                    update_df = _download_history(
+                        code,
+                        period="10d"
+                    )
+
+                    if (
+                        update_df is not None
+                        and not update_df.empty
+                    ):
+
+                        combined_df = pd.concat(
+                            [
+                                cached_df,
+                                update_df
+                            ],
+                            ignore_index=True
+                        )
+
+                        combined_df["Date"] = pd.to_datetime(
+                            combined_df["Date"],
+                            errors="coerce"
+                        )
+
+                        combined_df = (
+                            combined_df
+                            .dropna(subset=["Date"])
+                            .sort_values("Date")
+                            .drop_duplicates(
+                                subset=["Date"],
+                                keep="last"
+                            )
+                        )
+
+                        _save_cache(
+                            combined_df,
+                            cache_file
+                        )
+
+                        elapsed = (
+                            time.time()
+                            - start_time
+                        )
+
+                        print(
+                            f"データ更新(Yahoo) : "
+                            f"{elapsed:.2f} 秒"
+                        )
+
+                        return combined_df
 
         except Exception:
 
@@ -241,119 +296,39 @@ def get_history(
             # Yahooから再取得
             pass
 
+    # ==========================
+    # キャッシュがない場合
+    #
+    # 今まで通り6か月分取得
+    # ==========================
+
+    df = _download_history(
+        code,
+        period=period
+    )
+
+    if df is None or df.empty:
+
+        return None
 
     # ==========================
-    # Yahooから取得
+    # キャッシュ保存
     # ==========================
 
-    ticker = f"{code}.T"
+    _save_cache(
+        df,
+        cache_file
+    )
 
+    elapsed = (
+        time.time()
+        - start_time
+    )
 
-    for attempt in range(RETRY_COUNT):
+    print(
+        f"データ取得(Yahoo) : "
+        f"{elapsed:.2f} 秒"
+    )
 
-        try:
-
-            stock = yf.Ticker(
-                ticker
-            )
-
-            df = stock.history(
-                period=period
-            )
-
-
-            if df.empty:
-
-                return None
-
-
-            # ==========================
-            # Date列を作成
-            # ==========================
-
-            df = df.reset_index()
-
-
-            if "Date" not in df.columns:
-
-                return None
-
-
-            df["Date"] = (
-                pd.to_datetime(
-                    df["Date"],
-                    errors="coerce"
-                )
-            )
-
-
-            df = (
-                df
-                .dropna(
-                    subset=["Date"]
-                )
-                .sort_values("Date")
-            )
-
-
-            # ==========================
-            # キャッシュ保存
-            # ==========================
-
-            try:
-
-                df.to_csv(
-                    cache_file,
-                    index=False,
-                    encoding="utf-8-sig"
-                )
-
-            except Exception:
-
-                pass
-
-
-            elapsed = (
-                time.time()
-                -
-                start_time
-            )
-
-
-            print(
-                f"データ取得(Yahoo) : "
-                f"{elapsed:.2f} 秒"
-            )
-
-
-            # ==========================
-            # 重要
-            #
-            # Date列を残したまま返す
-            #
-            # chart_service.py
-            # tracking_service.py
-            # analyzer.py
-            # が従来通り使える
-            # ==========================
-
-            return df
-
-
-        except Exception:
-
-            if (
-                attempt
-                ==
-                RETRY_COUNT - 1
-            ):
-
-                return None
-
-
-            time.sleep(
-                RETRY_WAIT
-            )
-
-
-    return None
+    return df
+```
