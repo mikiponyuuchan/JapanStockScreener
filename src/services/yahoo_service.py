@@ -2,6 +2,8 @@ import time
 from datetime import datetime, time as dt_time
 from pathlib import Path
 
+import holidays
+
 import pandas as pd
 import yfinance as yf
 
@@ -31,57 +33,65 @@ def get_expected_market_date():
     now = datetime.now()
 
     # ==========================
-    # 土曜日
+    # 日本の祝日
     # ==========================
 
-    if now.weekday() == 5:
+    jp_holidays = holidays.Japan(
+        years=now.year
+    )
 
-        return (
-            pd.Timestamp(
-                now.date()
-            )
+    today = now.date()
+
+    # ==========================
+    # 休場日
+    #
+    # 土日・祝日
+    # → 直前の営業日
+    # ==========================
+
+    if (
+        now.weekday() >= 5
+        or today in jp_holidays
+    ):
+
+        date = (
+            pd.Timestamp(today)
             - pd.offsets.BDay(1)
-        ).normalize()
+        )
 
+        # 祝日が連続する場合も考慮
+        while (
+            date.weekday() >= 5
+            or date.date() in jp_holidays
+        ):
 
-    # ==========================
-    # 日曜日
-    # ==========================
-
-    if now.weekday() == 6:
-
-        return (
-            pd.Timestamp(
-                now.date()
+            date = (
+                date
+                - pd.offsets.BDay(1)
             )
-            - pd.offsets.BDay(1)
-        ).normalize()
 
+        return date.normalize()
 
     # ==========================
     # 平日
     #
     # 15:30以降
-    # → 当日の株価を期待
+    # → 当日
     #
     # 15:30前
-    # → 前営業日を期待
+    # → 前営業日
     # ==========================
 
     if now.time() >= dt_time(15, 30):
 
         return pd.Timestamp(
-            now.date()
+            today
         ).normalize()
 
-    else:
-
-        return (
-            pd.Timestamp(
-                now.date()
-            )
-            - pd.offsets.BDay(1)
-        ).normalize()
+    return (
+        pd.Timestamp(today)
+        - pd.offsets.BDay(1)
+    ).normalize()
 
 
 # ==========================
@@ -161,6 +171,91 @@ def get_price(code: str):
 
 
 # ==========================
+# Yahoo履歴データ取得
+# ==========================
+
+def _download_history(
+    code: str,
+    period="6mo"
+):
+
+    ticker = f"{code}.T"
+
+    for attempt in range(RETRY_COUNT):
+
+        try:
+
+            stock = yf.Ticker(
+                ticker
+            )
+
+            df = stock.history(
+                period=period
+            )
+
+            if df.empty:
+
+                return None
+
+            df = df.reset_index()
+
+            if "Date" not in df.columns:
+
+                return None
+
+            df["Date"] = pd.to_datetime(
+                df["Date"],
+                errors="coerce"
+            )
+
+            df = (
+                df
+                .dropna(subset=["Date"])
+                .sort_values("Date")
+            )
+
+            return df
+
+        except Exception:
+
+            if (
+                attempt
+                ==
+                RETRY_COUNT - 1
+            ):
+
+                return None
+
+            time.sleep(
+                RETRY_WAIT
+            )
+
+    return None
+
+
+# ==========================
+# キャッシュ保存
+# ==========================
+
+def _save_cache(
+    df,
+    cache_file
+):
+
+    try:
+
+        df.to_csv(
+            cache_file,
+            index=False,
+            encoding="utf-8-sig"
+        )
+
+    except Exception:
+
+        pass
+
+
+# ==========================
 # 履歴データ取得
 # ==========================
 
@@ -200,6 +295,14 @@ def get_history(
                     cached_df["Date"],
                     errors="coerce"
                 )
+
+                # キャッシュの日付にタイムゾーンがある場合は削除
+                if cached_df["Date"].dt.tz is not None:
+
+                    cached_df["Date"] = (
+                        cached_df["Date"]
+                        .dt.tz_localize(None)
+                    )
 
                 cached_df = (
                     cached_df
@@ -331,4 +434,3 @@ def get_history(
     )
 
     return df
-```
