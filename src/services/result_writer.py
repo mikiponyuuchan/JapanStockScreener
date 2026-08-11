@@ -197,7 +197,6 @@ def save_result(df):
         chart = save_chart(code)
 
         if chart:
-
             chart_files[code] = chart
 
     # --------------------------
@@ -216,10 +215,11 @@ def save_result(df):
         chart = save_chart(code)
 
         if chart:
-
             chart_files[code] = chart
 
-    print("日足チャート作成完了")
+    print(
+        f"日足チャート作成完了 ({len(chart_files)}銘柄)"
+    )
 
     # ==========================
     # 買い候補
@@ -599,7 +599,6 @@ def save_result(df):
                             )
                             == main_title
                         ):
-
                             continue
 
                         news_rows.append(
@@ -916,15 +915,14 @@ def save_result(df):
             # 列幅
             # ----------------------
 
-            sheet.column_dimensions["A"].width = 7
-            sheet.column_dimensions["B"].width = 16
-            sheet.column_dimensions["C"].width = 8
-            sheet.column_dimensions["D"].width = 7
-            sheet.column_dimensions["E"].width = 10
-            sheet.column_dimensions["F"].width = 14
-            sheet.column_dimensions["G"].width = 18
-            sheet.column_dimensions["H"].width = 20
-            sheet.column_dimensions["I"].width = 11
+            sheet.column_dimensions["A"].width = 7    # コード
+            sheet.column_dimensions["B"].width = 16   # 銘柄名
+            sheet.column_dimensions["C"].width = 8    # 株価
+            sheet.column_dimensions["D"].width = 7    # 強気度
+            sheet.column_dimensions["E"].width = 10   # 分析コメント
+            sheet.column_dimensions["F"].width = 14   # 急騰理由
+            sheet.column_dimensions["G"].width = 18   # 主な材料
+            sheet.column_dimensions["H"].width = 11   # ニュース日時
 
             # ----------------------
             # 強気度グラデーション
@@ -1018,24 +1016,21 @@ def save_result(df):
                 sheet.max_row + 1
             ):
 
-                for header_name in [
-                    "分析コメント",
-                    "急騰理由",
-                    "主な材料",
-                    "ニュース日時",
-                ]:
+                for col in range(
+                    1,
+                    sheet.max_column + 1
+                ):
 
-                    if header_name in headers:
+                    cell = sheet.cell(
+                        row,
+                        col
+                    )
 
-                        cell = sheet.cell(
-                            row,
-                            headers[header_name]
-                        )
-
-                        cell.alignment = Alignment(
-                            wrap_text=True,
-                            vertical="top"
-                        )
+                    cell.alignment = Alignment(
+                        horizontal="left",
+                        vertical="top",
+                        wrap_text=True
+                    )
 
             # ----------------------
             # 主な材料をリンク化
@@ -1137,7 +1132,7 @@ def save_result(df):
             ].width = 30
 
             # ----------------------
-            # TOP20全セル上寄せ
+            # TOP20最終整形
             # ----------------------
 
             for row in range(
@@ -1161,6 +1156,57 @@ def save_result(df):
                         wrap_text=True
                     )
 
+            # ----------------------
+            # TOP20最終列幅
+            # ----------------------
+
+            sheet.column_dimensions["A"].width = 7
+            sheet.column_dimensions["B"].width = 16
+            sheet.column_dimensions["C"].width = 8
+            sheet.column_dimensions["D"].width = 7
+            sheet.column_dimensions["E"].width = 10
+            sheet.column_dimensions["F"].width = 14
+            sheet.column_dimensions["G"].width = 18
+            sheet.column_dimensions["H"].width = 11
+
+            # ----------------------
+            # 主な材料を確実に
+            # 折り返し・上詰め
+            # ----------------------
+
+            if "主な材料" in headers:
+
+                material_col = headers[
+                    "主な材料"
+                ]
+
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
+
+                    sheet.cell(
+                        row,
+                        material_col
+                    ).alignment = Alignment(
+                        horizontal="left",
+                        vertical="top",
+                        wrap_text=True
+                    )
+
+            # ----------------------
+            # チャート列ヘッダー
+            # ----------------------
+
+            sheet.cell(
+                1,
+                chart_column
+            ).alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True
+            )
+
             # ==================================================
             # 初動スコアTOP20シート
             # ==================================================
@@ -1179,18 +1225,17 @@ def save_result(df):
 
             # ----------------------
             # 列幅
-            # 強気度TOP20に合わせて調整
             # ----------------------
 
-            sheet.column_dimensions["A"].width = 7    # コード
-            sheet.column_dimensions["B"].width = 16   # 銘柄名
-            sheet.column_dimensions["C"].width = 8    # 株価
-            sheet.column_dimensions["D"].width = 7    # 強気度
-            sheet.column_dimensions["E"].width = 10   # 初動スコア
-            sheet.column_dimensions["F"].width = 14   # 分析コメント
-            sheet.column_dimensions["G"].width = 18   # 急騰理由
-            sheet.column_dimensions["H"].width = 20   # 主な材料
-            sheet.column_dimensions["I"].width = 11   # ニュース日時
+            sheet.column_dimensions["A"].width = 7
+            sheet.column_dimensions["B"].width = 16
+            sheet.column_dimensions["C"].width = 8
+            sheet.column_dimensions["D"].width = 7
+            sheet.column_dimensions["E"].width = 7
+            sheet.column_dimensions["F"].width = 10
+            sheet.column_dimensions["G"].width = 14
+            sheet.column_dimensions["H"].width = 18
+            sheet.column_dimensions["I"].width = 11
 
             # ----------------------
             # 初動スコア
@@ -1436,25 +1481,19 @@ def save_result(df):
             # 初動TOP20最終整形
             # ----------------------
 
-            # 主な材料・急騰理由などを確実に上詰め
             for row in range(
                 2,
                 sheet.max_row + 1
             ):
 
-                for header_name in [
-                    "分析コメント",
-                    "急騰理由",
-                    "主な材料",
-                    "ニュース日時",
-                ]:
-
-                    if header_name not in headers:
-                        continue
+                for col in range(
+                    1,
+                    sheet.max_column + 1
+                ):
 
                     cell = sheet.cell(
                         row,
-                        headers[header_name]
+                        col
                     )
 
                     cell.alignment = Alignment(
@@ -1463,7 +1502,49 @@ def save_result(df):
                         wrap_text=True
                     )
 
-            # チャート列のヘッダーも整形
+            # ----------------------
+            # 初動TOP20最終列幅
+            # ----------------------
+
+            sheet.column_dimensions["A"].width = 7
+            sheet.column_dimensions["B"].width = 16
+            sheet.column_dimensions["C"].width = 8
+            sheet.column_dimensions["D"].width = 7
+            sheet.column_dimensions["E"].width = 7
+            sheet.column_dimensions["F"].width = 10
+            sheet.column_dimensions["G"].width = 14
+            sheet.column_dimensions["H"].width = 18
+            sheet.column_dimensions["I"].width = 11
+
+            # ----------------------
+            # 主な材料を確実に
+            # 折り返し・上詰め
+            # ----------------------
+
+            if "主な材料" in headers:
+
+                material_col = headers[
+                    "主な材料"
+                ]
+
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
+
+                    sheet.cell(
+                        row,
+                        material_col
+                    ).alignment = Alignment(
+                        horizontal="left",
+                        vertical="top",
+                        wrap_text=True
+                    )
+
+            # ----------------------
+            # チャート列ヘッダー
+            # ----------------------
+
             sheet.cell(
                 1,
                 chart_column
