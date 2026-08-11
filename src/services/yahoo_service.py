@@ -1,9 +1,11 @@
 import time
+import atexit
+import threading
+
 from datetime import datetime, time as dt_time
 from pathlib import Path
 
 import holidays
-
 import pandas as pd
 import yfinance as yf
 
@@ -25,12 +27,129 @@ CACHE_DIR.mkdir(
 
 
 # ==========================
+# Ver6.9 詳細計測
+# ==========================
+
+_stats_lock = threading.Lock()
+
+_stats = {
+    "total_calls": 0,
+    "cache_hits": 0,
+    "cache_updates": 0,
+    "full_downloads": 0,
+
+    "expected_date_time": 0.0,
+    "cache_read_time": 0.0,
+    "yahoo_download_time": 0.0,
+    "cache_save_time": 0.0,
+    "total_get_history_time": 0.0,
+
+    "yahoo_10d_calls": 0,
+    "yahoo_6mo_calls": 0,
+}
+
+
+def _add_stat(name, value):
+
+    with _stats_lock:
+
+        _stats[name] += value
+
+
+def _add_count(name, value=1):
+
+    with _stats_lock:
+
+        _stats[name] += value
+
+
+def print_yahoo_stats():
+
+    with _stats_lock:
+
+        stats = dict(_stats)
+
+    print()
+    print("==============================")
+    print(" Ver6.9 Yahoo詳細計測")
+    print("==============================")
+
+    print(
+        f"get_history呼出       : "
+        f"{stats['total_calls']}"
+    )
+
+    print(
+        f"キャッシュ利用        : "
+        f"{stats['cache_hits']}"
+    )
+
+    print(
+        f"キャッシュ更新        : "
+        f"{stats['cache_updates']}"
+    )
+
+    print(
+        f"初回Yahoo取得         : "
+        f"{stats['full_downloads']}"
+    )
+
+    print()
+
+    print(
+        f"営業日判定時間        : "
+        f"{stats['expected_date_time']:.2f} 秒"
+    )
+
+    print(
+        f"キャッシュ読込時間    : "
+        f"{stats['cache_read_time']:.2f} 秒"
+    )
+
+    print(
+        f"Yahoo取得時間         : "
+        f"{stats['yahoo_download_time']:.2f} 秒"
+    )
+
+    print(
+        f"キャッシュ保存時間    : "
+        f"{stats['cache_save_time']:.2f} 秒"
+    )
+
+    print(
+        f"get_history実時間合計 : "
+        f"{stats['total_get_history_time']:.2f} 秒"
+    )
+
+    print()
+
+    print(
+        f"Yahoo 10d取得回数     : "
+        f"{stats['yahoo_10d_calls']}"
+    )
+
+    print(
+        f"Yahoo 6mo取得回数     : "
+        f"{stats['yahoo_6mo_calls']}"
+    )
+
+    print("==============================")
+    print()
+
+
+# プログラム終了時に集計表示
+atexit.register(print_yahoo_stats)
+
+
+# ==========================
 # 最新の期待営業日
 # ==========================
 
 def get_expected_market_date():
 
     now = datetime.now()
+
+    start_time = time.time()
 
     # ==========================
     # 日本の祝日
@@ -43,10 +162,7 @@ def get_expected_market_date():
     today = now.date()
 
     # ==========================
-    # 休場日
-    #
     # 土日・祝日
-    # → 直前の営業日
     # ==========================
 
     if (
@@ -59,7 +175,6 @@ def get_expected_market_date():
             - pd.offsets.BDay(1)
         )
 
-        # 祝日が連続する場合も考慮
         while (
             date.weekday() >= 5
             or date.date() in jp_holidays
@@ -70,7 +185,14 @@ def get_expected_market_date():
                 - pd.offsets.BDay(1)
             )
 
-        return date.normalize()
+        result = date.normalize()
+
+        _add_stat(
+            "expected_date_time",
+            time.time() - start_time
+        )
+
+        return result
 
     # ==========================
     # 平日
@@ -84,14 +206,23 @@ def get_expected_market_date():
 
     if now.time() >= dt_time(15, 30):
 
-        return pd.Timestamp(
+        result = pd.Timestamp(
             today
         ).normalize()
 
-    return (
-        pd.Timestamp(today)
-        - pd.offsets.BDay(1)
-    ).normalize()
+    else:
+
+        result = (
+            pd.Timestamp(today)
+            - pd.offsets.BDay(1)
+        ).normalize()
+
+    _add_stat(
+        "expected_date_time",
+        time.time() - start_time
+    )
+
+    return result
 
 
 # ==========================
@@ -179,7 +310,21 @@ def _download_history(
     period="6mo"
 ):
 
+    start_time = time.time()
+
     ticker = f"{code}.T"
+
+    if period == "10d":
+
+        _add_count(
+            "yahoo_10d_calls"
+        )
+
+    else:
+
+        _add_count(
+            "yahoo_6mo_calls"
+        )
 
     for attempt in range(RETRY_COUNT):
 
@@ -195,11 +340,21 @@ def _download_history(
 
             if df.empty:
 
+                _add_stat(
+                    "yahoo_download_time",
+                    time.time() - start_time
+                )
+
                 return None
 
             df = df.reset_index()
 
             if "Date" not in df.columns:
+
+                _add_stat(
+                    "yahoo_download_time",
+                    time.time() - start_time
+                )
 
                 return None
 
@@ -214,6 +369,11 @@ def _download_history(
                 .sort_values("Date")
             )
 
+            _add_stat(
+                "yahoo_download_time",
+                time.time() - start_time
+            )
+
             return df
 
         except Exception:
@@ -224,11 +384,21 @@ def _download_history(
                 RETRY_COUNT - 1
             ):
 
+                _add_stat(
+                    "yahoo_download_time",
+                    time.time() - start_time
+                )
+
                 return None
 
             time.sleep(
                 RETRY_WAIT
             )
+
+    _add_stat(
+        "yahoo_download_time",
+        time.time() - start_time
+    )
 
     return None
 
@@ -242,6 +412,8 @@ def _save_cache(
     cache_file
 ):
 
+    start_time = time.time()
+
     try:
 
         df.to_csv(
@@ -254,6 +426,13 @@ def _save_cache(
 
         pass
 
+    finally:
+
+        _add_stat(
+            "cache_save_time",
+            time.time() - start_time
+        )
+
 
 # ==========================
 # 履歴データ取得
@@ -265,6 +444,10 @@ def get_history(
 ):
 
     start_time = time.time()
+
+    _add_count(
+        "total_calls"
+    )
 
     cache_file = (
         CACHE_DIR
@@ -282,6 +465,8 @@ def get_history(
 
     if cache_file.exists():
 
+        cache_read_start = time.time()
+
         try:
 
             cached_df = pd.read_csv(
@@ -296,7 +481,7 @@ def get_history(
                     errors="coerce"
                 )
 
-                # キャッシュの日付にタイムゾーンがある場合は削除
+                # タイムゾーンを除去
                 if cached_df["Date"].dt.tz is not None:
 
                     cached_df["Date"] = (
@@ -318,15 +503,33 @@ def get_history(
                         .max()
                     )
 
+                    _add_stat(
+                        "cache_read_time",
+                        time.time() - cache_read_start
+                    )
+
                     # ==========================
-                    # すでに最新営業日まである
+                    # 最新営業日まで存在
                     # ==========================
 
-                    if latest_cache_date >= expected_date:
+                    if (
+                        latest_cache_date
+                        >=
+                        expected_date
+                    ):
+
+                        _add_count(
+                            "cache_hits"
+                        )
 
                         elapsed = (
                             time.time()
                             - start_time
+                        )
+
+                        _add_stat(
+                            "total_get_history_time",
+                            elapsed
                         )
 
                         print(
@@ -337,9 +540,8 @@ def get_history(
                         return cached_df
 
                     # ==========================
-                    # キャッシュあり・更新が必要
+                    # キャッシュあり・更新必要
                     #
-                    # 6か月分を取り直さず
                     # 直近10営業日程度だけ取得
                     # ==========================
 
@@ -381,9 +583,18 @@ def get_history(
                             cache_file
                         )
 
+                        _add_count(
+                            "cache_updates"
+                        )
+
                         elapsed = (
                             time.time()
                             - start_time
+                        )
+
+                        _add_stat(
+                            "total_get_history_time",
+                            elapsed
                         )
 
                         print(
@@ -395,6 +606,11 @@ def get_history(
 
         except Exception:
 
+            _add_stat(
+                "cache_read_time",
+                time.time() - cache_read_start
+            )
+
             # キャッシュが壊れている場合は
             # Yahooから再取得
             pass
@@ -402,7 +618,7 @@ def get_history(
     # ==========================
     # キャッシュがない場合
     #
-    # 今まで通り6か月分取得
+    # 6か月分取得
     # ==========================
 
     df = _download_history(
@@ -411,6 +627,16 @@ def get_history(
     )
 
     if df is None or df.empty:
+
+        elapsed = (
+            time.time()
+            - start_time
+        )
+
+        _add_stat(
+            "total_get_history_time",
+            elapsed
+        )
 
         return None
 
@@ -423,9 +649,18 @@ def get_history(
         cache_file
     )
 
+    _add_count(
+        "full_downloads"
+    )
+
     elapsed = (
         time.time()
         - start_time
+    )
+
+    _add_stat(
+        "total_get_history_time",
+        elapsed
     )
 
     print(
