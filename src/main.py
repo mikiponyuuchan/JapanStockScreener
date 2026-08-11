@@ -111,6 +111,11 @@ def main():
         return
     analysis_end = time.time()
 
+    analysis_time = (
+        analysis_end
+        - analysis_start
+    )
+
     # ==========================
     # DataFrame
     # ==========================
@@ -215,6 +220,10 @@ def main():
 
     print(
         f"保存            : {save_end - save_start:6.1f} 秒"
+    )
+
+    print(
+        f"分析処理（実時間）: {analysis_time:6.1f} 秒"
     )
 
     print()
