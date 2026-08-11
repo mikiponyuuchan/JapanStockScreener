@@ -1179,17 +1179,18 @@ def save_result(df):
 
             # ----------------------
             # 列幅
+            # 強気度TOP20に合わせて調整
             # ----------------------
 
-            sheet.column_dimensions["A"].width = 7
-            sheet.column_dimensions["B"].width = 16
-            sheet.column_dimensions["C"].width = 8
-            sheet.column_dimensions["D"].width = 7
-            sheet.column_dimensions["E"].width = 10
-            sheet.column_dimensions["F"].width = 22
-            sheet.column_dimensions["G"].width = 22
-            sheet.column_dimensions["H"].width = 30
-            sheet.column_dimensions["I"].width = 12
+            sheet.column_dimensions["A"].width = 7    # コード
+            sheet.column_dimensions["B"].width = 16   # 銘柄名
+            sheet.column_dimensions["C"].width = 8    # 株価
+            sheet.column_dimensions["D"].width = 7    # 強気度
+            sheet.column_dimensions["E"].width = 10   # 初動スコア
+            sheet.column_dimensions["F"].width = 14   # 分析コメント
+            sheet.column_dimensions["G"].width = 18   # 急騰理由
+            sheet.column_dimensions["H"].width = 20   # 主な材料
+            sheet.column_dimensions["I"].width = 11   # ニュース日時
 
             # ----------------------
             # 初動スコア
@@ -1303,6 +1304,36 @@ def save_result(df):
                     )
 
             # ----------------------
+            # 主な材料・急騰理由などを上詰め
+            # ----------------------
+
+            for header_name in [
+                "分析コメント",
+                "急騰理由",
+                "主な材料",
+                "ニュース日時",
+            ]:
+
+                if header_name not in headers:
+                    continue
+
+                col = headers[header_name]
+
+                for row in range(
+                    2,
+                    sheet.max_row + 1
+                ):
+
+                    sheet.cell(
+                        row,
+                        col
+                    ).alignment = Alignment(
+                        horizontal="left",
+                        vertical="top",
+                        wrap_text=True
+                    )
+
+            # ----------------------
             # 主な材料をリンク化
             # ----------------------
 
@@ -1400,6 +1431,47 @@ def save_result(df):
                     chart_column
                 )
             ].width = 30
+
+            # ----------------------
+            # 初動TOP20最終整形
+            # ----------------------
+
+            # 主な材料・急騰理由などを確実に上詰め
+            for row in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                for header_name in [
+                    "分析コメント",
+                    "急騰理由",
+                    "主な材料",
+                    "ニュース日時",
+                ]:
+
+                    if header_name not in headers:
+                        continue
+
+                    cell = sheet.cell(
+                        row,
+                        headers[header_name]
+                    )
+
+                    cell.alignment = Alignment(
+                        horizontal="left",
+                        vertical="top",
+                        wrap_text=True
+                    )
+
+            # チャート列のヘッダーも整形
+            sheet.cell(
+                1,
+                chart_column
+            ).alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True
+            )
 
             # ==================================================
             # TOP20を最初に開く
