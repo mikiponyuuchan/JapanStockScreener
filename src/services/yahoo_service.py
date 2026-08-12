@@ -423,6 +423,27 @@ def get_history(
     period="6mo"
 ):
 
+    # ==========================
+    # Ver6.11 Parquet優先
+    #
+    # 通常分析は6moなので
+    # 統合Parquetキャッシュを利用する。
+    #
+    # 1yはチャート用なので
+    # 従来のCSV方式を維持する。
+    # ==========================
+
+    if period == "6mo":
+
+        parquet_df = get_history_parquet(
+            code,
+            period=period
+        )
+
+        if parquet_df is not None and not parquet_df.empty:
+
+            return parquet_df
+
     start_time = time.time()
 
     _add_count(
