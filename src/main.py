@@ -39,10 +39,7 @@ def main():
     # 銘柄一覧取得
     # ==========================
 
-    stocks = load_stock_list(
-        start=0,
-        limit=100
-    )
+    stocks = load_stock_list()
 
     total = len(stocks)
 
