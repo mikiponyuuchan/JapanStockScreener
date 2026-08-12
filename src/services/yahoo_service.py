@@ -743,10 +743,129 @@ def _read_parquet_history(code: str):
 
         return None
 
+# ==========================
+# Ver6.13 Parquetメモリキャッシュ
+# ==========================
+
+_PARQUET_MEMORY_CACHE = None
+_PARQUET_MEMORY_CACHE_LOCK = threading.Lock()
+
+_EXPECTED_MARKET_DATE_CACHE = None
+_EXPECTED_MARKET_DATE_CACHE_DATE = None
+_EXPECTED_MARKET_DATE_CACHE_LOCK = threading.Lock()
 
 
 # ==========================
-# Ver6.11 Parquet版履歴取得
+# Parquetメモリ読込
+# ==========================
+
+def _read_parquet_history(code: str):
+
+    global _PARQUET_MEMORY_CACHE
+
+    if not PARQUET_CACHE_FILE.exists():
+        return None
+
+    try:
+
+        # --------------------------
+        # 初回だけParquet全体をメモリへ
+        # --------------------------
+
+        if _PARQUET_MEMORY_CACHE is None:
+
+            with _PARQUET_MEMORY_CACHE_LOCK:
+
+                if _PARQUET_MEMORY_CACHE is None:
+
+                    start_time = time.time()
+
+                    df_all = pd.read_parquet(
+                        PARQUET_CACHE_FILE
+                    )
+
+                    if df_all.empty:
+                        return None
+
+                    if "Date" in df_all.columns:
+
+                        df_all["Date"] = pd.to_datetime(
+                            df_all["Date"],
+                            errors="coerce"
+                        )
+
+                        if getattr(
+                            df_all["Date"].dt,
+                            "tz",
+                            None
+                        ) is not None:
+
+                            df_all["Date"] = (
+                                df_all["Date"]
+                                .dt.tz_localize(None)
+                            )
+
+                        df_all = (
+                            df_all
+                            .dropna(subset=["Date"])
+                            .sort_values(
+                                ["code", "Date"]
+                            )
+                        )
+
+                    # codeを文字列に統一
+                    if "code" in df_all.columns:
+
+                        df_all["code"] = (
+                            df_all["code"]
+                            .astype(str)
+                        )
+
+                    _PARQUET_MEMORY_CACHE = df_all
+
+                    elapsed = (
+                        time.time()
+                        - start_time
+                    )
+
+                    print(
+                        f"Parquetメモリ読込 : "
+                        f"{len(df_all)}行 / "
+                        f"{elapsed:.4f}秒"
+                    )
+
+        # --------------------------
+        # メモリから対象銘柄だけ抽出
+        # --------------------------
+
+        df = _PARQUET_MEMORY_CACHE
+
+        if df is None or df.empty:
+            return None
+
+        code_str = str(code)
+
+        result = df[
+            df["code"] == code_str
+        ].copy()
+
+        if result.empty:
+            return None
+
+        return result
+
+    except Exception as e:
+
+        print(
+            f"Parquetメモリ読込エラー : "
+            f"{code} / {e}"
+        )
+
+        return None
+
+
+# ==========================
+# Ver6.13 Parquet履歴取得
 # ==========================
 
 def get_history_parquet(
@@ -764,7 +883,13 @@ def get_history_parquet(
     # Parquetから取得
     # ==========================
 
-    df = _read_parquet_history(code)
+    df = _read_parquet_history(
+        code
+    )
+
+    # ==========================
+    # Parquetに存在する場合
+    # ==========================
 
     if df is not None and not df.empty:
 
@@ -845,6 +970,39 @@ def get_history_parquet(
                 f"{len(combined_df)}行"
             )
 
+            # メモリキャッシュも更新
+            global _PARQUET_MEMORY_CACHE
+
+            if _PARQUET_MEMORY_CACHE is not None:
+
+                with _PARQUET_MEMORY_CACHE_LOCK:
+
+                    memory_df = (
+                        _PARQUET_MEMORY_CACHE
+                    )
+
+                    memory_df = memory_df[
+                        memory_df["code"].astype(str)
+                        != str(code)
+                    ]
+
+                    _PARQUET_MEMORY_CACHE = pd.concat(
+                        [
+                            memory_df,
+                            combined_df.assign(
+                                code=str(code)
+                            )
+                        ],
+                        ignore_index=True
+                    )
+
+                    _PARQUET_MEMORY_CACHE = (
+                        _PARQUET_MEMORY_CACHE
+                        .sort_values(
+                            ["code", "Date"]
+                        )
+                    )
+
             return combined_df
 
     # ==========================
@@ -862,7 +1020,6 @@ def get_history_parquet(
     )
 
     if df is None or df.empty:
-
         return None
 
     elapsed = (
