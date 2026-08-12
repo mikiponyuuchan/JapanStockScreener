@@ -825,7 +825,7 @@ def record_initial_move(df):
     # ==========================
 
     score_series = pd.to_numeric(
-        df["蛻晏虚繧ｹ繧ｳ繧｢"],
+        df["初動スコア"],
         errors="coerce"
     )
 

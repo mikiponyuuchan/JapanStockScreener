@@ -75,7 +75,7 @@ def save_result(df):
     # ==========================
 
     initial_move_score = pd.to_numeric(
-        df["蛻晏虚繧ｹ繧ｳ繧｢"],
+        df["初動スコア"],
         errors="coerce"
     )
 
