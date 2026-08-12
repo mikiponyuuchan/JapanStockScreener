@@ -649,3 +649,211 @@ def get_history(
     )
 
     return df
+# ==========================
+# Ver6.11 統合Parquetキャッシュ
+# ==========================
+
+PARQUET_CACHE_FILE = (
+    CACHE_DIR
+    / "_all_cache.parquet"
+)
+
+
+def _read_parquet_history(code: str):
+
+    if not PARQUET_CACHE_FILE.exists():
+        return None
+
+    try:
+
+        start_time = time.time()
+
+        df = pd.read_parquet(
+            PARQUET_CACHE_FILE,
+            filters=[
+                ("code", "==", str(code))
+            ]
+        )
+
+        if df.empty:
+            return None
+
+        if "Date" in df.columns:
+
+            df["Date"] = pd.to_datetime(
+                df["Date"],
+                errors="coerce"
+            )
+
+            if getattr(
+                df["Date"].dt,
+                "tz",
+                None
+            ) is not None:
+
+                df["Date"] = (
+                    df["Date"]
+                    .dt.tz_localize(None)
+                )
+
+            df = (
+                df
+                .dropna(subset=["Date"])
+                .sort_values("Date")
+            )
+
+        elapsed = time.time() - start_time
+
+        print(
+            f"Parquet利用 : "
+            f"{code} / "
+            f"{len(df)}行 / "
+            f"{elapsed:.4f}秒"
+        )
+
+        return df
+
+    except Exception as e:
+
+        print(
+            f"Parquet読込失敗 : "
+            f"{code} / {e}"
+        )
+
+        return None
+
+
+
+# ==========================
+# Ver6.11 Parquet版履歴取得
+# ==========================
+
+def get_history_parquet(
+    code: str,
+    period="6mo"
+):
+
+    start_time = time.time()
+
+    expected_date = (
+        get_expected_market_date()
+    )
+
+    # ==========================
+    # Parquetから取得
+    # ==========================
+
+    df = _read_parquet_history(code)
+
+    if df is not None and not df.empty:
+
+        latest_date = (
+            df["Date"]
+            .dt.normalize()
+            .max()
+        )
+
+        # ==========================
+        # 最新営業日まで存在
+        # ==========================
+
+        if latest_date >= expected_date:
+
+            elapsed = (
+                time.time()
+                - start_time
+            )
+
+            print(
+                f"Parquetキャッシュ利用 : "
+                f"{code} / "
+                f"{len(df)}行 / "
+                f"{elapsed:.4f}秒"
+            )
+
+            return df
+
+        # ==========================
+        # 古い場合
+        # Yahooから10日分取得
+        # ==========================
+
+        print(
+            f"Parquet更新必要 : "
+            f"{code} / "
+            f"最新={latest_date.date()} / "
+            f"期待={expected_date.date()}"
+        )
+
+        update_df = _download_history(
+            code,
+            period="10d"
+        )
+
+        if (
+            update_df is not None
+            and not update_df.empty
+        ):
+
+            combined_df = pd.concat(
+                [
+                    df,
+                    update_df
+                ],
+                ignore_index=True
+            )
+
+            combined_df["Date"] = pd.to_datetime(
+                combined_df["Date"],
+                errors="coerce"
+            )
+
+            combined_df = (
+                combined_df
+                .dropna(subset=["Date"])
+                .sort_values("Date")
+                .drop_duplicates(
+                    subset=["Date"],
+                    keep="last"
+                )
+            )
+
+            print(
+                f"Parquet更新取得成功 : "
+                f"{code} / "
+                f"{len(combined_df)}行"
+            )
+
+            return combined_df
+
+    # ==========================
+    # Parquetに存在しない場合
+    # ==========================
+
+    print(
+        f"Parquet未登録 : "
+        f"{code} / Yahoo取得"
+    )
+
+    df = _download_history(
+        code,
+        period=period
+    )
+
+    if df is None or df.empty:
+
+        return None
+
+    elapsed = (
+        time.time()
+        - start_time
+    )
+
+    print(
+        f"Yahoo初回取得 : "
+        f"{code} / "
+        f"{len(df)}行 / "
+        f"{elapsed:.4f}秒"
+    )
+
+    return df
