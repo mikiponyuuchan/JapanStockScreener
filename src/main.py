@@ -41,7 +41,7 @@ def main():
 
     stocks = load_stock_list(
         start=0,
-        limit=10
+        limit=100
     )
 
     total = len(stocks)
