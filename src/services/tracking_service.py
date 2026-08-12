@@ -2,8 +2,13 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
-from services.yahoo_service import get_history
+import pandas as pd
+import holidays
 
+from services.yahoo_service import (
+    get_history,
+    _download_history_batch,
+)
 
 # ==========================
 # 設定
@@ -115,12 +120,38 @@ def add_business_days(
 
     date = pd.Timestamp(
         date
+    ).normalize()
+
+    # 日本の祝日
+    jp_holidays = holidays.Japan(
+        years=[
+            date.year - 1,
+            date.year,
+            date.year + 1
+        ]
     )
 
-    return date + pd.offsets.BDay(
-        days
-    )
+    current = date
 
+    count = 0
+
+    while count < days:
+
+        current += pd.Timedelta(
+            days=1
+        )
+
+        # 土日を除外
+        if current.weekday() >= 5:
+            continue
+
+        # 日本の祝日を除外
+        if current.date() in jp_holidays:
+            continue
+
+        count += 1
+
+    return current
 
 # ==========================
 # 株価取得
@@ -130,6 +161,14 @@ def get_price_on_or_after(
         code,
         target_date):
 
+    target_date = pd.Timestamp(
+        target_date
+    ).normalize()
+
+    # ==========================
+    # まず通常の履歴を確認
+    # ==========================
+
     try:
 
         history = get_history(
@@ -138,80 +177,147 @@ def get_price_on_or_after(
 
     except Exception:
 
-        return None
-
-    if history is None:
-
-        return None
-
-    if history.empty:
-
-        return None
-
-    history = history.copy()
+        history = None
 
     # ==========================
-    # 日付列がある場合
+    # 履歴を検索する関数
     # ==========================
 
-    if "Date" in history.columns:
+    def find_price(df):
 
-        history["Date"] = pd.to_datetime(
-            history["Date"]
+        if df is None:
+            return None
+
+        if df.empty:
+            return None
+
+        df = df.copy()
+
+        # --------------------------
+        # Dateをインデックスへ
+        # --------------------------
+
+        if "Date" in df.columns:
+
+            df["Date"] = pd.to_datetime(
+                df["Date"],
+                errors="coerce"
+            )
+
+            df = df.dropna(
+                subset=["Date"]
+            )
+
+            df = df.set_index(
+                "Date"
+            )
+
+        else:
+
+            df.index = pd.to_datetime(
+                df.index,
+                errors="coerce"
+            )
+
+            df = df[
+                ~df.index.isna()
+            ]
+
+        # --------------------------
+        # タイムゾーン除去
+        # --------------------------
+
+        if getattr(
+            df.index,
+            "tz",
+            None
+        ) is not None:
+
+            df.index = (
+                df.index
+                .tz_localize(None)
+            )
+
+        # --------------------------
+        # 指定日以降を検索
+        # --------------------------
+
+        available = df[
+            df.index.normalize()
+            >= target_date
+        ]
+
+        if available.empty:
+
+            return None
+
+        available = (
+            available
+            .sort_index()
         )
 
-        history = history.set_index(
-            "Date"
+        price = available.iloc[0].get(
+            "Close"
         )
 
-    else:
+        if pd.isna(price):
 
-        history.index = pd.to_datetime(
-            history.index
+            return None
+
+        return float(price)
+
+    # ==========================
+    # 通常履歴から取得
+    # ==========================
+
+    price = find_price(
+        history
+    )
+
+    if price is not None:
+
+        return price
+
+    # ==========================
+    # 通常履歴に無ければ
+    # Yahoo 10d を直接取得
+    #
+    # 8/12のような当日データが
+    # Parquetにまだ反映されていない
+    # 場合に対応
+    # ==========================
+
+    try:
+
+        batch_result = (
+            _download_history_batch(
+                [str(code)],
+                period="10d",
+                batch_size=1
+            )
         )
 
-    # ==========================
-    # タイムゾーン除去
-    # ==========================
-
-    if getattr(
-        history.index,
-        "tz",
-        None
-    ) is not None:
-
-        history.index = (
-            history.index
-            .tz_localize(None)
-        )
-
-    target_date = pd.Timestamp(
-        target_date
-    ).normalize()
-
-    # ==========================
-    # 対象日以降の最初の取引日
-    # ==========================
-
-    available = history[
-        history.index.normalize()
-        >= target_date
-    ]
-
-    if available.empty:
+    except Exception:
 
         return None
 
-    price = available.iloc[0][
-        "Close"
-    ]
-
-    if pd.isna(price):
+    if not batch_result:
 
         return None
 
-    return float(price)
+    yahoo_history = batch_result.get(
+        str(code)
+    )
 
+    price = find_price(
+        yahoo_history
+    )
+
+    if price is not None:
+
+        return price
+
+    return None
 
 # ==========================
 # 騰落率計算
