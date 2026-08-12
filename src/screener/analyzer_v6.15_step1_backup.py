@@ -679,43 +679,29 @@ def make_analysis_comment(
 # 銘柄分析
 # ==========================
 
-def analyze_stock(
-    stock,
-    history_df=None
-):
+def analyze_stock(stock):
 
     code = stock["コード"]
 
 
     # ==========================
-    # データ取得・計測
+    # データ取得計測
     # ==========================
 
     data_start = time.time()
 
-    if history_df is not None:
+    df = get_history(code)
 
-        # Ver6.15
-        # Yahoo一括取得済みのDataFrameを使用
-        df = history_df
-
-    else:
-
-        # 従来方式
-        df = get_history(code)
-
-    data_time = (
-        time.time()
-        - data_start
-    )
+    data_time = time.time() - data_start
 
 
     if df is None or df.empty:
         return None
 
 
+
     # ==========================
-    # 指標計算・計測
+    # 指標計算計測
     # ==========================
 
     indicator_start = time.time()
@@ -732,24 +718,19 @@ def analyze_stock(
     latest = df.iloc[-1]
 
 
+
     # ==========================
-    # 判定処理・計測
+    # 判定作成計測
     # ==========================
 
     judge_start = time.time()
 
 
-    score = calculate_score(
-        latest
-    )
+    score = calculate_score(latest)
 
-    initial_score = calculate_initial_score(
-        latest
-    )
+    initial_score = calculate_initial_score(latest)
 
-    rank = make_rank(
-        score
-    )
+    rank = make_rank(score)
 
 
     position = make_price_position(
@@ -780,6 +761,7 @@ def analyze_stock(
     )
 
 
+
     return {
 
         "コード":
@@ -792,20 +774,15 @@ def analyze_stock(
             stock["市場・商品区分"],
 
         "終値":
-            round(
-                float(
-                    latest["Close"]
-                ),
-                2
-            ),
+            round(float(latest["Close"]),2),
 
         "前日比%":
             latest["ChangePercent"],
 
-        "5日騰落率":
+        "5日騰落率%":
             latest["Change5Days"],
 
-        "20日騰落率":
+        "20日騰落率%":
             latest["Change20Days"],
 
         "RSI":
@@ -821,34 +798,22 @@ def analyze_stock(
             latest["MAAlignment"],
 
         "初動シグナル":
-            "○"
-            if latest["InitialMoveSignal"]
-            else "",
+            "○" if latest["InitialMoveSignal"] else "",
 
         "押し目判定":
-            "○"
-            if latest["PullbackSignal"]
-            else "",
+            "○" if latest["PullbackSignal"] else "",
 
         "MACD GC":
-            "○"
-            if latest["MACD_GC"]
-            else "",
+            "○" if latest["MACD_GC"] else "",
 
         "30日高値更新":
-            "○"
-            if latest["New30High"]
-            else "",
+            "○" if latest["New30High"] else "",
 
         "年初来高値更新":
-            "○"
-            if latest["NewYearHigh"]
-            else "",
+            "○" if latest["NewYearHigh"] else "",
 
         "ブレイク":
-            "○"
-            if latest["BreakoutSignal"]
-            else "",
+            "○" if latest["BreakoutSignal"] else "",
 
         "強気度":
             score,
@@ -882,16 +847,11 @@ def analyze_stock(
             (
                 pd.to_datetime(
                     df["Date"]
-                )
-                .max()
-                .strftime("%Y-%m-%d")
+                ).max().strftime("%Y-%m-%d")
                 if "Date" in df.columns
-                else
-                pd.to_datetime(
+                else pd.to_datetime(
                     df.index
-                )
-                .max()
-                .strftime("%Y-%m-%d")
+                ).max().strftime("%Y-%m-%d")
             ),
 
         "_data_time":
