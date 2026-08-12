@@ -1034,4 +1034,4 @@ def get_history_parquet(
         f"{elapsed:.4f}秒"
     )
 
-    return df
+    return df.copy()
