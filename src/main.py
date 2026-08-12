@@ -9,7 +9,21 @@ from concurrent.futures import (
 from screener.loader import load_stock_list
 from screener.analyzer import analyze_stock
 
+from services.yahoo_service import _download_history_batch
+
 from services.result_writer import save_result
+
+
+# ==========================
+# Ver6.15
+#
+# Yahoo一括取得
+# ＋
+# 並列分析
+# ==========================
+
+MAX_WORKERS = 12
+BATCH_SIZE = 100
 
 
 def main():
@@ -17,49 +31,158 @@ def main():
     start_time = time.time()
 
     print("==============================")
-    print(" 日本株スクリーナー Ver5.3 ")
+    print(" 日本株スクリーナー Ver6.15 ")
     print("==============================")
     print()
 
     # ==========================
-    # 銘柄取得
+    # 銘柄一覧取得
     # ==========================
 
     stocks = load_stock_list()
 
     total = len(stocks)
 
-    results = []
-    analysis_start = time.time()
+    print(
+        f"普通株数 : {total}"
+    )
 
-    # ==========================
-    # 並列分析開始
-    # ==========================
-
-    print(f"{total}銘柄を並列分析中...")
     print()
 
+    if total == 0:
+
+        print(
+            "対象銘柄がありません。"
+        )
+
+        return
+
+    # ==========================
+    # コード一覧
+    # ==========================
+
+    codes = [
+        str(code)
+        for code in stocks["コード"]
+    ]
+
+    print(
+        f"対象銘柄数 : {len(codes)}"
+    )
+
+    # ==========================
+    # Yahoo一括取得
+    # ==========================
+
+    print()
+    print("Yahoo一括取得開始...")
+    print()
+
+    batch_start = time.time()
+
+    history_map = _download_history_batch(
+        codes,
+        period="6mo",
+        batch_size=BATCH_SIZE
+    )
+
+    batch_time = (
+        time.time()
+        - batch_start
+    )
+
+    print()
+
+    print(
+        f"一括取得時間 : "
+        f"{batch_time:.2f} 秒"
+    )
+
+    print(
+        f"取得銘柄数   : "
+        f"{len(history_map)}"
+    )
+
+    # ==========================
+    # 分析開始
+    # ==========================
+
+    print()
+    print("分析開始...")
+    print()
+
+    analysis_start = time.time()
+
+    results = []
+
+    error_count = 0
+    skip_count = 0
     completed = 0
 
-    with ThreadPoolExecutor(max_workers=12) as executor:
+    # ==========================
+    # 並列分析
+    # ==========================
+
+    with ThreadPoolExecutor(
+        max_workers=MAX_WORKERS
+    ) as executor:
 
         futures = {}
 
         for _, stock in stocks.iterrows():
 
+            code = str(
+                stock["コード"]
+            )
+
+            history_df = (
+                history_map.get(code)
+            )
+
+            # --------------------------
+            # 履歴データなし
+            # --------------------------
+
+            if (
+                history_df is None
+                or history_df.empty
+            ):
+
+                skip_count += 1
+
+                print(
+                    f"SKIP {code} : "
+                    f"履歴データなし"
+                )
+
+                continue
+
+            # --------------------------
+            # 一括取得済みデータを
+            # analyze_stockへ渡す
+            # --------------------------
+
             future = executor.submit(
                 analyze_stock,
-                stock
+                stock,
+                history_df=history_df
             )
 
             futures[future] = stock
 
-        # ------- 続きは後半 -------
+        # ==========================
+        # 分析結果回収
+        # ==========================
 
-        for future in as_completed(futures):
+        for future in as_completed(
+            futures
+        ):
 
             stock = futures[future]
-            code = stock["コード"]
+
+            code = str(
+                stock["コード"]
+            )
 
             completed += 1
 
@@ -68,63 +191,79 @@ def main():
                 result = future.result()
 
                 if result is not None:
-                    results.append(result)
+
+                    results.append(
+                        result
+                    )
+
+                    print(
+                        f"[{completed}/"
+                        f"{len(futures)}] "
+                        f"OK {code} : "
+                        f"終値={result['終値']} "
+                        f"強気度={result['強気度']}"
+                    )
+
+                else:
+
+                    print(
+                        f"[{completed}/"
+                        f"{len(futures)}] "
+                        f"NONE {code}"
+                    )
 
             except Exception as e:
 
-                print(f"ERROR: {code} {e}")
-
-
-            # --------------------------
-            # 進捗表示（20銘柄ごと）
-            # --------------------------
-
-            percent = completed / total * 100
-
-            elapsed = time.time() - start_time
-
-            if completed > 0:
-
-                remain = (
-                    elapsed / completed
-                ) * (total - completed)
-
-            else:
-
-                remain = 0
-
-            if completed % 20 == 0 or completed == total:
+                error_count += 1
 
                 print(
-                    f"[{completed}/{total}] "
-                    f"{percent:5.1f}% "
-                    f"残り約 {remain:5.0f} 秒",
-                    end="\r"
+                    f"[{completed}/"
+                    f"{len(futures)}] "
+                    f"ERROR {code} : {e}"
                 )
 
+    analysis_time = (
+        time.time()
+        - analysis_start
+    )
+
     print()
-    print()
+
+    # ==========================
+    # 分析結果なし
+    # ==========================
 
     if not results:
 
-        print("分析結果なし")
-        return
-    analysis_end = time.time()
+        print(
+            "分析結果がありません。"
+        )
 
-    analysis_time = (
-        analysis_end
-        - analysis_start
-    )
+        return
 
     # ==========================
     # DataFrame
     # ==========================
 
-    df = pd.DataFrame(results)
+    df = pd.DataFrame(
+        results
+    )
+
+    # ==========================
+    # 強気度順
+    # ==========================
 
     df = df.sort_values(
-        ["強気度", "初動スコア", "コード"],
-        ascending=[False, False, True]
+        [
+            "強気度",
+            "初動スコア",
+            "コード"
+        ],
+        ascending=[
+            False,
+            False,
+            True
+        ]
     )
 
     # ==========================
@@ -144,92 +283,152 @@ def main():
     # TOP20
     # ==========================
 
-    top20 = display_df.head(20)
-
+    top20 = (
+        display_df
+        .head(20)
+    )
 
     # ==========================
     # 買い候補
     # ==========================
 
     buy_df = display_df[
-        display_df["総合判定"] == "買い候補"
+        display_df["総合判定"]
+        == "買い候補"
     ]
-
 
     # ==========================
     # 保存
     # ==========================
 
-# ==========================
-# 保存時間計測
-# ==========================
-
     save_start = time.time()
 
-    save_result(df)
+    save_result(
+        df
+    )
 
-    save_end = time.time()
-
+    save_time = (
+        time.time()
+        - save_start
+    )
 
     # ==========================
-    # Sprint2 時間集計
+    # Sprint2
+    # 処理時間集計
     # ==========================
 
     data_total = (
         df["_data_time"]
         .sum()
+        if "_data_time" in df.columns
+        else 0
     )
-
 
     indicator_total = (
         df["_indicator_time"]
         .sum()
+        if "_indicator_time" in df.columns
+        else 0
     )
-
 
     judge_total = (
         df["_judge_time"]
         .sum()
+        if "_judge_time" in df.columns
+        else 0
     )
-
 
     total_time = (
         time.time()
-        -
-        start_time
+        - start_time
     )
 
+    # ==========================
+    # 結果表示
+    # ==========================
+
+    print()
+    print("==============================")
+    print(" Ver6.15 RESULT ")
+    print("==============================")
+
+    print(
+        f"対象銘柄数       : "
+        f"{total}"
+    )
+
+    print(
+        f"Yahoo取得銘柄数  : "
+        f"{len(history_map)}"
+    )
+
+    print(
+        f"分析対象銘柄数    : "
+        f"{len(futures)}"
+    )
+
+    print(
+        f"分析成功         : "
+        f"{len(results)}"
+    )
+
+    print(
+        f"分析スキップ     : "
+        f"{skip_count}"
+    )
+
+    print(
+        f"分析エラー       : "
+        f"{error_count}"
+    )
 
     print()
 
-    print("==============================")
-    print(" 処理時間内訳 ")
-    print("==============================")
-
     print(
-        f"データ取得      : {data_total:6.1f} 秒"
+        f"Yahoo一括取得    : "
+        f"{batch_time:.1f} 秒"
     )
 
     print(
-        f"指標計算        : {indicator_total:6.1f} 秒"
+        f"データ取得時間   : "
+        f"{data_total:.1f} 秒"
     )
 
     print(
-        f"判定作成        : {judge_total:6.1f} 秒"
+        f"指標計算時間     : "
+        f"{indicator_total:.1f} 秒"
     )
 
     print(
-        f"保存            : {save_end - save_start:6.1f} 秒"
+        f"判定時間         : "
+        f"{judge_total:.1f} 秒"
     )
 
     print(
-        f"分析処理（実時間）: {analysis_time:6.1f} 秒"
+        f"保存時間         : "
+        f"{save_time:.1f} 秒"
+    )
+
+    print(
+        f"分析時間         : "
+        f"{analysis_time:.1f} 秒"
+    )
+
+    print(
+        f"合計時間         : "
+        f"{total_time:.1f} 秒"
     )
 
     print()
 
     print(
-        f"合計            : {total_time:6.1f} 秒"
+        f"TOP20            : "
+        f"{len(top20)} 銘柄"
+    )
+
+    print(
+        f"買い候補         : "
+        f"{len(buy_df)} 銘柄"
     )
 
 
