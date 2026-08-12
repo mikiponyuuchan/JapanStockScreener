@@ -1035,3 +1035,223 @@ def get_history_parquet(
     )
 
     return df.copy()
+
+# ==========================
+# Ver6.15 Yahoo batch history download
+# ==========================
+
+def _download_history_batch(
+    codes,
+    period="10d",
+    batch_size=100
+):
+    """
+    Download multiple stocks from Yahoo Finance in batches.
+
+    Returns:
+        {
+            "1301": DataFrame,
+            "1332": DataFrame,
+            ...
+        }
+    """
+
+    if not codes:
+        return {}
+
+    codes = [
+        str(code)
+        for code in codes
+    ]
+
+    results = {}
+
+    total = len(codes)
+
+    for batch_start in range(
+        0,
+        total,
+        batch_size
+    ):
+
+        batch_codes = codes[
+            batch_start:
+            batch_start + batch_size
+        ]
+
+        tickers = [
+            f"{code}.T"
+            for code in batch_codes
+        ]
+
+        print(
+            f"Yahoo batch download "
+            f"{batch_start + 1}-"
+            f"{batch_start + len(batch_codes)} / "
+            f"{total}"
+        )
+
+        try:
+
+            raw_df = yf.download(
+                tickers=tickers,
+                period=period,
+                group_by="ticker",
+                auto_adjust=False,
+                progress=False,
+                threads=True
+            )
+
+        except Exception as e:
+
+            print(
+                f"Yahoo batch ERROR: {e}"
+            )
+
+            continue
+
+        if raw_df is None or raw_df.empty:
+            continue
+
+        for code in batch_codes:
+
+            ticker = f"{code}.T"
+
+            try:
+
+                if isinstance(
+                    raw_df.columns,
+                    pd.MultiIndex
+                ):
+
+                    level0 = (
+                        raw_df.columns
+                        .get_level_values(0)
+                    )
+
+                    level1 = (
+                        raw_df.columns
+                        .get_level_values(1)
+                    )
+
+                    if ticker in level0:
+
+                        df = raw_df[
+                            ticker
+                        ].copy()
+
+                    elif ticker in level1:
+
+                        df = raw_df[
+                            :,
+                            ticker
+                        ].copy()
+
+                    else:
+
+                        continue
+
+                else:
+
+                    if len(batch_codes) != 1:
+                        continue
+
+                    df = raw_df.copy()
+
+                if df is None or df.empty:
+                    continue
+
+                df = df.reset_index()
+
+                if "Date" not in df.columns:
+                    continue
+
+                df["Date"] = pd.to_datetime(
+                    df["Date"],
+                    errors="coerce"
+                )
+
+                if (
+                    getattr(
+                        df["Date"].dt,
+                        "tz",
+                        None
+                    ) is not None
+                ):
+
+                    df["Date"] = (
+                        df["Date"]
+                        .dt
+                        .tz_localize(None)
+                    )
+
+                df = (
+                    df
+                    .dropna(subset=["Date"])
+                    .sort_values("Date")
+                    .drop_duplicates(
+                        subset=["Date"],
+                        keep="last"
+                    )
+                )
+
+                if df.empty:
+                    continue
+
+                result = pd.DataFrame()
+
+                result["Date"] = df["Date"]
+
+                for column in [
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume"
+                ]:
+
+                    if column in df.columns:
+
+                        result[column] = (
+                            df[column]
+                        )
+
+                    else:
+
+                        result[column] = pd.NA
+
+                result["Dividends"] = 0.0
+                result["Stock Splits"] = 0.0
+                result["code"] = str(code)
+
+                result = result[
+                    [
+                        "Date",
+                        "Open",
+                        "High",
+                        "Low",
+                        "Close",
+                        "Volume",
+                        "Dividends",
+                        "Stock Splits",
+                        "code"
+                    ]
+                ]
+
+                results[
+                    str(code)
+                ] = result
+
+            except Exception as e:
+
+                print(
+                    f"Yahoo batch parse ERROR: "
+                    f"{code} / {e}"
+                )
+
+    print(
+        f"Yahoo batch complete: "
+        f"{len(results)} / {total}"
+    )
+
+    return results
