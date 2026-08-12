@@ -819,20 +819,45 @@ def record_initial_move(df):
         )
     )
 
+    
     # ==========================
-    # 初動スコア上位を抽出
+    # 初動スコアTOP20抽出
     # ==========================
 
+    score_series = pd.to_numeric(
+        df["蛻晏虚繧ｹ繧ｳ繧｢"],
+        errors="coerce"
+    )
+
     candidates = (
-        df[
-            df["初動スコア"].notna()
+        df.loc[
+            score_series.notna()
         ]
+        .copy()
+    )
+
+    candidates["_initial_move_score_numeric"] = (
+        score_series.loc[
+            candidates.index
+        ]
+    )
+
+    candidates = (
+        candidates
         .sort_values(
-            "初動スコア",
-            ascending=False
+            "_initial_move_score_numeric",
+            ascending=False,
+            kind="mergesort"
         )
         .head(20)
         .copy()
+    )
+
+    candidates.drop(
+        columns=[
+            "_initial_move_score_numeric"
+        ],
+        inplace=True
     )
 
     if candidates.empty:

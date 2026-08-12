@@ -74,16 +74,40 @@ def save_result(df):
     # 初動スコアTOP20
     # ==========================
 
+    initial_move_score = pd.to_numeric(
+        df["蛻晏虚繧ｹ繧ｳ繧｢"],
+        errors="coerce"
+    )
+
     initial_move_top20 = (
-        df[
-            df["初動スコア"].notna()
+        df.loc[
+            initial_move_score.notna()
         ]
+        .copy()
+    )
+
+    initial_move_top20["_initial_move_score_numeric"] = (
+        initial_move_score.loc[
+            initial_move_top20.index
+        ]
+    )
+
+    initial_move_top20 = (
+        initial_move_top20
         .sort_values(
-            "初動スコア",
-            ascending=False
+            "_initial_move_score_numeric",
+            ascending=False,
+            kind="mergesort"
         )
         .head(20)
         .copy()
+    )
+
+    initial_move_top20.drop(
+        columns=[
+            "_initial_move_score_numeric"
+        ],
+        inplace=True
     )
 
     # ==========================
