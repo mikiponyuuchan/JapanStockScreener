@@ -353,7 +353,6 @@ def calculate_change(
         2
     )
 
-
 # ==========================
 # 追跡結果更新
 # ==========================
@@ -388,7 +387,7 @@ def update_tracking_results(
     )
 
     # ==========================
-    # 未来日付の誤登録を除外
+    # 未未来日の追跡データを除外
     # ==========================
 
     tracking_dates = pd.to_datetime(
@@ -428,11 +427,206 @@ def update_tracking_results(
         inplace=True
     )
 
-    updated_count = 0
+    # ==========================
+    # 更新対象銘柄を収集
+    # ==========================
+
+    target_codes = set()
+
+    for index, row in tracking_df.iterrows():
+
+        try:
+
+            detection_date = pd.Timestamp(
+                row["検出日"]
+            ).normalize()
+
+        except Exception:
+
+            continue
+
+        code = str(
+            row["コード"]
+        )
+
+        base_price = pd.to_numeric(
+            row["検出時株価"],
+            errors="coerce"
+        )
+
+        if pd.isna(base_price):
+
+            continue
+
+        for day in range(1, 11):
+
+            target_date = add_business_days(
+                detection_date,
+                day
+            )
+
+            # まだ対象日になっていない
+            if market_date < target_date:
+
+                continue
+
+            price_column = (
+                f"{day}日後株価"
+            )
+
+            existing_price = pd.to_numeric(
+                row[price_column],
+                errors="coerce"
+            )
+
+            # 既に記録済み
+            if pd.notna(existing_price):
+
+                continue
+
+            target_codes.add(
+                code
+            )
+
+    target_codes = sorted(
+        target_codes
+    )
+
+    print(
+        "Yahoo一括取得対象銘柄 :",
+        len(target_codes),
+        "件"
+    )
 
     # ==========================
-    # 各銘柄を追跡
+    # Yahoo一括取得
     # ==========================
+
+    yahoo_results = {}
+
+    if target_codes:
+
+        try:
+
+            yahoo_results = (
+                _download_history_batch(
+                    target_codes,
+                    period="10d",
+                    batch_size=100
+                )
+            )
+
+        except Exception as e:
+
+            print(
+                "Yahoo batch download ERROR :",
+                e
+            )
+
+            yahoo_results = {}
+
+    # ==========================
+    # Yahooデータ検索関数
+    # ==========================
+
+    def find_price(
+            history,
+            target_date):
+
+        if history is None:
+
+            return None
+
+        if history.empty:
+
+            return None
+
+        df = history.copy()
+
+        # --------------------------
+        # Date列をindexへ
+        # --------------------------
+
+        if "Date" in df.columns:
+
+            df["Date"] = pd.to_datetime(
+                df["Date"],
+                errors="coerce"
+            )
+
+            df = df.dropna(
+                subset=["Date"]
+            )
+
+            df = df.set_index(
+                "Date"
+            )
+
+        else:
+
+            try:
+
+                df.index = pd.to_datetime(
+                    df.index,
+                    errors="coerce"
+                )
+
+            except Exception:
+
+                return None
+
+        # --------------------------
+        # timezone除去
+        # --------------------------
+
+        if getattr(
+            df.index,
+            "tz",
+            None
+        ) is not None:
+
+            df.index = (
+                df.index
+                .tz_localize(None)
+            )
+
+        # --------------------------
+        # 日付検索
+        # --------------------------
+
+        target_date = pd.Timestamp(
+            target_date
+        ).normalize()
+
+        available = df[
+            df.index.normalize()
+            >= target_date
+        ]
+
+        if available.empty:
+
+            return None
+
+        available = (
+            available
+            .sort_index()
+        )
+
+        price = available.iloc[0].get(
+            "Close"
+        )
+
+        if pd.isna(price):
+
+            return None
+
+        return float(price)
+
+    # ==========================
+    # 各銘柄を更新
+    # ==========================
+
+    updated_count = 0
 
     for index, row in tracking_df.iterrows():
 
@@ -460,7 +654,15 @@ def update_tracking_results(
             continue
 
         # ==========================
-        # 1日後～10日後
+        # Yahoo一括取得データ
+        # ==========================
+
+        history = yahoo_results.get(
+            code
+        )
+
+        # ==========================
+        # 1～10営業日後
         # ==========================
 
         for day in range(1, 11):
@@ -478,19 +680,17 @@ def update_tracking_results(
                 f"{day}日後騰落率%"
             )
 
-            # ======================
-            # まだ対象日になって
-            # いなければスキップ
-            # ======================
+            # ----------------------
+            # まだ対象日でない
+            # ----------------------
 
             if market_date < target_date:
 
                 continue
 
-            # ======================
-            # すでに記録済みなら
-            # スキップ
-            # ======================
+            # ----------------------
+            # 既に記録済み
+            # ----------------------
 
             existing_price = pd.to_numeric(
                 row[price_column],
@@ -501,22 +701,40 @@ def update_tracking_results(
 
                 continue
 
-            # ======================
-            # 株価取得
-            # ======================
+            # ----------------------
+            # 一括取得データから検索
+            # ----------------------
 
-            price = get_price_on_or_after(
-                code,
+            price = find_price(
+                history,
                 target_date
             )
+
+            # ----------------------
+            # Yahoo batchに無かった場合
+            # 既存方式でフォールバック
+            # ----------------------
+
+            if price is None:
+
+                try:
+
+                    price = get_price_on_or_after(
+                        code,
+                        target_date
+                    )
+
+                except Exception:
+
+                    price = None
 
             if price is None:
 
                 continue
 
-            # ======================
+            # ----------------------
             # 株価保存
-            # ======================
+            # ----------------------
 
             tracking_df.at[
                 index,
@@ -526,9 +744,9 @@ def update_tracking_results(
                 2
             )
 
-            # ======================
+            # ----------------------
             # 騰落率
-            # ======================
+            # ----------------------
 
             change = calculate_change(
                 base_price,
