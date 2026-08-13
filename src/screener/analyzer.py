@@ -681,7 +681,8 @@ def make_analysis_comment(
 
 def analyze_stock(
     stock,
-    history_df=None
+    history_df=None,
+    credit_row=None
 ):
 
     code = stock["コード"]
@@ -861,6 +862,61 @@ def analyze_stock(
 
         "総合判定":
             judgement,
+
+        # ==========================
+        # JPX信用データ
+        # ==========================
+
+        "信用倍率":
+            (
+                credit_row["信用倍率"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "売残高":
+            (
+                credit_row["売残高"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "買残高":
+            (
+                credit_row["買残高"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "前日売残高":
+            (
+                credit_row["前日売残高"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "売り残増加数":
+            (
+                credit_row["売り残増加数"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "売り残増加率":
+            (
+                credit_row["売り残増加率"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "売り残前日比増加":
+            (
+                credit_row["売り残前日比増加"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+
 
         "分析コメント":
             make_analysis_comment(
