@@ -65,6 +65,9 @@ def build_parquet_cache():
             if "Date" not in df.columns:
                 continue
 
+  
+            df["_data_date"] = df["Date"].dt.strftime("%Y-%m-%d")
+
             code = (
                 csv_file.stem
             )
@@ -72,6 +75,7 @@ def build_parquet_cache():
             df["code"] = code
 
             dfs.append(df)
+
 
         except Exception as e:
 
@@ -193,7 +197,7 @@ def build_parquet_cache():
         f"Parquet保存時間 : "
         f"{save_time:.2f} 秒"
     )
-
+    
     print(
         f"ファイルサイズ : "
         f"{file_size_mb:.2f} MB"

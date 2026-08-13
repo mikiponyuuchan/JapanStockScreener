@@ -824,125 +824,104 @@ def record_initial_move(df):
     # 初動スコアTOP20抽出
     # ==========================
 
-    score_series = pd.to_numeric(
-        df["初動スコア"],
-        errors="coerce"
-    )
+    # 初動スコアを数値化し、NaN は 0 に置き換える
+    df["初動スコア"] = pd.to_numeric(df["初動スコア"], errors="coerce").fillna(0)
 
-    candidates = (
-        df.loc[
-            score_series.notna()
-        ]
-        .copy()
-    )
+    # 全銘柄を候補にする（NaN除外しない）
+    candidates = df.copy()
 
-    candidates["_initial_move_score_numeric"] = (
-        score_series.loc[
-            candidates.index
-        ]
-    )
-
-    candidates = (
+    # 初動スコアでソートして上位20件を抽出
+    top20 = (
         candidates
-        .sort_values(
-            "_initial_move_score_numeric",
-            ascending=False,
-            kind="mergesort"
-        )
+        .sort_values("初動スコア", ascending=False)
         .head(20)
         .copy()
     )
 
-    candidates.drop(
-        columns=[
-            "_initial_move_score_numeric"
-        ],
-        inplace=True
-    )
+def save_initial_move(top20):
+    """
+    初動TOP20を tracking フォルダに保存する関数
+    """
+    ensure_tracking_folder()
 
-    if candidates.empty:
+    # 保存先のパス
+    save_path = os.path.join(TRACKING_FOLDER, "initial_move.csv")
 
-        print(
-            "初動スコア対象銘柄なし"
+    # 既存データがあれば読み込む
+    if os.path.exists(save_path):
+        existing = pd.read_csv(save_path, encoding="utf-8")
+        df = pd.concat([existing, top20], ignore_index=True)
+    else:
+        df = top20.copy()
+
+    # 保存
+    df.to_csv(save_path, index=False, encoding="utf-8")
+
+
+ 
+    # ======================
+    # 同じ銘柄を同じ日に
+    # 二重登録しない
+    # ======================
+
+    already_exists = (
+        (
+            tracking_df[
+                "検出日"
+            ].astype(str)
+            == data_date
         )
+        &
+        (
+            tracking_df[
+                "コード"
+            ].astype(str)
+            == code
+        )
+    ).any()
+
+    if already_exists:
 
         return tracking_df
 
-    # ==========================
-    # 新規登録
-    # ==========================
+    new_row = {
+        "検出日":
+            data_date,
 
-    new_rows = []
+        "コード":
+            code,
 
-    for _, row in candidates.iterrows():
+        "銘柄名":
+            row["銘柄名"],
 
-        code = str(
-            row["コード"]
-        )
+        "検出時株価":
+            row["終値"],
 
-        # ======================
-        # 同じ銘柄を同じ日に
-        # 二重登録しない
-        # ======================
+        "強気度":
+            row["強気度"],
 
-        already_exists = (
-            (
-                tracking_df[
-                    "検出日"
-                ].astype(str)
-                == data_date
-            )
-            &
-            (
-                tracking_df[
-                    "コード"
-                ].astype(str)
-                == code
-            )
-        ).any()
+        "初動スコア":
+            row["初動スコア"],
+    }
 
-        if already_exists:
+    # ======================
+    # 1日後～10日後の
+    # 空欄を作成
+    # ======================
 
-            continue
+    for day in range(1, 11):
 
-        new_row = {
-            "検出日":
-                data_date,
+        new_row[
+            f"{day}日後株価"
+        ] = ""
 
-            "コード":
-                code,
+        new_row[
+            f"{day}日後騰落率%"
+        ] = ""
 
-            "銘柄名":
-                row["銘柄名"],
-
-            "検出時株価":
-                row["終値"],
-
-            "強気度":
-                row["強気度"],
-
-            "初動スコア":
-                row["初動スコア"],
-        }
-
-        # ======================
-        # 1日後～10日後の
-        # 空欄を作成
-        # ======================
-
-        for day in range(1, 11):
-
-            new_row[
-                f"{day}日後株価"
-            ] = ""
-
-            new_row[
-                f"{day}日後騰落率%"
-            ] = ""
-
-        new_rows.append(
-            new_row
-        )
+    new_rows.append(
+        new_row
+    )
 
     # ==========================
     # 新規データ追加

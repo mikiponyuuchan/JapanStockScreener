@@ -642,34 +642,30 @@ def get_history(
         return None
 
     # ==========================
+    # 追加：欠損チェック（Close が NaN の場合は再取得）
+    # ==========================
+
+    if df["Close"].isna().any():
+        print(f"欠損検出 → 再取得: {code}")
+        df_retry = _download_history(code, period="6mo")
+        if df_retry is not None and not df_retry.empty:
+            df = df_retry
+
+
+    # ==========================
     # キャッシュ保存
     # ==========================
 
-    _save_cache(
-        df,
-        cache_file
-    )
+    _save_cache(df, cache_file)
+    _add_count("full_downloads")
 
-    _add_count(
-        "full_downloads"
-    )
+    elapsed = time.time() - start_time
+    _add_stat("total_get_history_time", elapsed)
 
-    elapsed = (
-        time.time()
-        - start_time
-    )
-
-    _add_stat(
-        "total_get_history_time",
-        elapsed
-    )
-
-    print(
-        f"データ取得(Yahoo) : "
-        f"{elapsed:.2f} 秒"
-    )
+    print(f"データ取得(Yahoo) : {elapsed:.2f} 秒")
 
     return df
+
 # ==========================
 # Ver6.11 統合Parquetキャッシュ
 # ==========================
@@ -893,11 +889,8 @@ def get_history_parquet(
 
     if df is not None and not df.empty:
 
-        latest_date = (
-            df["Date"]
-            .dt.normalize()
-            .max()
-        )
+        latest_date = df["_data_date"].max()
+
 
         # ==========================
         # 最新営業日まで存在
@@ -923,87 +916,43 @@ def get_history_parquet(
         # 古い場合
         # Yahooから10日分取得
         # ==========================
-
         print(
             f"Parquet更新必要 : "
-            f"{code} / "
-            f"最新={latest_date.date()} / "
-            f"期待={expected_date.date()}"
+            f"{code} / 最新={latest_date.date()} / 期待={expected_date.date()}"
         )
 
-        update_df = _download_history(
-            code,
-            period="10d"
-        )
+        update_df = _download_history(code, period="10d")
 
-        if (
-            update_df is not None
-            and not update_df.empty
-        ):
+        if update_df is not None and not update_df.empty:
 
-            combined_df = pd.concat(
-                [
-                    df,
-                    update_df
-                ],
-                ignore_index=True
-            )
-
-            combined_df["Date"] = pd.to_datetime(
-                combined_df["Date"],
-                errors="coerce"
-            )
+            combined_df = pd.concat([df, update_df], ignore_index=True)
+            combined_df["Date"] = pd.to_datetime(combined_df["Date"], errors="coerce")
 
             combined_df = (
                 combined_df
                 .dropna(subset=["Date"])
                 .sort_values("Date")
-                .drop_duplicates(
-                    subset=["Date"],
-                    keep="last"
-                )
+                .drop_duplicates(subset=["Date"], keep="last")
             )
 
-            print(
-                f"Parquet更新取得成功 : "
-                f"{code} / "
-                f"{len(combined_df)}行"
-            )
+            print(f"Parquet更新取得成功 : {code} / {len(combined_df)}行")
 
-            # メモリキャッシュも更新
+            # ★★★ 追加：Parquetファイルを更新する ★★★
+            combined_df.to_parquet(PARQUET_CACHE_FILE)
+
+            # ★★★ メモリキャッシュも更新する ★★★
             global _PARQUET_MEMORY_CACHE
-
             if _PARQUET_MEMORY_CACHE is not None:
-
                 with _PARQUET_MEMORY_CACHE_LOCK:
-
-                    memory_df = (
-                        _PARQUET_MEMORY_CACHE
-                    )
-
-                    memory_df = memory_df[
-                        memory_df["code"].astype(str)
-                        != str(code)
-                    ]
-
+                    memory_df = _PARQUET_MEMORY_CACHE
+                    memory_df = memory_df[memory_df["code"].astype(str) != str(code)]
                     _PARQUET_MEMORY_CACHE = pd.concat(
-                        [
-                            memory_df,
-                            combined_df.assign(
-                                code=str(code)
-                            )
-                        ],
+                        [memory_df, combined_df.assign(code=str(code))],
                         ignore_index=True
-                    )
-
-                    _PARQUET_MEMORY_CACHE = (
-                        _PARQUET_MEMORY_CACHE
-                        .sort_values(
-                            ["code", "Date"]
-                        )
-                    )
+                    ).sort_values(["code", "Date"])
 
             return combined_df
+
 
     # ==========================
     # Parquetに存在しない場合
