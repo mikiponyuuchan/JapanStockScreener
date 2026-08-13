@@ -14,3 +14,5 @@ logs/
 # 実行結果
 results/
 data/cache/
+
+data/jpx_credit/
