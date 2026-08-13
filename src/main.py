@@ -13,6 +13,7 @@ from services.yahoo_service import _download_history_batch
 
 from services.result_writer import save_result
 
+from services.jpx_credit_service import update_credit_data
 
 # ==========================
 # Ver6.15
@@ -104,6 +105,30 @@ def main():
     )
 
     # ==========================
+    # JPX信用データ取得
+    # ==========================
+
+    print()
+    print("JPX信用データ取得開始...")
+    print()
+
+    credit_df = update_credit_data()
+
+    credit_map = {}
+
+    if credit_df is not None and not credit_df.empty:
+
+        for _, row in credit_df.iterrows():
+
+            code = str(row["コード"]).strip()
+
+            credit_map[code] = row
+
+    print(
+        f"JPX信用データ : {len(credit_map)}銘柄"
+    )
+
+    # ==========================
     # 分析開始
     # ==========================
 
@@ -158,14 +183,16 @@ def main():
                 continue
 
             # --------------------------
-            # 一括取得済みデータを
-            # analyze_stockへ渡す
+            # JPX信用データ
             # --------------------------
+
+            credit_row = credit_map.get(code)
 
             future = executor.submit(
                 analyze_stock,
                 stock,
-                history_df=history_df
+                history_df=history_df,
+                credit_row=credit_row
             )
 
             futures[future] = stock
