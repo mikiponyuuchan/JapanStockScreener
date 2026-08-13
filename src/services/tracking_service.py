@@ -824,43 +824,7 @@ def record_initial_move(df):
     # 初動スコアTOP20抽出
     # ==========================
 
-    score_series = pd.to_numeric(
-        df["初動スコア"],
-        errors="coerce"
-    )
-
-    candidates = (
-        df.loc[
-            score_series.notna()
-        ]
-        .copy()
-    )
-
-    candidates["_initial_move_score_numeric"] = (
-        score_series.loc[
-            candidates.index
-        ]
-    )
-
-    candidates = (
-        candidates
-        .sort_values(
-            "_initial_move_score_numeric",
-            ascending=False,
-            kind="mergesort"
-        )
-        .head(20)
-        .copy()
-    )
-
-    candidates.drop(
-        columns=[
-            "_initial_move_score_numeric"
-        ],
-        inplace=True
-    )
-
-    if candidates.empty:
+    if df.empty:
 
         print(
             "初動スコア対象銘柄なし"
@@ -874,7 +838,7 @@ def record_initial_move(df):
 
     new_rows = []
 
-    for _, row in candidates.iterrows():
+    for _, row in df.iterrows():
 
         code = str(
             row["コード"]

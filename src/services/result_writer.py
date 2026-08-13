@@ -52,12 +52,6 @@ def save_result(df):
     )
 
     # ==========================
-    # 初動銘柄追跡
-    # ==========================
-
-    record_initial_move(df)
-
-    # ==========================
     # 強気度TOP20
     # ==========================
 
@@ -79,9 +73,18 @@ def save_result(df):
         errors="coerce"
     )
 
+    # 初動シグナルがある銘柄だけを対象にする
+    initial_move_signal = (
+        df["初動シグナル"]
+        .astype(str)
+        .str.strip()
+        .ne("")
+    )
+
     initial_move_top20 = (
         df.loc[
-            initial_move_score.notna()
+            initial_move_signal
+            & initial_move_score.notna()
         ]
         .copy()
     )
@@ -109,6 +112,15 @@ def save_result(df):
         ],
         inplace=True
     )
+
+    # ==========================
+    # 初動TOP20を追跡対象として登録
+    # ==========================
+
+    record_initial_move(
+        initial_move_top20
+    )
+
 
     # ==========================
     # TOP20ニュース取得
