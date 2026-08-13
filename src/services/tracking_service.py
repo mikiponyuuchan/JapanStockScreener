@@ -792,7 +792,7 @@ def record_initial_move(df):
     tracking_df = load_tracking()
 
     # ==========================
-    # 実際の株価データ日
+    # 実際のデータ日付を取得
     # ==========================
 
     if "_data_date" in df.columns:
@@ -809,25 +809,22 @@ def record_initial_move(df):
         )
 
     # ==========================
-    # まず過去銘柄を更新
+    # 過去データを更新
     # ==========================
 
-    tracking_df = (
-        update_tracking_results(
-            tracking_df,
-            data_date
-        )
+    tracking_df = update_tracking_results(
+        tracking_df,
+        data_date
     )
 
-    
     # ==========================
-    # 初動スコアTOP20抽出
+    # 初動スコアTOP20対象
     # ==========================
 
     if df.empty:
 
         print(
-            "初動スコア対象銘柄なし"
+            "初動スコア対象データなし"
         )
 
         return tracking_df
@@ -890,8 +887,7 @@ def record_initial_move(df):
         }
 
         # ======================
-        # 1日後～10日後の
-        # 空欄を作成
+        # 1～10日後のデータ用列
         # ======================
 
         for day in range(1, 11):
@@ -938,12 +934,12 @@ def record_initial_move(df):
 
     print()
     print(
-        "初動銘柄追跡保存 :",
+        "初動追跡データ保存:",
         TRACKING_FILE
     )
 
     print(
-        "今回の追跡登録数 :",
+        "今回の新規登録件数 :",
         len(new_rows)
     )
 
