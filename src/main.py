@@ -11,9 +11,10 @@ from screener.analyzer import analyze_stock
 
 from services.yahoo_service import _download_history_batch
 
+from services.yahoo_credit_service import load_latest_credit_data
+
 from services.result_writer import save_result
 
-from services.jpx_credit_service import update_credit_data
 
 # ==========================
 # Ver6.15
@@ -105,27 +106,20 @@ def main():
     )
 
     # ==========================
-    # JPX信用データ取得
+    # Yahoo信用データ読み込み
     # ==========================
 
     print()
-    print("JPX信用データ取得開始...")
+    print("Yahoo信用データ読み込み開始...")
     print()
 
-    credit_df = update_credit_data()
-
-    credit_map = {}
-
-    if credit_df is not None and not credit_df.empty:
-
-        for _, row in credit_df.iterrows():
-
-            code = str(row["コード"]).strip()
-
-            credit_map[code] = row
+    credit_map = load_latest_credit_data(
+        codes
+    )
 
     print(
-        f"JPX信用データ : {len(credit_map)}銘柄"
+        f"Yahoo信用データ : "
+        f"{len(credit_map)}銘柄"
     )
 
     # ==========================

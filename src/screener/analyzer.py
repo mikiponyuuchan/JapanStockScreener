@@ -597,7 +597,8 @@ def make_analysis_comment(
         short_trend,
         middle_trend,
         long_trend,
-        judgement):
+        judgement,
+        credit_row=None):
 
 
     comments = []
@@ -668,6 +669,37 @@ def make_analysis_comment(
             f"RSI{latest['RSI']}"
         )
 
+    # ==========================
+    # Yahoo信用条件
+    # ==========================
+
+    if credit_row is not None:
+
+        try:
+
+            credit_ratio = float(
+                str(
+                    credit_row["信用倍率"]
+                ).replace(",", "")
+            )
+
+            sell_change = float(
+                str(
+                    credit_row["売残増減"]
+                ).replace(",", "")
+            )
+
+            if (
+                credit_ratio < 1
+                and sell_change > 0
+            ):
+
+                comments.append(
+                    "信用条件"
+                )
+
+        except Exception:
+            pass
 
     comments.append(
         judgement
@@ -732,12 +764,76 @@ def analyze_stock(
 
     latest = df.iloc[-1]
 
+    credit_ratio = pd.NA
+
+    if credit_row is not None:
+
+        try:
+
+            sell_balance = float(
+                str(
+                    credit_row["売残"]
+                ).replace(",", "")
+            )
+
+            buy_balance = float(
+                str(
+                    credit_row["買残"]
+                ).replace(",", "")
+            )
+
+            if sell_balance > 0:
+
+                credit_ratio = round(
+                    buy_balance / sell_balance,
+                    2
+                )
+
+        except Exception:
+            pass
 
     # ==========================
     # 判定処理・計測
     # ==========================
 
     judge_start = time.time()
+
+    # ==========================
+    # Yahoo信用条件
+    # ==========================
+
+    credit_condition = "未判定"
+
+    if credit_row is not None:
+
+        try:
+
+            credit_ratio = float(
+                str(
+                    credit_row["信用倍率"]
+                ).replace(",", "")
+            )
+
+            sell_change = float(
+                str(
+                    credit_row["売残増減"]
+                ).replace(",", "")
+            )
+
+            if (
+                credit_ratio < 1
+                and sell_change > 0
+            ):
+
+                credit_condition = "○"
+
+            else:
+
+                credit_condition = ""
+
+        except Exception:
+
+            credit_condition = "未判定"
 
 
     score = calculate_score(
@@ -864,8 +960,43 @@ def analyze_stock(
             judgement,
 
         # ==========================
-        # JPX信用データ
+        # Yahoo信用データ
         # ==========================
+
+        "信用日付":
+            (
+                credit_row["日付"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "売残":
+            (
+                credit_row["売残"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "買残":
+            (
+                credit_row["買残"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "売残増減":
+            (
+                credit_row["売残増減"]
+                if credit_row is not None
+                else pd.NA
+            ),
+
+        "買残増減":
+            (
+                credit_row["買残増減"]
+                if credit_row is not None
+                else pd.NA
+            ),
 
         "信用倍率":
             (
@@ -874,49 +1005,8 @@ def analyze_stock(
                 else pd.NA
             ),
 
-        "売残高":
-            (
-                credit_row["売残高"]
-                if credit_row is not None
-                else pd.NA
-            ),
-
-        "買残高":
-            (
-                credit_row["買残高"]
-                if credit_row is not None
-                else pd.NA
-            ),
-
-        "前日売残高":
-            (
-                credit_row["前日売残高"]
-                if credit_row is not None
-                else pd.NA
-            ),
-
-        "売り残増加数":
-            (
-                credit_row["売り残増加数"]
-                if credit_row is not None
-                else pd.NA
-            ),
-
-        "売り残増加率":
-            (
-                credit_row["売り残増加率"]
-                if credit_row is not None
-                else pd.NA
-            ),
-
-        "売り残前日比増加":
-            (
-                credit_row["売り残前日比増加"]
-                if credit_row is not None
-                else pd.NA
-            ),
-
-
+        "信用条件":
+            credit_condition,
 
         "分析コメント":
             make_analysis_comment(
@@ -927,7 +1017,8 @@ def analyze_stock(
                 short_trend,
                 middle_trend,
                 long_trend,
-                judgement
+                judgement,
+                credit_row
             ),
 
         # ==========================
