@@ -30,6 +30,10 @@ MAX_RETRIES = 2
 REQUEST_DELAY = 0.8
 RETRY_DELAYS = [3, 8]
 
+class YahooCreditNotFound(Exception):
+    """Yahooに銘柄ページが存在しない場合"""
+    pass
+
 
 def get_credit_history(
     code: str,
@@ -56,12 +60,14 @@ def get_credit_history(
     for attempt in range(MAX_RETRIES + 1):
 
         try:
+
             response = session.get(
                 top_url,
                 timeout=timeout,
             )
 
             if response.status_code == 200:
+
                 top_ok = True
                 break
 
@@ -70,6 +76,16 @@ def get_credit_history(
                 f"{response.status_code}"
             )
 
+            # Yahooに銘柄ページが存在しない
+            # 404はリトライ・待機不要
+            if response.status_code == 404:
+
+                print(
+                    f"[{code}] Yahooに銘柄ページなし"
+                )
+
+                raise YahooCreditNotFound(code)
+
         except requests.RequestException as e:
 
             print(
@@ -77,6 +93,7 @@ def get_credit_history(
             )
 
         if attempt < MAX_RETRIES:
+
             time.sleep(
                 RETRY_DELAYS[
                     min(
@@ -357,6 +374,218 @@ def save_credit_history(
 
     return path
 
+def download_credit_batch(
+    codes: list[str],
+) -> dict[str, pd.DataFrame]:
+    """
+    複数銘柄のYahoo信用データを順番に取得して保存する。
+
+    既にCSVが存在する銘柄は再取得しない。
+    """
+
+    results = {}
+
+    total = len(codes)
+
+    for index, code in enumerate(codes, start=1):
+
+        code = str(code).strip()
+
+        if not code:
+            continue
+
+        path = DATA_DIR / f"{code}.csv"
+
+        # ----------------------------------------------------
+        # 既に保存済みなら読み込んで利用
+        # ----------------------------------------------------
+
+        if path.exists():
+
+            try:
+
+                df = pd.read_csv(
+                    path,
+                    encoding="utf-8-sig",
+                )
+
+                if df is not None and not df.empty:
+
+                    results[code] = df
+
+                    print(
+                        f"[{index}/{total}] "
+                        f"{code} : キャッシュ利用"
+                    )
+
+                    continue
+
+            except Exception as e:
+
+                print(
+                    f"[{index}/{total}] "
+                    f"{code} : CSV読込失敗 "
+                    f"{e}"
+                )
+
+        # ----------------------------------------------------
+        # 20銘柄ごとに休憩
+        # ----------------------------------------------------
+
+        if index % 20 == 0:
+
+            print()
+            print(
+                "Yahoo負荷対策 : "
+                "15秒休憩..."
+            )
+
+            time.sleep(15)
+
+        # ----------------------------------------------------
+        # Yahooから取得
+        # ----------------------------------------------------
+
+        print(
+            f"[{index}/{total}] "
+            f"{code} : Yahoo取得開始"
+        )
+
+        try:
+
+            df = get_credit_history(code)
+
+            if df is None or df.empty:
+
+                print(
+                    f"[{index}/{total}] "
+                    f"{code} : 取得失敗"
+                )
+
+                print(
+                    "Yahoo制限の可能性 "
+                    "30秒待機"
+                )
+
+                time.sleep(30)
+
+                continue
+
+            save_credit_history(
+                df,
+                code,
+            )
+
+            results[code] = df
+
+            print(
+                f"[{index}/{total}] "
+                f"{code} : 保存完了 "
+                f"({len(df)} rows)"
+            )
+
+        except YahooCreditNotFound:
+
+            print(
+                f"[{index}/{total}] "
+                f"{code} : Yahoo対象外"
+            )
+
+            # 404はYahooに銘柄ページがないため
+            # 待機せず、そのまま次の銘柄へ進む
+            continue
+
+        except Exception as e:
+
+            print(
+                f"[{index}/{total}] "
+                f"{code} : ERROR "
+                f"{e}"
+            )
+
+            continue
+
+    print()
+    print(
+        f"Yahoo信用データ取得完了 : "
+        f"{len(results)}/{total}銘柄"
+    )
+
+    return results
+
+def load_latest_credit_data(
+    codes=None,
+) -> dict[str, pd.Series]:
+    """
+    data/yahoo_credit/ に保存されているYahoo信用データから
+    各銘柄の最新信用データを読み込み、
+    {コード: 最新行} の辞書を返す。
+    """
+
+    credit_map = {}
+
+    if codes is not None:
+        target_codes = {
+            str(code).strip()
+            for code in codes
+        }
+    else:
+        target_codes = None
+
+    if not DATA_DIR.exists():
+        return credit_map
+
+    for path in DATA_DIR.glob("*.csv"):
+
+        code = path.stem.strip()
+
+        if target_codes is not None:
+            if code not in target_codes:
+                continue
+
+        try:
+
+            df = pd.read_csv(
+                path,
+                encoding="utf-8-sig",
+            )
+
+        except Exception as e:
+
+            print(
+                f"[{code}] credit CSV read error: {e}"
+            )
+
+            continue
+
+        if df.empty:
+            continue
+
+        # 日付の新しい順に並べる
+        if "日付" in df.columns:
+
+            df["日付"] = pd.to_datetime(
+                df["日付"],
+                errors="coerce",
+            )
+
+            df = df.dropna(
+                subset=["日付"]
+            )
+
+            if df.empty:
+                continue
+
+            df = df.sort_values(
+                "日付",
+                ascending=False,
+            )
+
+        latest = df.iloc[0]
+
+        credit_map[code] = latest
+
+    return credit_map
 
 def main():
 
