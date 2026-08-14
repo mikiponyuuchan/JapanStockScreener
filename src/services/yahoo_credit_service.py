@@ -6,18 +6,14 @@ import requests
 from bs4 import BeautifulSoup
 
 
-# ============================================================
-# 設定
-# ============================================================
-
 DATA_DIR = Path("data/yahoo_credit")
 
-BASE_URL = (
-    "https://finance.yahoo.co.jp/"
-    "quote/{}.T/history?styl=margin"
+TOP_URL = "https://finance.yahoo.co.jp/quote/{}.T"
+
+CREDIT_URL = (
+    "https://finance.yahoo.co.jp/quote/{}.T/history?styl=margin"
 )
 
-# 実際に HTTP 200 を確認できた User-Agent
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 "
@@ -26,158 +22,128 @@ HEADERS = {
         "(KHTML, like Gecko) "
         "Chrome/151.0.0.0 "
         "Safari/537.36"
-    )
+    ),
+    "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
 }
 
-# リトライ回数
-MAX_RETRIES = 3
-
-# 通常アクセス時の待機時間
+MAX_RETRIES = 2
 REQUEST_DELAY = 0.8
+RETRY_DELAYS = [3, 8]
 
-# リトライ時の待機時間
-RETRY_DELAYS = [2, 5, 10]
-
-
-# ============================================================
-# Yahoo!ファイナンス 信用残時系列取得
-# ============================================================
 
 def get_credit_history(
     code: str,
-    timeout: int = 20
+    timeout: int = 20,
 ) -> pd.DataFrame | None:
-    """
-    Yahoo!ファイナンスから個別銘柄の信用残時系列を取得する。
-
-    戻り値:
-        成功:
-            DataFrame
-
-        信用データなし:
-            None
-
-        HTTP・通信エラー:
-            None
-
-    DataFrame列:
-        コード
-        日付
-        売残
-        買残
-        売残増減
-        買残増減
-        信用倍率
-    """
 
     code = str(code).strip()
 
     if not code:
         return None
 
-    url = BASE_URL.format(code)
+    top_url = TOP_URL.format(code)
+    credit_url = CREDIT_URL.format(code)
 
-    response = None
+    session = requests.Session()
+    session.headers.update(HEADERS)
 
-    # ========================================================
-    # HTTP取得
-    # ========================================================
+    # --------------------------------------------------------
+    # Step 1: access stock top page
+    # --------------------------------------------------------
+
+    top_ok = False
 
     for attempt in range(MAX_RETRIES + 1):
 
-        if attempt > 0:
-
-            delay = RETRY_DELAYS[
-                min(
-                    attempt - 1,
-                    len(RETRY_DELAYS) - 1
-                )
-            ]
-
-            print(
-                f"[{code}] "
-                f"リトライ {attempt}/{MAX_RETRIES} "
-                f"{delay}秒待機..."
-            )
-
-            time.sleep(delay)
-
         try:
-
-            # Sessionを使わず、直接 requests.get()
-            response = requests.get(
-                url,
-                headers=HEADERS,
-                timeout=timeout
+            response = session.get(
+                top_url,
+                timeout=timeout,
             )
 
-            status = response.status_code
-
-            # ------------------------------------------------
-            # 成功
-            # ------------------------------------------------
-
-            if status == 200:
-
-                print(
-                    f"[{code}] HTTP 200 "
-                    f"({len(response.content):,} bytes)"
-                )
-
+            if response.status_code == 200:
+                top_ok = True
                 break
 
-            # ------------------------------------------------
-            # アクセス制限
-            # ------------------------------------------------
-
-            if status == 429:
-
-                print(
-                    f"[{code}] "
-                    f"HTTP 429 Too Many Requests"
-                )
-
-                continue
-
-            # ------------------------------------------------
-            # サーバーエラー
-            # ------------------------------------------------
-
-            if status >= 500:
-
-                print(
-                    f"[{code}] "
-                    f"HTTP {status} Server Error"
-                )
-
-                continue
-
-            # ------------------------------------------------
-            # その他HTTPエラー
-            # ------------------------------------------------
-
             print(
-                f"[{code}] "
-                f"HTTP {status} エラー"
+                f"[{code}] TOP HTTP "
+                f"{response.status_code}"
             )
-
-            return None
 
         except requests.RequestException as e:
 
             print(
-                f"[{code}] "
-                f"通信エラー: {e}"
+                f"[{code}] TOP request error: {e}"
             )
 
-            if attempt >= MAX_RETRIES:
-                return None
+        if attempt < MAX_RETRIES:
+            time.sleep(
+                RETRY_DELAYS[
+                    min(
+                        attempt,
+                        len(RETRY_DELAYS) - 1,
+                    )
+                ]
+            )
 
-            continue
+    if not top_ok:
 
-    # ========================================================
-    # 最終確認
-    # ========================================================
+        print(
+            f"[{code}] TOP page failed"
+        )
+
+        return None
+
+    # --------------------------------------------------------
+    # Step 2: access credit history page
+    # --------------------------------------------------------
+
+    time.sleep(REQUEST_DELAY)
+
+    response = None
+
+    for attempt in range(MAX_RETRIES + 1):
+
+        try:
+
+            response = session.get(
+                credit_url,
+                timeout=timeout,
+            )
+
+            status = response.status_code
+
+            print(
+                f"[{code}] CREDIT HTTP "
+                f"{status} "
+                f"size={len(response.content):,}"
+            )
+
+            if status == 200:
+                break
+
+        except requests.RequestException as e:
+
+            print(
+                f"[{code}] CREDIT request error: {e}"
+            )
+
+            response = None
+
+        if attempt < MAX_RETRIES:
+
+            delay = RETRY_DELAYS[
+                min(
+                    attempt,
+                    len(RETRY_DELAYS) - 1,
+                )
+            ]
+
+            print(
+                f"[{code}] retry after {delay}s"
+            )
+
+            time.sleep(delay)
 
     if response is None:
         return None
@@ -185,43 +151,33 @@ def get_credit_history(
     if response.status_code != 200:
 
         print(
-            f"[{code}] "
-            f"取得失敗 status={response.status_code}"
+            f"[{code}] CREDIT page failed"
         )
 
         return None
 
-    # ========================================================
-    # アクセス間隔
-    # ========================================================
-
-    time.sleep(REQUEST_DELAY)
-
-    # ========================================================
-    # HTML解析
-    # ========================================================
+    # --------------------------------------------------------
+    # Step 3: parse HTML
+    # --------------------------------------------------------
 
     soup = BeautifulSoup(
         response.text,
-        "html.parser"
+        "html.parser",
     )
 
     tables = soup.find_all("table")
 
+    print(
+        f"[{code}] tables={len(tables)}"
+    )
+
     if not tables:
 
         print(
-            f"[{code}] "
-            f"tableなし"
+            f"[{code}] no table"
         )
 
         return None
-
-    # ========================================================
-    # 信用残テーブル検索
-    # ========================================================
-
-    target_rows = None
 
     required = {
         "日付",
@@ -231,6 +187,8 @@ def get_credit_history(
         "買残増減",
         "信用倍率",
     }
+
+    target_rows = None
 
     for table in tables:
 
@@ -245,7 +203,7 @@ def get_credit_history(
             values = [
                 cell.get_text(
                     " ",
-                    strip=True
+                    strip=True,
                 )
                 for cell in cells
             ]
@@ -256,9 +214,9 @@ def get_credit_history(
         if not rows:
             continue
 
-        header = rows[0]
+        header = set(rows[0])
 
-        if required.issubset(set(header)):
+        if required.issubset(header):
 
             target_rows = rows
 
@@ -267,15 +225,14 @@ def get_credit_history(
     if target_rows is None:
 
         print(
-            f"[{code}] "
-            f"信用データなし"
+            f"[{code}] no credit table"
         )
 
         return None
 
-    # ========================================================
-    # DataFrame作成
-    # ========================================================
+    # --------------------------------------------------------
+    # Step 4: DataFrame
+    # --------------------------------------------------------
 
     header = target_rows[0]
 
@@ -291,16 +248,17 @@ def get_credit_history(
         )
 
     if not data_rows:
+
+        print(
+            f"[{code}] no data rows"
+        )
+
         return None
 
     df = pd.DataFrame(
         data_rows,
-        columns=header
+        columns=header,
     )
-
-    # ========================================================
-    # 必要列だけ残す
-    # ========================================================
 
     columns = [
         "日付",
@@ -313,19 +271,15 @@ def get_credit_history(
 
     df = df[columns].copy()
 
-    # ========================================================
-    # コード追加
-    # ========================================================
-
     df.insert(
         0,
         "コード",
-        code
+        code,
     )
 
-    # ========================================================
-    # 数値変換
-    # ========================================================
+    # --------------------------------------------------------
+    # Step 5: numeric conversion
+    # --------------------------------------------------------
 
     numeric_columns = [
         "売残",
@@ -340,28 +294,27 @@ def get_credit_history(
         df[column] = (
             df[column]
             .astype(str)
-            .str.replace(",", "", regex=False)
-            .str.replace("-", "0", regex=False)
+            .str.replace(
+                ",",
+                "",
+                regex=False,
+            )
             .str.strip()
         )
 
         df[column] = pd.to_numeric(
             df[column],
-            errors="coerce"
+            errors="coerce",
         )
 
-    # ========================================================
-    # 日付変換
-    # ========================================================
+    # --------------------------------------------------------
+    # Step 6: date conversion
+    # --------------------------------------------------------
 
     df["日付"] = pd.to_datetime(
         df["日付"],
-        errors="coerce"
+        errors="coerce",
     )
-
-    # ========================================================
-    # 不正行削除
-    # ========================================================
 
     df = df.dropna(
         subset=["日付"]
@@ -370,27 +323,20 @@ def get_credit_history(
     if df.empty:
         return None
 
-    # ========================================================
-    # 日付順
-    # ========================================================
-
-    df = df.sort_values(
-        "日付",
-        ascending=False
-    ).reset_index(
-        drop=True
+    df = (
+        df.sort_values(
+            "日付",
+            ascending=False,
+        )
+        .reset_index(drop=True)
     )
 
     return df
 
 
-# ============================================================
-# CSV保存
-# ============================================================
-
 def save_credit_history(
     df: pd.DataFrame,
-    code: str
+    code: str,
 ) -> Path | None:
 
     if df is None or df.empty:
@@ -398,7 +344,7 @@ def save_credit_history(
 
     DATA_DIR.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     path = DATA_DIR / f"{code}.csv"
@@ -406,22 +352,17 @@ def save_credit_history(
     df.to_csv(
         path,
         index=False,
-        encoding="utf-8-sig"
+        encoding="utf-8-sig",
     )
 
     return path
 
 
-# ============================================================
-# テスト
-# ============================================================
-
 def main():
 
     print("=" * 60)
-    print("Yahoo!ファイナンス 信用残取得テスト")
+    print("Yahoo credit test")
     print("=" * 60)
-    print()
 
     test_codes = [
         "1301",
@@ -429,11 +370,6 @@ def main():
         "1605",
         "1801",
         "2002",
-        "2502",
-        "2914",
-        "3382",
-        "4063",
-        "4502",
     ]
 
     success = 0
@@ -443,15 +379,14 @@ def main():
 
         start = time.perf_counter()
 
+        print()
         print(
-            f"[{code}] 取得中..."
+            f"[{code}] retrieving..."
         )
 
         try:
 
-            df = get_credit_history(
-                code
-            )
+            df = get_credit_history(code)
 
             elapsed = (
                 time.perf_counter()
@@ -463,9 +398,9 @@ def main():
                 success += 1
 
                 print(
-                    f"[{code}] 成功 "
-                    f"{len(df)}件 "
-                    f"({elapsed:.2f}秒)"
+                    f"[{code}] SUCCESS "
+                    f"{len(df)} rows "
+                    f"({elapsed:.2f}s)"
                 )
 
                 print(
@@ -476,21 +411,20 @@ def main():
 
                 path = save_credit_history(
                     df,
-                    code
+                    code,
                 )
 
-                if path:
-                    print(
-                        f"保存: {path}"
-                    )
+                print(
+                    f"saved: {path}"
+                )
 
             else:
 
                 failed += 1
 
                 print(
-                    f"[{code}] 信用データなし "
-                    f"({elapsed:.2f}秒)"
+                    f"[{code}] FAILED "
+                    f"({elapsed:.2f}s)"
                 )
 
         except Exception as e:
@@ -503,34 +437,19 @@ def main():
             )
 
             print(
-                f"[{code}] エラー: {e} "
-                f"({elapsed:.2f}秒)"
+                f"[{code}] ERROR: {e} "
+                f"({elapsed:.2f}s)"
             )
 
-        print()
-
+    print()
     print("=" * 60)
-    print("テスト結果")
+    print("TEST RESULT")
     print("=" * 60)
-
-    total = success + failed
-
-    rate = (
-        success / total * 100
-        if total > 0
-        else 0
-    )
-
     print(
-        f"成功 : {success}銘柄"
+        f"success: {success}/{len(test_codes)}"
     )
-
     print(
-        f"失敗 : {failed}銘柄"
-    )
-
-    print(
-        f"成功率 : {rate:.1f}%"
+        f"failed : {failed}/{len(test_codes)}"
     )
 
 
