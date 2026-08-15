@@ -416,7 +416,8 @@ def make_total_judgement(
         short_trend,
         middle_trend,
         position,
-        latest=None):
+        latest=None,
+        credit_condition="未判定"):
 
 
     # ==========================
@@ -435,6 +436,7 @@ def make_total_judgement(
             latest["InitialMoveSignal"]
         )
         and latest["RSI"] >= 50
+        and credit_condition == "○"
     ):
 
         return "買い候補"
@@ -873,7 +875,8 @@ def analyze_stock(
         short_trend,
         middle_trend,
         position,
-        latest
+        latest,
+        credit_condition
     )
 
 
