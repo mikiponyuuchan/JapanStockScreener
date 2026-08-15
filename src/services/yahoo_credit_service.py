@@ -378,27 +378,100 @@ def download_credit_batch(
     codes: list[str],
 ) -> dict[str, pd.DataFrame]:
     """
-    複数銘柄のYahoo信用データを順番に取得して保存する。
+    Yahoo信用データを複数銘柄まとめて取得する。
 
-    既にCSVが存在する銘柄は再取得しない。
+    ルール
+    ------
+    ・既存CSVがある銘柄はYahooへアクセスしない
+    ・ブラックリスト登録銘柄はYahooへアクセスしない
+    ・YahooCreditNotFound（404）はブラックリストへ追加
+    ・500 / timeout / 通信エラー等はブラックリストへ追加しない
+    ・500等の一時エラーが連続した場合はバッチを中断する
     """
 
     results = {}
 
     total = len(codes)
 
-    for index, code in enumerate(codes, start=1):
+    # ==========================
+    # ブラックリスト
+    # ==========================
+
+    failed_path = (
+        DATA_DIR.parent
+        / "yahoo_credit_failed.csv"
+    )
+
+    failed_codes = set()
+
+    if failed_path.exists():
+
+        try:
+
+            failed_df = pd.read_csv(
+                failed_path,
+                dtype=str,
+                encoding="utf-8-sig",
+            )
+
+            if "code" in failed_df.columns:
+
+                failed_codes = {
+                    str(code).strip()
+                    for code in failed_df["code"]
+                    if pd.notna(code)
+                }
+
+        except Exception as e:
+
+            print(
+                f"ブラックリスト読込失敗: {e}"
+            )
+
+    # ==========================
+    # 500等の連続エラー管理
+    # ==========================
+
+    consecutive_errors = 0
+
+    # 500等がこの回数連続したら中断
+    MAX_CONSECUTIVE_ERRORS = 3
+
+    # ==========================
+    # 取得ループ
+    # ==========================
+
+    for index, code in enumerate(
+        codes,
+        start=1,
+    ):
 
         code = str(code).strip()
 
         if not code:
             continue
 
-        path = DATA_DIR / f"{code}.csv"
+        # ==========================
+        # ブラックリスト
+        # ==========================
 
-        # ----------------------------------------------------
-        # 既に保存済みなら読み込んで利用
-        # ----------------------------------------------------
+        if code in failed_codes:
+
+            print(
+                f"[{index}/{total}] "
+                f"{code} : ブラックリスト除外"
+            )
+
+            continue
+
+        # ==========================
+        # 既存CSV
+        # ==========================
+
+        path = (
+            DATA_DIR
+            / f"{code}.csv"
+        )
 
         if path.exists():
 
@@ -409,14 +482,20 @@ def download_credit_batch(
                     encoding="utf-8-sig",
                 )
 
-                if df is not None and not df.empty:
+                if (
+                    df is not None
+                    and not df.empty
+                ):
 
                     results[code] = df
 
                     print(
                         f"[{index}/{total}] "
-                        f"{code} : キャッシュ利用"
+                        f"{code} : CSV利用"
                     )
+
+                    # 成功したので連続エラーをリセット
+                    consecutive_errors = 0
 
                     continue
 
@@ -428,23 +507,26 @@ def download_credit_batch(
                     f"{e}"
                 )
 
-        # ----------------------------------------------------
-        # 20銘柄ごとに休憩
-        # ----------------------------------------------------
+        # ==========================
+        # 20銘柄ごとの休憩
+        # ==========================
 
-        if index % 20 == 0:
+        if (
+            index > 1
+            and (index - 1) % 20 == 0
+        ):
 
             print()
             print(
-                "Yahoo負荷対策 : "
-                "15秒休憩..."
+                "Yahoo負荷対策: "
+                "15秒待機..."
             )
 
             time.sleep(15)
 
-        # ----------------------------------------------------
-        # Yahooから取得
-        # ----------------------------------------------------
+        # ==========================
+        # Yahoo取得
+        # ==========================
 
         print(
             f"[{index}/{total}] "
@@ -453,23 +535,64 @@ def download_credit_batch(
 
         try:
 
-            df = get_credit_history(code)
+            df = get_credit_history(
+                code
+            )
 
-            if df is None or df.empty:
+            # ==========================
+            # 取得失敗
+            # ==========================
+
+            if (
+                df is None
+                or df.empty
+            ):
 
                 print(
                     f"[{index}/{total}] "
                     f"{code} : 取得失敗"
                 )
 
+                # --------------------------------
+                # None / empty は
+                # 「対象外」と断定しない
+                # --------------------------------
+
+                consecutive_errors += 1
+
                 print(
-                    "Yahoo制限の可能性 "
-                    "30秒待機"
+                    f"{code} : "
+                    "一時エラー扱い "
+                    f"({consecutive_errors}/"
+                    f"{MAX_CONSECUTIVE_ERRORS})"
+                )
+
+                if (
+                    consecutive_errors
+                    >= MAX_CONSECUTIVE_ERRORS
+                ):
+
+                    print()
+                    print(
+                        "Yahoo一時エラーが"
+                        "連続したため、"
+                        "今回のバッチを中断します。"
+                    )
+
+                    break
+
+                print(
+                    "Yahoo負荷対策: "
+                    "30秒待機..."
                 )
 
                 time.sleep(30)
 
                 continue
+
+            # ==========================
+            # 正常取得
+            # ==========================
 
             save_credit_history(
                 df,
@@ -484,6 +607,13 @@ def download_credit_batch(
                 f"({len(df)} rows)"
             )
 
+            # 成功したのでリセット
+            consecutive_errors = 0
+
+        # ==========================
+        # 404
+        # ==========================
+
         except YahooCreditNotFound:
 
             print(
@@ -491,27 +621,152 @@ def download_credit_batch(
                 f"{code} : Yahoo対象外"
             )
 
-            # 404はYahooに銘柄ページがないため
-            # 待機せず、そのまま次の銘柄へ進む
+            # --------------------------------
+            # 404だけブラックリストへ追加
+            # --------------------------------
+
+            failed_codes.add(
+                code
+            )
+
+            print(
+                f"{code} : "
+                "ブラックリスト追加"
+            )
+
+            # ブラックリストを即時保存
+            try:
+
+                failed_df = pd.DataFrame(
+                    sorted(failed_codes),
+                    columns=["code"],
+                )
+
+                failed_df.to_csv(
+                    failed_path,
+                    index=False,
+                    encoding="utf-8-sig",
+                )
+
+            except Exception as e:
+
+                print(
+                    "ブラックリスト保存失敗: "
+                    f"{e}"
+                )
+
+            # 404は銘柄固有なので
+            # 連続エラーには含めない
+            consecutive_errors = 0
+
             continue
+
+        # ==========================
+        # その他のエラー
+        # ==========================
+
+        except KeyboardInterrupt:
+
+            print()
+            print(
+                "ユーザー操作により"
+                "取得を中断しました。"
+            )
+
+            break
 
         except Exception as e:
 
             print(
                 f"[{index}/{total}] "
                 f"{code} : ERROR "
-                f"{e}"
+                f"{type(e).__name__}: {e}"
             )
+
+            # --------------------------------
+            # 500 / timeout / 通信エラー等
+            # --------------------------------
+            # ブラックリストには入れない
+
+            consecutive_errors += 1
+
+            print(
+                f"{code} : "
+                "一時エラー扱い "
+                f"({consecutive_errors}/"
+                f"{MAX_CONSECUTIVE_ERRORS})"
+            )
+
+            if (
+                consecutive_errors
+                >= MAX_CONSECUTIVE_ERRORS
+            ):
+
+                print()
+                print(
+                    "Yahoo一時エラーが"
+                    "連続したため、"
+                    "今回のバッチを中断します。"
+                )
+
+                break
+
+            print(
+                "Yahoo負荷対策: "
+                "60秒待機..."
+            )
+
+            time.sleep(60)
 
             continue
 
+    # ==========================
+    # 最終ブラックリスト保存
+    # ==========================
+
+    try:
+
+        failed_df = pd.DataFrame(
+            sorted(failed_codes),
+            columns=["code"],
+        )
+
+        failed_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        failed_df.to_csv(
+            failed_path,
+            index=False,
+            encoding="utf-8-sig",
+        )
+
+        print()
+        print(
+            "ブラックリスト保存 : "
+            f"{len(failed_codes)} 銘柄"
+        )
+
+    except Exception as e:
+
+        print(
+            "ブラックリスト保存失敗: "
+            f"{e}"
+        )
+
+    # ==========================
+    # 結果
+    # ==========================
+
     print()
     print(
-        f"Yahoo信用データ取得完了 : "
+        "Yahoo信用データ取得完了 : "
         f"{len(results)}/{total}銘柄"
     )
 
     return results
+
 
 def load_latest_credit_data(
     codes=None,
