@@ -1,679 +1,111 @@
-import pandas as pd
 import time
+import pandas as pd
 
 from services.yahoo_service import get_history
-from services.chart_service import save_chart
 from indicators.technical import add_indicators
 
 
-
-# ==========================
-# 注目ポイント
-# ==========================
-
-def make_comment(latest):
-
-    comments = []
-
-
-    if latest["PriceUp"]:
-        comments.append("株価上昇")
-
-
-    if latest["AboveMA5"]:
-        comments.append("5日線上")
-
-
-    if latest["AboveMA25"]:
-        comments.append("25日線上")
+# ============================================================
+# 初動スコア
+#
+# 目的：
+# 「すでに大きく上昇した銘柄」ではなく
+# 「上昇が始まりそうな銘柄」を早い段階で拾う
+#
+# 最大15点
+#
+# 出来高        最大4点
+# 当日上昇      最大3点
+# MA5上        最大2点
+# 信用倍率      最大3点
+# 売り残増加    最大3点
+# ============================================================
 
 
-    if latest["AboveMA75"]:
-        comments.append("75日線上")
-
-
-    if latest["TrendEvaluation"]:
-        comments.append(
-            latest["TrendEvaluation"]
-        )
-
-
-    if latest["MAAlignment"]:
-        comments.append(
-            latest["MAAlignment"]
-        )
-
-
-    if latest["InitialMoveSignal"]:
-        comments.append(
-            "初動シグナル"
-        )
-
-
-    if latest["PullbackSignal"]:
-        comments.append(
-            "押し目候補"
-        )
-
-
-    if latest["MACD_GC"]:
-        comments.append(
-            "MACD GC"
-        )
-
-
-    if latest["New30High"]:
-        comments.append(
-            "30日高値更新"
-        )
-
-
-    if latest["NewYearHigh"]:
-        comments.append(
-            "年初来高値更新"
-        )
-
-
-    if latest["BreakoutSignal"]:
-        comments.append(
-            "ブレイクアウト"
-        )
-
-
-    if latest["BreakoutFirstDay"]:
-        comments.append(
-            "ブレイク初日"
-        )
-
-
-    if pd.notna(latest["VolumeRatio"]):
-
-        if latest["VolumeRatio"] >= 2:
-
-            comments.append(
-                "出来高急増"
-            )
-
-
-    if pd.notna(latest["VolumeRatio20"]):
-
-        if latest["VolumeRatio20"] >= 2:
-
-            comments.append(
-                "20日平均出来高超"
-            )
-
-
-    if latest["Change5Days"] >= 5:
-
-        comments.append(
-            f"5日上昇{latest['Change5Days']}%"
-        )
-
-
-    if latest["Change20Days"] >= 10:
-
-        comments.append(
-            f"20日上昇{latest['Change20Days']}%"
-        )
-
-
-    if latest["ConsecutiveUpDays"] > 0:
-
-        comments.append(
-            f"{latest['ConsecutiveUpDays']}日連続上昇"
-        )
-
-
-    if pd.notna(latest["RSI"]):
-
-        comments.append(
-            f"RSI {latest['RSI']}"
-        )
-
-
-    return " / ".join(comments)
-
-# ==========================
-# 初動スコア Ver1.0
-# ==========================
-
-def calculate_initial_score(latest):
+def calculate_initial_score(latest, credit_row=None):
 
     score = 0
 
-
-    # --------------------------
-    # 出来高
-    # --------------------------
-
-    if pd.notna(latest["VolumeRatio"]):
-
-        if latest["VolumeRatio"] >= 2:
-
-            score += 4
-
-
-    if pd.notna(latest["VolumeRatio20"]):
-
-        if latest["VolumeRatio20"] >= 2:
-
-            score += 3
-
-
-    # --------------------------
-    # 初動シグナル
-    # --------------------------
-
-    if latest["InitialMoveSignal"]:
-
-        score += 5
-
-
-    # --------------------------
-    # MACDゴールデンクロス
-    # --------------------------
-
-    if latest["MACD_GC"]:
-
-        score += 3
-
-
-    # --------------------------
-    # 5日線上
-    # --------------------------
-
-    if latest["AboveMA5"]:
-
-        score += 2
-
-
-    # --------------------------
-    # 前日上昇
-    # --------------------------
-
-    if latest["PriceUp"]:
-
-        score += 2
-
-
-    # --------------------------
-    # ブレイク
-    # --------------------------
-
-    if latest["BreakoutSignal"]:
-
-        score += 3
-
-
-    # --------------------------
-    # ブレイク初日
-    # --------------------------
-
-    if latest["BreakoutFirstDay"]:
-
-        score += 4
-
-
-    # --------------------------
-    # 30日高値更新
-    # --------------------------
-
-    if latest["New30High"]:
-
-        score += 3
-
-
-    # --------------------------
-    # 年初来高値更新
-    # --------------------------
-
-    if latest["NewYearHigh"]:
-
-        score += 2
-
-
-    return score
-
-
-
-# ==========================
-# スコア計算 Ver3.0
-# ==========================
-
-def calculate_score(latest):
-
-    score = 0
-
-
-    if latest["PriceUp"]:
-        score += 1
-
-
-    if latest["AboveMA5"]:
-        score += 1
-
-
-    if latest["AboveMA25"]:
-        score += 2
-
-
-    if latest["AboveMA75"]:
-        score += 2
-
-
-    if latest["MACD_GC"]:
-        score += 2
-
-
-    if latest["New30High"]:
-        score += 2
-
-
-    if latest["NewYearHigh"]:
-        score += 2
-
-
-    if latest["BreakoutSignal"]:
-        score += 2
-
-
-    if latest["VolumeRatio"] >= 2:
-        score += 1
-
-
-    if latest["VolumeRatio20"] >= 2:
-        score += 1
-
-
-    if latest["VolumeIncreaseDays"] >= 3:
-        score += 1
-
-
-    if latest["ConsecutiveUpDays"] >= 3:
-        score += 1
-
-
-    if latest["Change5Days"] >= 5:
-        score += 1
-
-
-    if latest["Change20Days"] >= 10:
-        score += 1
-
-
-    if latest["RSI_Strong"]:
-        score += 1
-
-
-
-    # トレンド評価
-
-    if latest["TrendEvaluation"] == "強い上昇":
-
-        score += 2
-
-
-    elif latest["TrendEvaluation"] == "上昇継続":
-
-        score += 1
-
-
-
-    # 初動
-
-    if latest["InitialMoveSignal"]:
-
-        score += 2
-
-
-
-    if latest["PullbackSignal"]:
-
-        score += 1
-
-
-
-    return score
-# ==========================
-# ランク
-# ==========================
-
-def make_rank(score):
-
-    if score >= 18:
-
-        return "A"
-
-
-    elif score >= 9:
-
-        return "B"
-
-
-    else:
-
-        return "C"
-
-
-
-
-
-# ==========================
-# 株価位置
-# ==========================
-
-def make_price_position(distance):
-
-    if pd.isna(distance):
-
-        return ""
-
-
-    if distance <= 5:
-
-        return "高値圏"
-
-
-    elif distance <= 15:
-
-        return "上昇中"
-
-
-    else:
-
-        return "上昇余地あり"
-
-
-
-
-
-# ==========================
-# トレンド
-# ==========================
-
-def make_trend(value):
-
-    if value:
-
-        return "強い"
-
-    else:
-
-        return "弱い"
-
-
-
-
-
-# ==========================
-# 総合判定
-# ==========================
-
-def make_total_judgement(
-        rank,
-        score,
-        short_trend,
-        middle_trend,
-        position,
-        latest=None,
-        credit_condition="未判定"):
-
-
-    # ==========================
-    # 買い候補
-    # ==========================
-
-    if (
-        rank == "A"
-        and score >= 18
-        and latest is not None
-        and (
-            latest["BreakoutSignal"]
-            or
-            latest["MACD_GC"]
-            or
-            latest["InitialMoveSignal"]
-        )
-        and latest["RSI"] >= 50
-        and credit_condition == "○"
-    ):
-
-        return "買い候補"
-
-
-
-    # ==========================
-    # 監視強化
-    # ==========================
-
-    elif (
-        rank == "A"
-        and score >= 15
-    ):
-
-        return "監視強化"
-
-
-
-    # ==========================
-    # 通常監視
-    # ==========================
-
-    elif rank in ["A","B"]:
-
-        return "監視継続"
-
-
-
-    else:
-
-        return "様子見"
-
-
-
-# ==========================
-# 買い候補理由
-# ==========================
-
-def make_buy_reason(
-        latest,
-        score,
-        rank,
-        position,
-        judgement):
-
-
-    if judgement != "買い候補":
-
-        return ""
-
-
-    reasons = []
-
-
-    reasons.append(
-        f"{rank}ランク 強気度{score}点"
+    # ========================================================
+    # 1. 出来高急増
+    # ========================================================
+
+    volume_ratio = latest.get(
+        "VolumeRatio",
+        pd.NA
     )
 
+    if pd.notna(volume_ratio):
 
-    if latest["TrendEvaluation"]:
+        try:
 
-        reasons.append(
-            latest["TrendEvaluation"]
-        )
+            volume_ratio = float(
+                volume_ratio
+            )
 
+            if volume_ratio >= 2:
 
-    if latest["MAAlignment"]:
+                score += 4
 
-        reasons.append(
-            latest["MAAlignment"]
-        )
+            elif volume_ratio >= 1.5:
 
+                score += 3
 
-    if latest["InitialMoveSignal"]:
+            elif volume_ratio >= 1.2:
 
-        reasons.append(
-            "初動シグナル"
-        )
+                score += 2
 
+        except Exception:
 
-    if latest["PullbackSignal"]:
+            pass
 
-        reasons.append(
-            "押し目判定"
-        )
+    # ========================================================
+    # 2. 当日上昇率
+    # ========================================================
 
-
-    if latest["MACD_GC"]:
-
-        reasons.append(
-            "MACDゴールデンクロス"
-        )
-
-
-    if latest["New30High"]:
-
-        reasons.append(
-            "30日高値更新"
-        )
-
-
-    if latest["NewYearHigh"]:
-
-        reasons.append(
-            "年初来高値更新"
-        )
-
-
-    if latest["BreakoutSignal"]:
-
-        reasons.append(
-            "ブレイクアウト"
-        )
-
-
-    if latest["VolumeRatio"] >= 2:
-
-        reasons.append(
-            f"出来高{latest['VolumeRatio']}倍"
-        )
-
-
-    if latest["RSI_Strong"]:
-
-        reasons.append(
-            f"RSI良好({latest['RSI']})"
-        )
-
-
-    if latest["MA25Deviation"]:
-
-        reasons.append(
-            f"25日線乖離{latest['MA25Deviation']}%"
-        )
-
-
-    if position:
-
-        reasons.append(
-            f"株価位置:{position}"
-        )
-
-
-    return " / ".join(reasons)
-
-
-
-
-
-# ==========================
-# 分析コメント
-# ==========================
-
-def make_analysis_comment(
-        latest,
-        score,
-        rank,
-        position,
-        short_trend,
-        middle_trend,
-        long_trend,
-        judgement,
-        credit_row=None):
-
-
-    comments = []
-
-
-    comments.append(
-        f"{rank}ランク"
+    change_percent = latest.get(
+        "ChangePercent",
+        pd.NA
     )
 
+    if pd.notna(change_percent):
 
-    comments.append(
-        f"強気度{score}点"
+        try:
+
+            change_percent = float(
+                change_percent
+            )
+
+            if change_percent >= 3:
+
+                score += 3
+
+            elif change_percent >= 1:
+
+                score += 2
+
+        except Exception:
+
+            pass
+
+    # ========================================================
+    # 3. MA5より上
+    # ========================================================
+
+    above_ma5 = latest.get(
+        "AboveMA5",
+        False
     )
 
+    if bool(above_ma5):
 
-    if latest["TrendEvaluation"]:
+        score += 2
 
-        comments.append(
-            latest["TrendEvaluation"]
-        )
-
-
-    if latest["MAAlignment"]:
-
-        comments.append(
-            latest["MAAlignment"]
-        )
-
-
-    if latest["InitialMoveSignal"]:
-
-        comments.append(
-            "初動検出"
-        )
-
-
-    if latest["PullbackSignal"]:
-
-        comments.append(
-            "押し目"
-        )
-
-
-    if latest["MACD_GC"]:
-
-        comments.append(
-            "MACD GC"
-        )
-
-
-    if latest["NewYearHigh"]:
-
-        comments.append(
-            "年初来高値"
-        )
-
-
-    if latest["BreakoutSignal"]:
-
-        comments.append(
-            "ブレイク"
-        )
-
-
-    if pd.notna(latest["RSI"]):
-
-        comments.append(
-            f"RSI{latest['RSI']}"
-        )
-
-    # ==========================
-    # Yahoo信用条件
-    # ==========================
+    # ========================================================
+    # 4. 信用倍率
+    #
+    # 信用倍率が低いほど買い圧力を評価
+    # ========================================================
 
     if credit_row is not None:
 
@@ -685,33 +117,326 @@ def make_analysis_comment(
                 ).replace(",", "")
             )
 
+            if credit_ratio < 1:
+
+                score += 3
+
+            elif credit_ratio < 2:
+
+                score += 2
+
+        except Exception:
+
+            pass
+
+        # ====================================================
+        # 5. 売り残前週比
+        # ====================================================
+
+        try:
+
             sell_change = float(
                 str(
-                    credit_row["売残増減"]
+                    credit_row["売り残前週比"]
                 ).replace(",", "")
             )
 
-            if (
-                credit_ratio < 1
-                and sell_change > 0
-            ):
+            if sell_change >= 10:
+
+                score += 3
+
+            elif sell_change >= 5:
+
+                score += 2
+
+            elif sell_change >= 1:
+
+                score += 1
+
+        except Exception:
+
+            pass
+
+    return score
+
+
+# ============================================================
+# 初動スコアコメント
+# ============================================================
+
+def make_analysis_comment(
+    initial_score,
+    latest=None,
+    credit_row=None
+):
+
+    comments = []
+
+    comments.append(
+        f"初動スコア{initial_score}点"
+    )
+
+    if latest is not None:
+
+        # ----------------------------------------------------
+        # 出来高
+        # ----------------------------------------------------
+
+        volume_ratio = latest.get(
+            "VolumeRatio",
+            pd.NA
+        )
+
+        if pd.notna(volume_ratio):
+
+            try:
+
+                volume_ratio = float(
+                    volume_ratio
+                )
+
+                if volume_ratio >= 2:
+
+                    comments.append(
+                        f"出来高{volume_ratio:.1f}倍"
+                    )
+
+                elif volume_ratio >= 1.5:
+
+                    comments.append(
+                        f"出来高{volume_ratio:.1f}倍"
+                    )
+
+            except Exception:
+
+                pass
+
+        # ----------------------------------------------------
+        # 当日上昇
+        # ----------------------------------------------------
+
+        change_percent = latest.get(
+            "ChangePercent",
+            pd.NA
+        )
+
+        if pd.notna(change_percent):
+
+            try:
+
+                change_percent = float(
+                    change_percent
+                )
+
+                if change_percent >= 1:
+
+                    comments.append(
+                        f"当日+{change_percent:.1f}%"
+                    )
+
+            except Exception:
+
+                pass
+
+        # ----------------------------------------------------
+        # MA5
+        # ----------------------------------------------------
+
+        if latest.get(
+            "AboveMA5",
+            False
+        ):
+
+            comments.append(
+                "5日線上"
+            )
+
+        # ----------------------------------------------------
+        # 初動シグナル
+        # ----------------------------------------------------
+
+        if latest.get(
+            "InitialMoveSignal",
+            False
+        ):
+
+            comments.append(
+                "初動シグナル"
+            )
+
+        # ----------------------------------------------------
+        # 押し目
+        # ----------------------------------------------------
+
+        if latest.get(
+            "PullbackSignal",
+            False
+        ):
+
+            comments.append(
+                "押し目判定"
+            )
+
+        # ----------------------------------------------------
+        # MACD GC
+        # ----------------------------------------------------
+
+        if latest.get(
+            "MACD_GC",
+            False
+        ):
+
+            comments.append(
+                "MACD GC"
+            )
+
+        # ----------------------------------------------------
+        # 30日高値
+        # ----------------------------------------------------
+
+        if latest.get(
+            "New30High",
+            False
+        ):
+
+            comments.append(
+                "30日高値更新"
+            )
+
+        # ----------------------------------------------------
+        # 年初来高値
+        # ----------------------------------------------------
+
+        if latest.get(
+            "NewYearHigh",
+            False
+        ):
+
+            comments.append(
+                "年初来高値更新"
+            )
+
+        # ----------------------------------------------------
+        # ブレイク
+        # ----------------------------------------------------
+
+        if latest.get(
+            "BreakoutSignal",
+            False
+        ):
+
+            comments.append(
+                "ブレイクアウト"
+            )
+
+        # ----------------------------------------------------
+        # 5日騰落率
+        # ----------------------------------------------------
+
+        change_5days = latest.get(
+            "Change5Days",
+            pd.NA
+        )
+
+        if pd.notna(change_5days):
+
+            try:
+
+                change_5days = float(
+                    change_5days
+                )
+
+                if change_5days >= 5:
+
+                    comments.append(
+                        f"5日+{change_5days:.1f}%"
+                    )
+
+            except Exception:
+
+                pass
+
+        # ----------------------------------------------------
+        # 20日騰落率
+        # ----------------------------------------------------
+
+        change_20days = latest.get(
+            "Change20Days",
+            pd.NA
+        )
+
+        if pd.notna(change_20days):
+
+            try:
+
+                change_20days = float(
+                    change_20days
+                )
+
+                if change_20days >= 10:
+
+                    comments.append(
+                        f"20日+{change_20days:.1f}%"
+                    )
+
+            except Exception:
+
+                pass
+
+    # ========================================================
+    # 信用情報
+    # ========================================================
+
+    if credit_row is not None:
+
+        try:
+
+            credit_ratio = float(
+                str(
+                    credit_row["信用倍率"]
+                ).replace(",", "")
+            )
+
+            if credit_ratio < 1:
 
                 comments.append(
-                    "信用条件"
+                    "信用倍率1倍未満"
+                )
+
+            elif credit_ratio < 2:
+
+                comments.append(
+                    "信用倍率2倍未満"
                 )
 
         except Exception:
+
             pass
 
-    comments.append(
-        judgement
-    )
+        try:
 
+            sell_change = float(
+                str(
+                    credit_row["売り残前週比"]
+                ).replace(",", "")
+            )
+
+            if sell_change >= 5:
+
+                comments.append(
+                    f"売り残+{sell_change:.1f}%"
+                )
+
+        except Exception:
+
+            pass
 
     return " / ".join(comments)
-# ==========================
+
+
+# ============================================================
 # 銘柄分析
-# ==========================
+# ============================================================
 
 def analyze_stock(
     stock,
@@ -719,52 +444,77 @@ def analyze_stock(
     credit_row=None
 ):
 
-    code = stock["コード"]
+    # ========================================================
+    # 基本情報
+    # ========================================================
 
+    code = str(
+        stock["コード"]
+    )
 
-    # ==========================
-    # データ取得・計測
-    # ==========================
+    name = stock.get(
+        "銘柄名",
+        ""
+    )
+
+    market = stock.get(
+        "市場・商品区分",
+        ""
+    )
+
+    # ========================================================
+    # データ取得
+    # ========================================================
 
     data_start = time.time()
 
     if history_df is not None:
 
-        # Ver6.15
-        # Yahoo一括取得済みのDataFrameを使用
         df = history_df
 
     else:
 
-        # 従来方式
-        df = get_history(code)
+        df = get_history(
+            code
+        )
 
     data_time = (
         time.time()
         - data_start
     )
 
-
     if df is None or df.empty:
+
         return None
 
-
-    # ==========================
-    # 指標計算・計測
-    # ==========================
+    # ========================================================
+    # テクニカル指標
+    # ========================================================
 
     indicator_start = time.time()
 
-    df = add_indicators(df)
+    df = add_indicators(
+        df
+    )
 
     indicator_time = (
         time.time()
-        -
-        indicator_start
+        - indicator_start
     )
 
+    if df is None or df.empty:
+
+        return None
+
+    # ========================================================
+    # 最新行
+    # ========================================================
 
     latest = df.iloc[-1]
+
+    # ========================================================
+    # 信用倍率
+    # ========================================================
 
     credit_ratio = pd.NA
 
@@ -774,13 +524,13 @@ def analyze_stock(
 
             sell_balance = float(
                 str(
-                    credit_row["売残"]
+                    credit_row["売り残"]
                 ).replace(",", "")
             )
 
             buy_balance = float(
                 str(
-                    credit_row["買残"]
+                    credit_row["買い残"]
                 ).replace(",", "")
             )
 
@@ -792,17 +542,14 @@ def analyze_stock(
                 )
 
         except Exception:
+
             pass
 
-    # ==========================
-    # 判定処理・計測
-    # ==========================
-
-    judge_start = time.time()
-
-    # ==========================
-    # Yahoo信用条件
-    # ==========================
+    # ========================================================
+    # 信用条件
+    #
+    # 初動スコアの補助情報として保持
+    # ========================================================
 
     credit_condition = "未判定"
 
@@ -810,7 +557,7 @@ def analyze_stock(
 
         try:
 
-            credit_ratio = float(
+            ratio = float(
                 str(
                     credit_row["信用倍率"]
                 ).replace(",", "")
@@ -818,16 +565,16 @@ def analyze_stock(
 
             sell_change = float(
                 str(
-                    credit_row["売残増減"]
+                    credit_row["売り残前週比"]
                 ).replace(",", "")
             )
 
             if (
-                credit_ratio < 1
+                ratio < 1
                 and sell_change > 0
             ):
 
-                credit_condition = "○"
+                credit_condition = "該当"
 
             else:
 
@@ -837,167 +584,325 @@ def analyze_stock(
 
             credit_condition = "未判定"
 
+    # ========================================================
+    # 初動スコア
+    # ========================================================
 
-    score = calculate_score(
-        latest
-    )
+    judge_start = time.time()
 
     initial_score = calculate_initial_score(
-        latest
-    )
-
-    rank = make_rank(
-        score
-    )
-
-
-    position = make_price_position(
-        latest["High30Distance"]
-    )
-
-
-    short_trend = make_trend(
-        latest["AboveMA5"]
-    )
-
-    middle_trend = make_trend(
-        latest["AboveMA25"]
-    )
-
-    long_trend = make_trend(
-        latest["AboveMA75"]
-    )
-
-
-    judgement = make_total_judgement(
-        rank,
-        score,
-        short_trend,
-        middle_trend,
-        position,
         latest,
-        credit_condition
+        credit_row
     )
 
+    analysis_comment = make_analysis_comment(
+        initial_score,
+        latest,
+        credit_row
+    )
+
+    judge_time = (
+        time.time()
+        - judge_start
+    )
+
+    # ========================================================
+    # 終値
+    #
+    # main.py / tracking_service.py / result_writer.py
+    # が使用する正式な列名
+    # ========================================================
+
+    try:
+
+        close_price = round(
+            float(
+                latest["Close"]
+            ),
+            2
+        )
+
+    except Exception:
+
+        return None
+
+    # ========================================================
+    # データ日
+    # ========================================================
+
+    try:
+
+        if "Date" in df.columns:
+
+            data_date = (
+                pd.to_datetime(
+                    df["Date"]
+                )
+                .max()
+                .strftime(
+                    "%Y-%m-%d"
+                )
+            )
+
+        else:
+
+            data_date = (
+                pd.to_datetime(
+                    df.index
+                )
+                .max()
+                .strftime(
+                    "%Y-%m-%d"
+                )
+            )
+
+    except Exception:
+
+        data_date = ""
+
+    # ========================================================
+    # 結果
+    #
+    # 重要：
+    # 「強気度」は完全に廃止
+    # 「初動スコア」を唯一のスコアとする
+    # ========================================================
 
     return {
+
+        # ----------------------------------------------------
+        # 基本情報
+        # ----------------------------------------------------
 
         "コード":
             code,
 
         "銘柄名":
-            stock["銘柄名"],
+            name,
 
         "市場":
-            stock["市場・商品区分"],
+            market,
+
+        # ----------------------------------------------------
+        # 株価
+        # ----------------------------------------------------
 
         "終値":
-            round(
-                float(
-                    latest["Close"]
-                ),
-                2
+            close_price,
+
+        "前日比":
+            latest.get(
+                "ChangePercent",
+                pd.NA
             ),
 
-        "前日比%":
-            latest["ChangePercent"],
-
         "5日騰落率":
-            latest["Change5Days"],
+            latest.get(
+                "Change5Days",
+                pd.NA
+            ),
 
         "20日騰落率":
-            latest["Change20Days"],
+            latest.get(
+                "Change20Days",
+                pd.NA
+            ),
+
+        # ----------------------------------------------------
+        # テクニカル
+        # ----------------------------------------------------
 
         "RSI":
-            latest["RSI"],
+            latest.get(
+                "RSI",
+                pd.NA
+            ),
 
         "ATR":
-            latest["ATR"],
+            latest.get(
+                "ATR",
+                pd.NA
+            ),
 
-        "トレンド評価":
-            latest["TrendEvaluation"],
-
-        "MA並び":
-            latest["MAAlignment"],
-
-        "初動シグナル":
-            "○"
-            if latest["InitialMoveSignal"]
-            else "",
-
-        "押し目判定":
-            "○"
-            if latest["PullbackSignal"]
-            else "",
-
-        "MACD GC":
-            "○"
-            if latest["MACD_GC"]
-            else "",
-
-        "30日高値更新":
-            "○"
-            if latest["New30High"]
-            else "",
-
-        "年初来高値更新":
-            "○"
-            if latest["NewYearHigh"]
-            else "",
-
-        "ブレイク":
-            "○"
-            if latest["BreakoutSignal"]
-            else "",
-
-        "強気度":
-            score,
+        # ----------------------------------------------------
+        # 初動スコア
+        # ----------------------------------------------------
 
         "初動スコア":
             initial_score,
 
-        "監視ランク":
-            rank,
+        "分析コメント":
+            analysis_comment,
 
-        "総合判定":
-            judgement,
+        # ----------------------------------------------------
+        # 初動判定用
+        # ----------------------------------------------------
 
-        # ==========================
-        # Yahoo信用データ
-        # ==========================
+        "InitialMoveSignal":
+            latest.get(
+                "InitialMoveSignal",
+                False
+            ),
 
-        "信用日付":
+        "PullbackSignal":
+            latest.get(
+                "PullbackSignal",
+                False
+            ),
+
+        "BreakoutSignal":
+            latest.get(
+                "BreakoutSignal",
+                False
+            ),
+
+        "BreakoutFirstDay":
+            latest.get(
+                "BreakoutFirstDay",
+                False
+            ),
+
+        "MACD_GC":
+            latest.get(
+                "MACD_GC",
+                False
+            ),
+
+        "New30High":
+            latest.get(
+                "New30High",
+                False
+            ),
+
+        "NewYearHigh":
+            latest.get(
+                "NewYearHigh",
+                False
+            ),
+
+        # ----------------------------------------------------
+        # 出来高
+        # ----------------------------------------------------
+
+        "VolumeRatio":
+            latest.get(
+                "VolumeRatio",
+                pd.NA
+            ),
+
+        "VolumeRatio20":
+            latest.get(
+                "VolumeRatio20",
+                pd.NA
+            ),
+
+        "VolumeIncreaseDays":
+            latest.get(
+                "VolumeIncreaseDays",
+                0
+            ),
+
+        # ----------------------------------------------------
+        # トレンド
+        # ----------------------------------------------------
+
+        "AboveMA5":
+            latest.get(
+                "AboveMA5",
+                False
+            ),
+
+        "AboveMA25":
+            latest.get(
+                "AboveMA25",
+                False
+            ),
+
+        "AboveMA75":
+            latest.get(
+                "AboveMA75",
+                False
+            ),
+
+        "TrendEvaluation":
+            latest.get(
+                "TrendEvaluation",
+                ""
+            ),
+
+        "MAAlignment":
+            latest.get(
+                "MAAlignment",
+                ""
+            ),
+
+        # ----------------------------------------------------
+        # RSI / 連騰
+        # ----------------------------------------------------
+
+        "RSI_Strong":
+            latest.get(
+                "RSI_Strong",
+                False
+            ),
+
+        "ConsecutiveUpDays":
+            latest.get(
+                "ConsecutiveUpDays",
+                0
+            ),
+
+        # ----------------------------------------------------
+        # MA25乖離
+        # ----------------------------------------------------
+
+        "MA25Deviation":
+            latest.get(
+                "MA25Deviation",
+                pd.NA
+            ),
+
+        # ----------------------------------------------------
+        # 信用情報
+        # ----------------------------------------------------
+
+        "信用情報日付":
             (
                 credit_row["日付"]
                 if credit_row is not None
+                and "日付" in credit_row
                 else pd.NA
             ),
 
-        "売残":
+        "売り残":
             (
-                credit_row["売残"]
+                credit_row["売り残"]
                 if credit_row is not None
+                and "売り残" in credit_row
                 else pd.NA
             ),
 
-        "買残":
+        "買い残":
             (
-                credit_row["買残"]
+                credit_row["買い残"]
                 if credit_row is not None
+                and "買い残" in credit_row
                 else pd.NA
             ),
 
-        "売残増減":
+        "売り残前週比":
             (
-                credit_row["売残増減"]
+                credit_row["売り残前週比"]
                 if credit_row is not None
+                and "売り残前週比" in credit_row
                 else pd.NA
             ),
 
-        "買残増減":
+        "買い残前週比":
             (
-                credit_row["買残増減"]
+                credit_row["買い残前週比"]
                 if credit_row is not None
+                and "買い残前週比" in credit_row
                 else pd.NA
             ),
 
@@ -1005,44 +910,22 @@ def analyze_stock(
             (
                 credit_row["信用倍率"]
                 if credit_row is not None
+                and "信用倍率" in credit_row
                 else pd.NA
             ),
+
+        "信用倍率計算値":
+            credit_ratio,
 
         "信用条件":
             credit_condition,
 
-        "分析コメント":
-            make_analysis_comment(
-                latest,
-                score,
-                rank,
-                position,
-                short_trend,
-                middle_trend,
-                long_trend,
-                judgement,
-                credit_row
-            ),
-
-        # ==========================
-        # Sprint2 計測データ
-        # ==========================
+        # ----------------------------------------------------
+        # Sprint / 計測情報
+        # ----------------------------------------------------
 
         "_data_date":
-            (
-                pd.to_datetime(
-                    df["Date"]
-                )
-                .max()
-                .strftime("%Y-%m-%d")
-                if "Date" in df.columns
-                else
-                pd.to_datetime(
-                    df.index
-                )
-                .max()
-                .strftime("%Y-%m-%d")
-            ),
+            data_date,
 
         "_data_time":
             data_time,
@@ -1051,6 +934,5 @@ def analyze_stock(
             indicator_time,
 
         "_judge_time":
-            time.time() - judge_start
-
+            judge_time,
     }

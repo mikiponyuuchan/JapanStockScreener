@@ -1,6 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
@@ -9,95 +8,197 @@ from screener.loader import load_stock_list
 from screener.analyzer import analyze_stock
 
 
+# ============================================================
+# スクリーナー実行
+#
+# 初動スコア15点方式
+#
+# このrunnerでは
+#
+# ・強気度
+# ・ランク
+# ・総合判定
+# ・watchlist
+# ・buy_candidate
+# ・前回強気度
+# ・今回強気度
+# ・強気度差
+#
+# は使用しない。
+#
+# 全銘柄を分析し、
+# 「初動スコア」の高い順に並べる。
+# ============================================================
+
 
 def run_screener(start=0, limit=None):
 
-    stocks = load_stock_list(start, limit)
+    # ========================================================
+    # 銘柄一覧取得
+    # ========================================================
+
+    stocks = load_stock_list(
+        start,
+        limit
+    )
 
     results = []
     error_list = []
 
-total = len(stocks)
+    total = len(stocks)
 
 
-MAX_WORKERS = 10
+    # ========================================================
+    # 並列処理
+    # ========================================================
 
-completed = 0
+    MAX_WORKERS = 10
 
-with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    completed = 0
 
-    futures = {
-        executor.submit(analyze_stock, stock): stock
-        for _, stock in stocks.iterrows()
-    }
 
-    for future in as_completed(futures):
+    with ThreadPoolExecutor(
+        max_workers=MAX_WORKERS
+    ) as executor:
 
-        stock = futures[future]
-        completed += 1
+        futures = {
+            executor.submit(
+                analyze_stock,
+                stock
+            ): stock
+            for _, stock in stocks.iterrows()
+        }
 
-        print(
-            f"[{completed}/{total}] "
-            f"{stock['コード']} {stock['銘柄名']}"
-        )
 
-        try:
+        for future in as_completed(futures):
 
-            result = future.result()
+            stock = futures[future]
 
-            if result is not None:
-                results.append(result)
+            completed += 1
 
-        except Exception as e:
 
             print(
-               f"ERROR {stock['コード']} : {e}"
+                f"[{completed}/{total}] "
+                f"{stock['コード']} "
+                f"{stock['銘柄名']}"
             )
 
-            error_list.append(
-                {
-                     "コード": stock["コード"],
-                     "銘柄名": stock["銘柄名"],
-                     "エラー内容": str(e)
-                }
-           )
+
+            try:
+
+                result = future.result()
 
 
+                if result is not None:
 
-    result_df = pd.DataFrame(results)
+                    results.append(result)
 
-if result_df.empty:
 
-    print()
+            except Exception as e:
 
-    print("取得できた銘柄がありませんでした。")
+                print(
+                    f"ERROR "
+                    f"{stock['コード']} : {e}"
+                )
 
-    if error_list:
 
-        error_df = pd.DataFrame(error_list)
+                error_list.append(
+                    {
+                        "コード":
+                            stock["コード"],
 
-        error_path = (
-            Path(config.DATA_DIR)
-            /
-            "error_log.csv"
+                        "銘柄名":
+                            stock["銘柄名"],
+
+                        "エラー内容":
+                            str(e)
+                    }
+                )
+
+
+    # ========================================================
+    # DataFrame化
+    # ========================================================
+
+    result_df = pd.DataFrame(
+        results
+    )
+
+
+    # ========================================================
+    # 結果なし
+    # ========================================================
+
+    if result_df.empty:
+
+        print()
+
+        print(
+            "分析結果がありません。"
         )
 
-        error_df.to_csv(
-            error_path,
-            index=False,
-            encoding="utf-8-sig"
+
+        if error_list:
+
+            error_df = pd.DataFrame(
+                error_list
+            )
+
+
+            error_path = (
+                Path(config.DATA_DIR)
+                /
+                "error_log.csv"
+            )
+
+
+            error_df.to_csv(
+                error_path,
+                index=False,
+                encoding="utf-8-sig"
+            )
+
+
+            print(
+                f"保存しました : "
+                f"{error_path}"
+            )
+
+
+        return result_df
+
+
+    # ========================================================
+    # 初動スコアで並べ替え
+    #
+    # 15点満点
+    # 高い順
+    # ========================================================
+
+    if "初動スコア" in result_df.columns:
+
+        result_df["初動スコア"] = pd.to_numeric(
+            result_df["初動スコア"],
+            errors="coerce"
+        ).fillna(0)
+
+
+        result_df = result_df.sort_values(
+            "初動スコア",
+            ascending=False
         )
 
-        print(f"保存しました : {error_path}")
 
-    return result_df
+    # ========================================================
+    # 全分析結果保存
+    # ========================================================
 
+    price_path = (
+        Path(config.DATA_DIR)
+        /
+        "price_data.csv"
+    )
 
-    # ==========================
-    # 全データ保存
-    # ==========================
-
-    price_path = Path(config.DATA_DIR) / "price_data.csv"
 
     result_df.to_csv(
         price_path,
@@ -105,24 +206,31 @@ if result_df.empty:
         encoding="utf-8-sig"
     )
 
-    print(f"保存しました : {price_path}")
 
-
-
-    # ==========================
-    # 基本スクリーニング
-    # ==========================
-
-    screening_df = result_df[
-        (result_df["出来高倍率"] >= 2)
-        &
-        (result_df["株価上昇"] == "○")
-        &
-        (result_df["5日線上"] == "○")
-    ].sort_values(
-        "出来高倍率",
-        ascending=False
+    print(
+        f"保存しました : "
+        f"{price_path}"
     )
+
+
+    # ========================================================
+    # スクリーニング結果
+    #
+    # 初動スコア順に全銘柄を保存。
+    #
+    # ここでは勝手に点数の足切りをしない。
+    # 「初動スコア15点」が唯一の評価軸。
+    # ========================================================
+
+    screening_df = result_df.copy()
+
+
+    if "初動スコア" in screening_df.columns:
+
+        screening_df = screening_df.sort_values(
+            "初動スコア",
+            ascending=False
+        )
 
 
     screening_path = (
@@ -138,315 +246,137 @@ if result_df.empty:
         encoding="utf-8-sig"
     )
 
-    print(f"保存しました : {screening_path}")
 
-
-
-    # ==========================
-    # watchlist
-    # ==========================
-
-    watchlist_df = result_df[
-        (result_df["監視ランク"] == "A")
-        |
-        (result_df["MACD GC"] == "○")
-        |
-        (result_df["30日高値更新"] == "○")
-    ]
-
-
-    watchlist_df = watchlist_df.sort_values(
-        [
-            "強気度",
-            "出来高倍率"
-        ],
-        ascending=[
-            False,
-            False
-        ]
+    print(
+        f"保存しました : "
+        f"{screening_path}"
     )
 
 
-    watchlist_path = (
+    # ========================================================
+    # 初動スコア TOP20
+    #
+    # 旧watchlistではない。
+    # 単純に初動スコア上位20銘柄。
+    # ========================================================
+
+    top20_df = screening_df.head(
+        20
+    ).copy()
+
+
+    top20_path = (
         Path(config.DATA_DIR)
         /
-        "watchlist.csv"
+        "initial_score_top20.csv"
     )
 
 
-    watchlist_df.to_csv(
-        watchlist_path,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    print(f"保存しました : {watchlist_path}")
-
-
-
-    # ==========================
-    # watchlist TOP20
-    # ==========================
-
-    watchlist_top_df = watchlist_df.head(20)
-
-
-    watchlist_top_path = (
-        Path(config.DATA_DIR)
-        /
-        "watchlist_top.csv"
-    )
-
-
-    watchlist_top_df.to_csv(
-        watchlist_top_path,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-
-    print(f"保存しました : {watchlist_top_path}")
-
-
-
-    # ==========================
-    # 1.19 買い候補
-    # ==========================
-
-    buy_candidate_df = result_df[
-        result_df["総合判定"] == "買い候補"
-    ]
-
-
-    buy_candidate_df = buy_candidate_df.sort_values(
-        [
-            "強気度",
-            "出来高倍率"
-        ],
-        ascending=[
-            False,
-            False
-        ]
-    )
-
-
-    buy_candidate_path = (
-        Path(config.DATA_DIR)
-        /
-        "buy_candidate.csv"
-    )
-
-
-    buy_candidate_df.to_csv(
-        buy_candidate_path,
+    top20_df.to_csv(
+        top20_path,
         index=False,
         encoding="utf-8-sig"
     )
 
 
     print(
-        f"保存しました : {buy_candidate_path}"
+        f"保存しました : "
+        f"{top20_path}"
     )
 
 
+    # ========================================================
+    # エラーログ
+    # ========================================================
 
-    # ==========================
-    # 1.20 候補履歴比較
-    # ==========================
+    if error_list:
 
-    previous_path = (
-        Path(config.DATA_DIR)
-        /
-        "previous_buy_candidate.csv"
-    )
-
-
-    change_path = (
-        Path(config.DATA_DIR)
-        /
-        "candidate_change.csv"
-    )
-
-
-    if previous_path.exists():
-
-        previous_df = pd.read_csv(
-            previous_path,
-            encoding="utf-8-sig"
+        error_df = pd.DataFrame(
+            error_list
         )
 
 
-        previous_codes = set(
-            previous_df["コード"]
-        )
-
-        current_codes = set(
-            buy_candidate_df["コード"]
-        )
-
-
-        change_results = []
-
-        # 新規・継続・強化・弱化判定
-        for _, row in buy_candidate_df.iterrows():
-
-            if row["コード"] in previous_codes:
-
-                old_row = previous_df[
-                    previous_df["コード"] == row["コード"]
-                ].iloc[0]
-
-
-                old_score = old_row["強気度"]
-
-                new_score = row["強気度"]
-
-
-                if new_score > old_score:
-
-                    status = "強化"
-
-
-                elif new_score < old_score:
-
-                    status = "弱化"
-
-
-                else:
-
-                    status = "継続候補"
-
-
-
-            else:
-
-                old_score = ""
-
-                new_score = row["強気度"]
-
-                status = "新規候補"
-
-
-
-            change_results.append(
-                {
-                    "コード": row["コード"],
-                    "銘柄名": row["銘柄名"],
-                    "候補変化": status,
-                    "前回強気度": old_score,
-                    "今回強気度": new_score,
-                    "強気度差":
-                        (
-                            new_score - old_score
-                            if old_score != ""
-                            else ""
-                        ),
-                    "総合判定": row["総合判定"]
-                }
-            )
-
-
-
-        # 除外銘柄
-        for _, row in previous_df.iterrows():
-
-            if row["コード"] not in current_codes:
-
-                change_results.append(
-                    {
-                        "コード": row["コード"],
-                        "銘柄名": row["銘柄名"],
-                        "候補変化": "除外銘柄",
-                        "強気度": "",
-                        "総合判定": ""
-                    }
-                )
-
-
-        change_df = pd.DataFrame(
-            change_results
+        error_path = (
+            Path(config.DATA_DIR)
+            /
+            "error_log.csv"
         )
 
 
-        change_df.to_csv(
-            change_path,
+        error_df.to_csv(
+            error_path,
             index=False,
             encoding="utf-8-sig"
         )
 
 
         print(
-            f"保存しました : {change_path}"
+            f"保存しました : "
+            f"{error_path}"
         )
 
+
+        print(
+            f"取得エラー : "
+            f"{len(error_list)} 件"
+        )
+
+
+    # ========================================================
+    # 本日の初動スコア TOP20表示
+    # ========================================================
+
+    print()
+
+    print(
+        "=== 本日の初動スコア TOP20 ==="
+    )
+
+
+    if top20_df.empty:
+
+        print(
+            "対象銘柄はありません。"
+        )
 
     else:
 
+        # 表示用に必要な列だけ選択
+        display_columns = [
+            "コード",
+            "銘柄名",
+            "株価",
+            "前日比",
+            "出来高倍率",
+            "5MA上",
+            "信用倍率",
+            "売り残前週比",
+            "初動スコア",
+            "分析コメント"
+        ]
+
+
+        available_columns = [
+            column
+            for column in display_columns
+            if column in top20_df.columns
+        ]
+
+
         print(
-            "初回実行のため候補履歴を作成します。"
+            top20_df[
+                available_columns
+            ].to_string(
+                index=False
+            )
         )
-
-
-    # 今日の候補を保存
-    buy_candidate_df.to_csv(
-        previous_path,
-        index=False,
-        encoding="utf-8-sig"
-    )
 
 
     print()
 
 
+    # ========================================================
+    # 結果返却
+    # ========================================================
 
-    if watchlist_top_df.empty:
-
-        print(
-            "注目銘柄はありませんでした。"
-        )
-
-    else:
-
-        print(
-            "=== 本日の注目銘柄 TOP20 ==="
-        )
-
-        print(watchlist_top_df)
-
-
-
-    if not buy_candidate_df.empty:
-
-        print()
-
-        print(
-            "=== 買い候補 ==="
-        )
-
-        print(buy_candidate_df)
-
-# ==========================
-# エラーログ保存
-# ==========================
-
-if error_list:
-
-    error_df = pd.DataFrame(error_list)
-
-    error_path = (
-        Path(config.DATA_DIR)
-        /
-        "error_log.csv"
-    )
-
-    error_df.to_csv(
-        error_path,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    print(f"保存しました : {error_path}")
-
-    print(f"取得エラー : {len(error_list)} 件")
-
-    return screening_df
+    return result_df

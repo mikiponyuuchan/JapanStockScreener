@@ -1,15 +1,15 @@
-import pandas as pd
+﻿import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
+from openpyxl import Workbook
 from openpyxl.styles import (
     Font,
     PatternFill,
     Alignment,
 )
-from openpyxl.formatting.rule import ColorScaleRule
-from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image
+from openpyxl.utils import get_column_letter
 
 from services.chart_service import save_chart
 
@@ -23,142 +23,1288 @@ from services.tracking_service import (
 )
 
 
-def save_result(df):
+# ==========================================================
+# 共通設定
+# ==========================================================
 
-    # ==========================
-    # 保存フォルダ
-    # ==========================
+RESULT_DIR = Path("results")
+CHART_DIR = RESULT_DIR / "charts"
 
-    folder = Path("results")
-    folder.mkdir(exist_ok=True)
 
-    chart_folder = folder / "charts"
-    chart_folder.mkdir(exist_ok=True)
+# ==========================================================
+# 安全な値取得
+# ==========================================================
 
-    today = datetime.now().strftime("%Y-%m-%d")
+def get_value(row, column, default=""):
+    """
+    DataFrameの列が存在しない場合でも落ちない安全な値取得。
+    """
 
-    csv_file = folder / f"{today}_stock_result.csv"
-    excel_file = folder / f"{today}_stock_result.xlsx"
-    top20_csv = folder / f"{today}_top20.csv"
+    if row is None:
+        return default
 
-    # ==========================
-    # CSV保存
-    # ==========================
+    if column not in row.index:
+        return default
 
-    df.to_csv(
-        csv_file,
-        index=False,
-        encoding="utf-8-sig"
-    )
+    value = row[column]
 
-    # ==========================
-    # 強気度TOP20
-    # ==========================
+    if pd.isna(value):
+        return default
 
-    top20 = (
-        df.sort_values(
-            "強気度",
-            ascending=False
+    return value
+
+
+# ==========================================================
+# Excel列幅
+# ==========================================================
+
+def set_column_widths(sheet, widths):
+    """
+    Excel列幅を設定。
+    """
+
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+
+
+# ==========================================================
+# ヘッダー書式
+# ==========================================================
+
+def format_header(sheet):
+    """
+    1行目をヘッダーとして整形。
+    """
+
+    for cell in sheet[1]:
+
+        cell.font = Font(
+            bold=True
         )
-        .head(20)
-        .copy()
-    )
 
-    # ==========================
-    # 初動スコアTOP20
-    # ==========================
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
 
-    initial_move_score = pd.to_numeric(
+
+# ==========================================================
+# 本文書式
+# ==========================================================
+
+def format_body(sheet):
+    """
+    本文セルを整形。
+    """
+
+    for row in sheet.iter_rows(
+        min_row=2
+    ):
+
+        for cell in row:
+
+            cell.alignment = Alignment(
+                horizontal="left",
+                vertical="top",
+                wrap_text=True,
+            )
+
+
+# ==========================================================
+# 初動スコア色付け
+# ==========================================================
+
+def apply_score_color(
+    sheet,
+    header_name,
+):
+    """
+    初動スコアを低→高で色付けする。
+    """
+
+    headers = {}
+
+    for cell in sheet[1]:
+        headers[cell.value] = cell.column
+
+    if header_name not in headers:
+        return
+
+    score_col = headers[
+        header_name
+    ]
+
+    scores = []
+
+    for row_number in range(
+        2,
+        sheet.max_row + 1
+    ):
+
+        value = sheet.cell(
+            row_number,
+            score_col
+        ).value
+
+        try:
+
+            score = float(value)
+
+            if pd.notna(score):
+                scores.append(score)
+
+        except Exception:
+
+            continue
+
+    if not scores:
+        return
+
+    min_score = min(scores)
+    max_score = max(scores)
+
+    for row_number in range(
+        2,
+        sheet.max_row + 1
+    ):
+
+        cell = sheet.cell(
+            row_number,
+            score_col
+        )
+
+        try:
+
+            score = float(
+                cell.value
+            )
+
+        except Exception:
+
+            continue
+
+        if max_score == min_score:
+
+            ratio = 1.0
+
+        else:
+
+            ratio = (
+                score - min_score
+            ) / (
+                max_score - min_score
+            )
+
+        ratio = max(
+            0.0,
+            min(
+                1.0,
+                ratio
+            )
+        )
+
+        red = 255
+
+        green = int(
+            255 * (1 - ratio)
+        )
+
+        color = (
+            f"FF{green:02X}00"
+        )
+
+        cell.fill = PatternFill(
+            fill_type="solid",
+            start_color=color,
+            end_color=color,
+        )
+
+        cell.font = Font(
+            bold=True
+        )
+
+
+# ==========================================================
+# 初動スコアTOP20作成
+# ==========================================================
+
+def make_initial_move_top20(df):
+    """
+    初動スコアだけでTOP20を作成。
+
+    強気度はランキングに使用しない。
+    """
+
+    if df is None:
+        return pd.DataFrame()
+
+    if df.empty:
+        return df.copy()
+
+    if "初動スコア" not in df.columns:
+
+        print(
+            "初動スコア列が存在しません。"
+        )
+
+        return pd.DataFrame()
+
+    score = pd.to_numeric(
         df["初動スコア"],
         errors="coerce"
     )
 
-    # 初動シグナルがある銘柄だけを対象にする
-    initial_move_signal = (
-        df["初動シグナル"]
-        .astype(str)
-        .str.strip()
-        .ne("")
-    )
-
-    initial_move_top20 = (
+    result = (
         df.loc[
-            initial_move_signal
-            & initial_move_score.notna()
+            score.notna()
         ]
         .copy()
     )
 
-    initial_move_top20["_initial_move_score_numeric"] = (
-        initial_move_score.loc[
-            initial_move_top20.index
-        ]
+    if result.empty:
+        return result
+
+    result["_score_numeric"] = (
+        pd.to_numeric(
+            result["初動スコア"],
+            errors="coerce"
+        )
     )
 
-    initial_move_top20 = (
-        initial_move_top20
+    result = (
+        result
         .sort_values(
-            "_initial_move_score_numeric",
+            "_score_numeric",
             ascending=False,
-            kind="mergesort"
+            kind="mergesort",
         )
         .head(20)
         .copy()
     )
 
-    initial_move_top20.drop(
+    result.drop(
         columns=[
-            "_initial_move_score_numeric"
+            "_score_numeric"
         ],
-        inplace=True
+        inplace=True,
+        errors="ignore",
     )
 
-    # ==========================
-    # 初動TOP20を追跡対象として登録
-    # ==========================
+    return result
 
-    record_initial_move(
-        initial_move_top20
+
+# ==========================================================
+# ニュース理由から安全に値を取得
+# ==========================================================
+
+def get_reason_value(
+    reason,
+    keys,
+    default="",
+):
+    """
+    analyze_news_reason() の戻り値について
+    キー名の違いを吸収する。
+    """
+
+    if not isinstance(
+        reason,
+        dict
+    ):
+        return default
+
+    for key in keys:
+
+        value = reason.get(
+            key,
+            ""
+        )
+
+        if value is None:
+            continue
+
+        if isinstance(
+            value,
+            float
+        ) and pd.isna(value):
+
+            continue
+
+        text = str(value).strip()
+
+        if text:
+            return value
+
+    return default
+
+
+# ==========================================================
+# ニュースから最初のURLを取得
+# ==========================================================
+
+def get_first_news_url(
+    news_list,
+):
+    """
+    ニュース一覧から最初のURLを取得。
+    """
+
+    if not isinstance(
+        news_list,
+        list
+    ):
+        return ""
+
+    for news in news_list:
+
+        if not isinstance(
+            news,
+            dict
+        ):
+            continue
+
+        url = news.get(
+            "url",
+            news.get(
+                "link",
+                ""
+            )
+        )
+
+        if url:
+            return str(url)
+
+    return ""
+
+
+# ==========================================================
+# ニュースからタイトルを取得
+# ==========================================================
+
+def get_first_news_title(
+    news_list,
+):
+    """
+    ニュース一覧から最初のタイトル。
+    """
+
+    if not isinstance(
+        news_list,
+        list
+    ):
+        return ""
+
+    for news in news_list:
+
+        if not isinstance(
+            news,
+            dict
+        ):
+            continue
+
+        title = news.get(
+            "title",
+            ""
+        )
+
+        if title:
+            return str(title)
+
+    return ""
+
+
+# ==========================================================
+# ニュースから概要を取得
+# ==========================================================
+
+def get_first_news_summary(
+    news_list,
+):
+    """
+    ニュース一覧から最初の概要。
+    """
+
+    if not isinstance(
+        news_list,
+        list
+    ):
+        return ""
+
+    for news in news_list:
+
+        if not isinstance(
+            news,
+            dict
+        ):
+            continue
+
+        summary = news.get(
+            "summary",
+            news.get(
+                "description",
+                ""
+            )
+        )
+
+        if summary:
+            return str(summary)
+
+    return ""
+
+
+# ==========================================================
+# ニュースから日時を取得
+# ==========================================================
+
+def get_first_news_date(
+    news_list,
+):
+    """
+    ニュース一覧から最初の日時。
+    """
+
+    if not isinstance(
+        news_list,
+        list
+    ):
+        return ""
+
+    for news in news_list:
+
+        if not isinstance(
+            news,
+            dict
+        ):
+            continue
+
+        published = news.get(
+            "published",
+            news.get(
+                "date",
+                ""
+            )
+        )
+
+        if published:
+            return str(
+                published
+            )
+
+    return ""
+
+
+# ==========================================================
+# チャート作成
+# ==========================================================
+
+def create_charts(
+    initial_move_top20,
+):
+    """
+    初動スコアTOP20の日足チャートを作成。
+    """
+
+    chart_files = {}
+
+    if initial_move_top20.empty:
+        return chart_files
+
+    for _, row in initial_move_top20.iterrows():
+
+        code = str(
+            get_value(
+                row,
+                "コード",
+                ""
+            )
+        )
+
+        if not code:
+            continue
+
+        try:
+
+            chart = save_chart(
+                code
+            )
+
+        except Exception as e:
+
+            print(
+                f"チャート作成ERROR {code} : {e}"
+            )
+
+            continue
+
+        if chart:
+
+            chart_files[
+                code
+            ] = Path(
+                chart
+            )
+
+    print(
+        f"日足チャート作成完了 ({len(chart_files)}銘柄)"
     )
 
+    return chart_files
 
-    # ==========================
-    # TOP20ニュース取得
-    # ==========================
 
-    print()
-    print("TOP20ニュース取得中...")
+# ==========================================================
+# DataFrame → Excel
+# ==========================================================
 
-    news_data = get_top20_news(top20)
+def dataframe_to_sheet(
+    workbook,
+    sheet_name,
+    dataframe,
+):
+    """
+    DataFrameをExcelシートに出力。
+    """
 
-    print("TOP20ニュース取得完了")
+    if sheet_name in workbook.sheetnames:
 
-    # ==========================
-    # 初動スコアTOP20ニュース取得
-    # ==========================
+        del workbook[
+            sheet_name
+        ]
 
-    print()
-    print("初動スコアTOP20ニュース取得中...")
-
-    initial_move_news_data = get_top20_news(
-        initial_move_top20
+    sheet = workbook.create_sheet(
+        sheet_name
     )
 
-    print("初動スコアTOP20ニュース取得完了")
+    if dataframe is None:
+        dataframe = pd.DataFrame()
 
-    # ==========================
-    # TOP20急騰理由分析
-    # ==========================
+    if dataframe.empty:
+        return sheet
 
-    print()
-    print("TOP20急騰理由分析中...")
+    # ヘッダー
+    for col_index, column in enumerate(
+        dataframe.columns,
+        start=1
+    ):
+
+        sheet.cell(
+            1,
+            col_index
+        ).value = column
+
+    # データ
+    for row_index, (_, row) in enumerate(
+        dataframe.iterrows(),
+        start=2
+    ):
+
+        for col_index, column in enumerate(
+            dataframe.columns,
+            start=1
+        ):
+
+            value = row[column]
+
+            if pd.isna(value):
+                value = ""
+
+            sheet.cell(
+                row_index,
+                col_index
+            ).value = value
+
+    format_header(
+        sheet
+    )
+
+    format_body(
+        sheet
+    )
+
+    sheet.freeze_panes = "A2"
+
+    sheet.auto_filter.ref = (
+        sheet.dimensions
+    )
+
+    return sheet
+
+
+# ==========================================================
+# 初動スコアTOP20 Excel
+# ==========================================================
+
+def create_top20_sheet(
+    workbook,
+    initial_move_top20,
+    chart_files,
+    reason_data_all,
+    news_data,
+):
+    """
+    初動スコアTOP20を1枚にまとめる。
+
+    ・初動スコア
+    ・初動判定
+    ・テクニカル情報
+    ・高騰理由
+    ・ニュース
+    ・ニュースリンク
+    ・日足チャート
+
+    を同じシートに配置する。
+    """
+
+    columns = [
+        "順位",
+        "コード",
+        "銘柄名",
+        "市場",
+        "終値",
+        "前日比",
+        "5日騰落率",
+        "20日騰落率",
+        "RSI",
+        "ATR",
+        "初動スコア",
+        "初動シグナル",
+        "押し目判定",
+        "ブレイクアウト",
+        "MACD GC",
+        "30日高値更新",
+        "出来高倍率",
+        "出来高20日倍率",
+        "高騰理由",
+        "ニュースタイトル",
+        "ニュース要約",
+        "ニュース日時",
+        "ニュースリンク",
+        "日足チャート",
+    ]
+
+    rows = []
+
+    if not initial_move_top20.empty:
+
+        for rank, (_, row) in enumerate(
+            initial_move_top20.iterrows(),
+            start=1
+        ):
+
+            code = str(
+                get_value(
+                    row,
+                    "コード",
+                    ""
+                )
+            )
+
+            reason = reason_data_all.get(
+                code,
+                {}
+            )
+
+            news_list = news_data.get(
+                code,
+                []
+            )
+
+            # ------------------------------------------
+            # 高騰理由
+            # ------------------------------------------
+
+            main_reason = get_reason_value(
+                reason,
+                [
+                    "main_reason",
+                    "reason",
+                    "summary",
+                    "main_material",
+                    "material",
+                    "headline",
+                ],
+                "",
+            )
+
+            # ------------------------------------------
+            # ニュース情報
+            # ------------------------------------------
+
+            news_title = (
+                get_reason_value(
+                    reason,
+                    [
+                        "main_title",
+                        "news_title",
+                        "title",
+                    ],
+                    "",
+                )
+            )
+
+            if not news_title:
+
+                news_title = (
+                    get_first_news_title(
+                        news_list
+                    )
+                )
+
+            news_summary = (
+                get_reason_value(
+                    reason,
+                    [
+                        "main_summary",
+                        "news_summary",
+                        "summary",
+                        "description",
+                    ],
+                    "",
+                )
+            )
+
+            if not news_summary:
+
+                news_summary = (
+                    get_first_news_summary(
+                        news_list
+                    )
+                )
+
+            news_date = (
+                get_reason_value(
+                    reason,
+                    [
+                        "published",
+                        "date",
+                        "news_date",
+                    ],
+                    "",
+                )
+            )
+
+            if not news_date:
+
+                news_date = (
+                    get_first_news_date(
+                        news_list
+                    )
+                )
+
+            news_link = (
+                get_reason_value(
+                    reason,
+                    [
+                        "main_link",
+                        "news_url",
+                        "url",
+                        "link",
+                    ],
+                    "",
+                )
+            )
+
+            if not news_link:
+
+                news_link = (
+                    get_first_news_url(
+                        news_list
+                    )
+                )
+
+            # ------------------------------------------
+            # 行
+            # ------------------------------------------
+
+            rows.append(
+                {
+                    "順位": rank,
+                    "コード": code,
+                    "銘柄名": get_value(
+                        row,
+                        "銘柄名"
+                    ),
+                    "市場": get_value(
+                        row,
+                        "市場"
+                    ),
+                    "終値": get_value(
+                        row,
+                        "終値"
+                    ),
+                    "前日比": get_value(
+                        row,
+                        "前日比"
+                    ),
+                    "5日騰落率": get_value(
+                        row,
+                        "5日騰落率"
+                    ),
+                    "20日騰落率": get_value(
+                        row,
+                        "20日騰落率"
+                    ),
+                    "RSI": get_value(
+                        row,
+                        "RSI"
+                    ),
+                    "ATR": get_value(
+                        row,
+                        "ATR"
+                    ),
+                    "初動スコア": get_value(
+                        row,
+                        "初動スコア"
+                    ),
+                    "初動シグナル": get_value(
+                        row,
+                        "InitialMoveSignal"
+                    ),
+                    "押し目判定": get_value(
+                        row,
+                        "PullbackSignal"
+                    ),
+                    "ブレイクアウト": get_value(
+                        row,
+                        "BreakoutSignal"
+                    ),
+                    "MACD GC": get_value(
+                        row,
+                        "MACD_GC"
+                    ),
+                    "30日高値更新": get_value(
+                        row,
+                        "New30High"
+                    ),
+                    "出来高倍率": get_value(
+                        row,
+                        "VolumeRatio"
+                    ),
+                    "出来高20日倍率": get_value(
+                        row,
+                        "VolumeRatio20"
+                    ),
+                    "高騰理由": main_reason,
+                    "ニュースタイトル": news_title,
+                    "ニュース要約": news_summary,
+                    "ニュース日時": news_date,
+                    "ニュースリンク": news_link,
+                    "日足チャート": "",
+                }
+            )
+
+    output = pd.DataFrame(
+        rows,
+        columns=columns
+    )
+
+    sheet = dataframe_to_sheet(
+        workbook,
+        "TOP20",
+        output,
+    )
+
+    # ======================================================
+    # 列幅
+    # ======================================================
+
+    set_column_widths(
+        sheet,
+        {
+            "A": 7,
+            "B": 9,
+            "C": 18,
+            "D": 18,
+            "E": 10,
+            "F": 10,
+            "G": 11,
+            "H": 11,
+            "I": 9,
+            "J": 10,
+            "K": 11,
+            "L": 12,
+            "M": 12,
+            "N": 14,
+            "O": 10,
+            "P": 14,
+            "Q": 12,
+            "R": 14,
+            "S": 45,
+            "T": 45,
+            "U": 60,
+            "V": 20,
+            "W": 45,
+            "X": 32,
+        }
+    )
+
+    # ======================================================
+    # 固定
+    # ======================================================
+
+    sheet.freeze_panes = "A2"
+
+    # ======================================================
+    # 行高
+    # ======================================================
+
+    for row_number in range(
+        2,
+        sheet.max_row + 1
+    ):
+
+        sheet.row_dimensions[
+            row_number
+        ].height = 125
+
+    # ======================================================
+    # 初動スコア色
+    # ======================================================
+
+    apply_score_color(
+        sheet,
+        "初動スコア"
+    )
+
+    # ======================================================
+    # ニュースリンク
+    # ======================================================
+
+    headers = {}
+
+    for cell in sheet[1]:
+
+        headers[
+            cell.value
+        ] = cell.column
+
+    if (
+        "ニュースリンク" in headers
+    ):
+
+        link_col = headers[
+            "ニュースリンク"
+        ]
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
+
+            cell = sheet.cell(
+                row_number,
+                link_col
+            )
+
+            if not cell.value:
+                continue
+
+            url = str(
+                cell.value
+            ).strip()
+
+            if (
+                url.startswith(
+                    "http://"
+                )
+                or
+                url.startswith(
+                    "https://"
+                )
+            ):
+
+                cell.hyperlink = url
+                cell.style = "Hyperlink"
+
+                # 表示文字を短くする
+                cell.value = "ニュースを見る"
+
+    # ======================================================
+    # チャート
+    # ======================================================
+
+    chart_col = headers.get(
+        "日足チャート"
+    )
+
+    if (
+        chart_col is not None
+        and not initial_move_top20.empty
+    ):
+
+        for row_number, (
+            _,
+            row
+        ) in enumerate(
+            initial_move_top20.iterrows(),
+            start=2
+        ):
+
+            code = str(
+                get_value(
+                    row,
+                    "コード",
+                    ""
+                )
+            )
+
+            chart_path = chart_files.get(
+                code
+            )
+
+            if not chart_path:
+                continue
+
+            chart_path = Path(
+                chart_path
+            )
+
+            if not chart_path.exists():
+                continue
+
+            try:
+
+                image = Image(
+                    str(chart_path)
+                )
+
+                image.width = 320
+                image.height = 160
+
+                cell = (
+                    get_column_letter(
+                        chart_col
+                    )
+                    + str(row_number)
+                )
+
+                sheet.add_image(
+                    image,
+                    cell
+                )
+
+            except Exception as e:
+
+                print(
+                    f"画像貼付ERROR {code} : {e}"
+                )
+
+    return sheet
+
+
+# ==========================================================
+# ニュースシート
+# ==========================================================
+
+def create_news_sheet(
+    workbook,
+    initial_move_top20,
+    news_data,
+):
+    """
+    初動TOP20の詳細ニュース。
+
+    TOP20本体とは別の補助シート。
+    """
+
+    rows = []
+
+    if not initial_move_top20.empty:
+
+        for _, row in initial_move_top20.iterrows():
+
+            code = str(
+                get_value(
+                    row,
+                    "コード",
+                    ""
+                )
+            )
+
+            name = get_value(
+                row,
+                "銘柄名",
+                ""
+            )
+
+            score = get_value(
+                row,
+                "初動スコア",
+                ""
+            )
+
+            news_list = news_data.get(
+                code,
+                []
+            )
+
+            if not news_list:
+
+                rows.append(
+                    {
+                        "コード": code,
+                        "銘柄名": name,
+                        "初動スコア": score,
+                        "ニュースタイトル": "",
+                        "ニュース概要": "",
+                        "ニュース日時": "",
+                        "ニュースURL": "",
+                    }
+                )
+
+                continue
+
+            for news in news_list:
+
+                if not isinstance(
+                    news,
+                    dict
+                ):
+                    continue
+
+                rows.append(
+                    {
+                        "コード": code,
+                        "銘柄名": name,
+                        "初動スコア": score,
+                        "ニュースタイトル": news.get(
+                            "title",
+                            ""
+                        ),
+                        "ニュース概要": news.get(
+                            "summary",
+                            news.get(
+                                "description",
+                                ""
+                            )
+                        ),
+                        "ニュース日時": news.get(
+                            "published",
+                            news.get(
+                                "date",
+                                ""
+                            )
+                        ),
+                        "ニュースURL": news.get(
+                            "url",
+                            news.get(
+                                "link",
+                                ""
+                            )
+                        ),
+                    }
+                )
+
+    news_df = pd.DataFrame(
+        rows
+    )
+
+    sheet = dataframe_to_sheet(
+        workbook,
+        "TOP20ニュース",
+        news_df,
+    )
+
+    set_column_widths(
+        sheet,
+        {
+            "A": 9,
+            "B": 18,
+            "C": 11,
+            "D": 45,
+            "E": 60,
+            "F": 20,
+            "G": 55,
+        }
+    )
+
+    if not news_df.empty:
+
+        headers = {}
+
+        for cell in sheet[1]:
+            headers[
+                cell.value
+            ] = cell.column
+
+        if "ニュースURL" in headers:
+
+            url_col = headers[
+                "ニュースURL"
+            ]
+
+            for row_number in range(
+                2,
+                sheet.max_row + 1
+            ):
+
+                cell = sheet.cell(
+                    row_number,
+                    url_col
+                )
+
+                if not cell.value:
+                    continue
+
+                url = str(
+                    cell.value
+                )
+
+                if (
+                    url.startswith(
+                        "http://"
+                    )
+                    or
+                    url.startswith(
+                        "https://"
+                    )
+                ):
+
+                    cell.hyperlink = url
+                    cell.style = "Hyperlink"
+
+                    cell.value = (
+                        "ニュースを見る"
+                    )
+
+    for row_number in range(
+        2,
+        sheet.max_row + 1
+    ):
+
+        sheet.row_dimensions[
+            row_number
+        ].height = 60
+
+    return sheet
+
+
+# ==========================================================
+# ニュース理由分析
+# ==========================================================
+
+def analyze_top20_news(
+    initial_move_top20,
+    news_data,
+):
+    """
+    初動TOP20のニュースから
+    高騰理由を分析する。
+    """
 
     reason_data_all = {}
 
-    for _, row in top20.iterrows():
+    if initial_move_top20.empty:
+        return reason_data_all
+
+    for _, row in initial_move_top20.iterrows():
 
         code = str(
-            row["コード"]
+            get_value(
+                row,
+                "コード",
+                ""
+            )
         )
 
         news_list = news_data.get(
@@ -166,1580 +1312,383 @@ def save_result(df):
             []
         )
 
-        reason_data_all[code] = (
-            analyze_news_reason(
+        try:
+
+            reason = analyze_news_reason(
                 news_list
             )
-        )
 
-    print("TOP20急騰理由分析完了")
+        except Exception as e:
 
-    # ==========================
-    # 初動スコアTOP20急騰理由分析
-    # ==========================
+            print(
+                f"ニュース理由分析ERROR {code} : {e}"
+            )
 
-    print()
-    print(
-        "初動スコアTOP20急騰理由分析中..."
+            reason = {}
+
+        if not isinstance(
+            reason,
+            dict
+        ):
+
+            reason = {}
+
+        reason_data_all[
+            code
+        ] = reason
+
+    return reason_data_all
+
+
+# ==========================================================
+# TOP20 CSV
+# ==========================================================
+
+def save_top20_csv(
+    initial_move_top20,
+    top20_csv,
+):
+    """
+    初動スコアTOP20 CSV保存。
+    """
+
+    initial_move_top20.to_csv(
+        top20_csv,
+        index=False,
+        encoding="utf-8-sig",
     )
 
-    initial_move_reason_data_all = {}
 
-    for _, row in initial_move_top20.iterrows():
+# ==========================================================
+# メイン
+# ==========================================================
 
-        code = str(
-            row["コード"]
-        )
+def save_result(df):
 
-        news_list = (
-            initial_move_news_data.get(
-                code,
-                []
-            )
-        )
+    # ======================================================
+    # フォルダ
+    # ======================================================
 
-        initial_move_reason_data_all[code] = (
-            analyze_news_reason(
-                news_list
-            )
-        )
-
-    print(
-        "初動スコアTOP20急騰理由分析完了"
+    RESULT_DIR.mkdir(
+        parents=True,
+        exist_ok=True
     )
 
-    # ==========================
-    # 日足チャート作成
-    # ==========================
+    CHART_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-    chart_files = {}
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
 
-    print()
-    print("日足チャート作成中...")
+    csv_file = (
+        RESULT_DIR
+        / f"{today}_stock_result.csv"
+    )
 
-    # --------------------------
-    # 強気度TOP20
-    # --------------------------
+    excel_file = (
+        RESULT_DIR
+        / f"{today}_stock_result.xlsx"
+    )
 
-    for _, row in top20.iterrows():
+    top20_csv = (
+        RESULT_DIR
+        / f"{today}_top20.csv"
+    )
 
-        code = str(
-            row["コード"]
-        )
+    # ======================================================
+    # 全銘柄CSV
+    # ======================================================
 
-        if code in chart_files:
-            continue
+    df.to_csv(
+        csv_file,
+        index=False,
+        encoding="utf-8-sig",
+    )
 
-        chart = save_chart(code)
-
-        if chart:
-            chart_files[code] = chart
-
-    # --------------------------
+    # ======================================================
     # 初動スコアTOP20
-    # --------------------------
+    # ======================================================
 
-    for _, row in initial_move_top20.iterrows():
-
-        code = str(
-            row["コード"]
+    initial_move_top20 = (
+        make_initial_move_top20(
+            df
         )
-
-        if code in chart_files:
-            continue
-
-        chart = save_chart(code)
-
-        if chart:
-            chart_files[code] = chart
-
-    print(
-        f"日足チャート作成完了 ({len(chart_files)}銘柄)"
     )
 
-    # ==========================
-    # 買い候補
-    # ==========================
+    print()
+    print(
+        "=============================="
+    )
+    print(
+        " 初動スコア TOP20"
+    )
+    print(
+        "=============================="
+    )
 
-    buy_df = df[
-        df["総合判定"] == "買い候補"
-    ]
+    if initial_move_top20.empty:
 
-    # ==========================
-    # Excel保存
-    # ==========================
+        print(
+            "初動スコア対象銘柄なし"
+        )
+
+    else:
+
+        display_columns = [
+            column
+            for column in [
+                "コード",
+                "銘柄名",
+                "終値",
+                "5日騰落率",
+                "20日騰落率",
+                "RSI",
+                "ATR",
+                "初動スコア",
+            ]
+            if column in initial_move_top20.columns
+        ]
+
+        print(
+            initial_move_top20[
+                display_columns
+            ].to_string(
+                index=False
+            )
+        )
+
+    # ======================================================
+    # 初動追跡
+    # ======================================================
+
+    print()
+    print(
+        "過去の初動銘柄を追跡中..."
+    )
 
     try:
 
-        with pd.ExcelWriter(
-            excel_file,
-            engine="openpyxl"
-        ) as writer:
+        record_initial_move(
+            initial_move_top20
+        )
 
-            # ==================================================
-            # 全銘柄
-            # ==================================================
+    except Exception as e:
 
-            df.to_excel(
-                writer,
-                sheet_name="全銘柄",
-                index=False
+        print(
+            "初動追跡ERROR :",
+            e
+        )
+
+    # ======================================================
+    # ニュース取得
+    # ======================================================
+
+    print()
+    print(
+        "初動スコアTOP20ニュース取得中..."
+    )
+
+    news_data = {}
+
+    if not initial_move_top20.empty:
+
+        try:
+
+            news_data = get_top20_news(
+                initial_move_top20
             )
 
-            # ==================================================
-            # TOP20表示用
-            # ==================================================
+        except Exception as e:
 
-            top20_rows = []
-
-            for _, row in top20.iterrows():
-
-                code = str(
-                    row["コード"]
-                )
-
-                reason_data = (
-                    reason_data_all.get(
-                        code,
-                        {}
-                    )
-                )
-
-                # ----------------------
-                # 分析コメント整理
-                # ----------------------
-
-                comment = str(
-                    row["分析コメント"]
-                )
-
-                parts = comment.split(
-                    " / "
-                )
-
-                parts = [
-                    part
-                    for part in parts
-                    if not part.startswith(
-                        "Aランク"
-                    )
-                    and not part.startswith(
-                        "買い候補"
-                    )
-                    and not part.startswith(
-                        "強気度"
-                    )
-                ]
-
-                clean_comment = "\n".join(
-                    parts
-                )
-
-                # ----------------------
-                # TOP20表示データ
-                # ----------------------
-
-                top20_rows.append(
-                    {
-                        "コード":
-                            code,
-
-                        "銘柄名":
-                            row["銘柄名"],
-
-                        "株価":
-                            row["終値"],
-
-                        "強気度":
-                            row["強気度"],
-
-                        "分析コメント":
-                            clean_comment,
-
-                        "急騰理由":
-                            reason_data.get(
-                                "reason",
-                                "明確な材料を確認できず"
-                            ),
-
-                        "主な材料":
-                            reason_data.get(
-                                "main_title",
-                                ""
-                            ),
-
-                        "ニュース日時":
-                            reason_data.get(
-                                "main_published",
-                                ""
-                            ),
-                    }
-                )
-
-            top20_display = pd.DataFrame(
-                top20_rows
+            print(
+                "ニュース取得ERROR :",
+                e
             )
 
-            top20_display.to_excel(
-                writer,
-                sheet_name="TOP20",
-                index=False
+            news_data = {}
+
+    print(
+        "初動スコアTOP20ニュース取得完了"
+    )
+
+    # ======================================================
+    # ニュース理由分析
+    # ======================================================
+
+    print()
+    print(
+        "初動スコアTOP20ニュース理由分析中..."
+    )
+
+    reason_data_all = (
+        analyze_top20_news(
+            initial_move_top20,
+            news_data,
+        )
+    )
+
+    print(
+        "ニュース理由分析完了"
+    )
+
+    # ======================================================
+    # チャート
+    # ======================================================
+
+    chart_files = {}
+
+    if not initial_move_top20.empty:
+
+        print()
+        print(
+            "日足チャート作成中..."
+        )
+
+        chart_files = create_charts(
+            initial_move_top20
+        )
+
+    # ======================================================
+    # Excel
+    # ======================================================
+
+    print()
+    print(
+        "Excel作成中..."
+    )
+
+    workbook = Workbook()
+
+    default_sheet = (
+        workbook.active
+    )
+
+    workbook.remove(
+        default_sheet
+    )
+
+    # ======================================================
+    # TOP20
+    # ======================================================
+
+    create_top20_sheet(
+        workbook,
+        initial_move_top20,
+        chart_files,
+        reason_data_all,
+        news_data,
+    )
+
+    # ======================================================
+    # TOP20ニュース
+    # ======================================================
+
+    create_news_sheet(
+        workbook,
+        initial_move_top20,
+        news_data,
+    )
+
+    # ======================================================
+    # 全銘柄
+    # ======================================================
+
+    result_sheet = dataframe_to_sheet(
+        workbook,
+        "全銘柄",
+        df,
+    )
+
+    result_sheet.freeze_panes = "A2"
+
+    apply_score_color(
+        result_sheet,
+        "初動スコア",
+    )
+
+    # ======================================================
+    # 初動追跡
+    # ======================================================
+
+    tracking_file = Path(
+        "data/tracking/initial_move_tracking.csv"
+    )
+
+    if tracking_file.exists():
+
+        try:
+
+            tracking_df = pd.read_csv(
+                tracking_file,
+                encoding="utf-8-sig",
             )
 
-            # ==================================================
-            # 初動スコアTOP20
-            # ==================================================
+        except Exception:
 
-            initial_move_rows = []
+            tracking_df = pd.DataFrame()
 
-            for _, row in initial_move_top20.iterrows():
+    else:
 
-                code = str(
-                    row["コード"]
-                )
+        tracking_df = pd.DataFrame()
 
-                reason_data = (
-                    initial_move_reason_data_all.get(
-                        code,
-                        {}
-                    )
-                )
+    dataframe_to_sheet(
+        workbook,
+        "初動追跡",
+        tracking_df,
+    )
 
-                # ----------------------
-                # 分析コメント整理
-                # ----------------------
+    # ======================================================
+    # シート順
+    # ======================================================
 
-                comment = str(
-                    row["分析コメント"]
-                )
+    desired_order = [
+        "TOP20",
+        "TOP20ニュース",
+        "全銘柄",
+        "初動追跡",
+    ]
 
-                parts = comment.split(
-                    " / "
-                )
+    for sheet_name in reversed(
+        desired_order
+    ):
 
-                parts = [
-                    part
-                    for part in parts
-                    if not part.startswith(
-                        "Aランク"
-                    )
-                    and not part.startswith(
-                        "買い候補"
-                    )
-                    and not part.startswith(
-                        "強気度"
-                    )
-                ]
+        if sheet_name not in workbook.sheetnames:
+            continue
 
-                clean_comment = "\n".join(
-                    parts
-                )
+        sheet = workbook[
+            sheet_name
+        ]
 
-                # ----------------------
-                # 初動スコアTOP20表示
-                # ----------------------
+        workbook._sheets.remove(
+            sheet
+        )
 
-                initial_move_rows.append(
-                    {
-                        "コード":
-                            code,
+        workbook._sheets.insert(
+            0,
+            sheet
+        )
 
-                        "銘柄名":
-                            row["銘柄名"],
+    # ======================================================
+    # TOP20を最初に表示
+    # ======================================================
 
-                        "株価":
-                            row["終値"],
+    if "TOP20" in workbook.sheetnames:
 
-                        "強気度":
-                            row["強気度"],
+        workbook.active = workbook.index(
+            workbook["TOP20"]
+        )
 
-                        "初動スコア":
-                            row["初動スコア"],
+    # ======================================================
+    # Excel保存
+    # ======================================================
 
-                        "分析コメント":
-                            clean_comment,
+    try:
 
-                        "急騰理由":
-                            reason_data.get(
-                                "reason",
-                                "明確な材料を確認できず"
-                            ),
-
-                        "主な材料":
-                            reason_data.get(
-                                "main_title",
-                                ""
-                            ),
-
-                        "ニュース日時":
-                            reason_data.get(
-                                "main_published",
-                                ""
-                            ),
-                    }
-                )
-
-            initial_move_display = pd.DataFrame(
-                initial_move_rows
-            )
-
-            initial_move_display.to_excel(
-                writer,
-                sheet_name="初動スコアTOP20",
-                index=False
-            )
-
-            # ==================================================
-            # TOP20ニュース
-            # ==================================================
-
-            news_rows = []
-
-            for _, row in top20.iterrows():
-
-                code = str(
-                    row["コード"]
-                )
-
-                name = str(
-                    row["銘柄名"]
-                )
-
-                news_list = news_data.get(
-                    code,
-                    []
-                )
-
-                reason_data = (
-                    reason_data_all.get(
-                        code,
-                        {}
-                    )
-                )
-
-                reason = reason_data.get(
-                    "reason",
-                    "明確な材料を確認できず"
-                )
-
-                main_title = reason_data.get(
-                    "main_title",
-                    ""
-                )
-
-                main_source = reason_data.get(
-                    "main_source",
-                    ""
-                )
-
-                main_published = reason_data.get(
-                    "main_published",
-                    ""
-                )
-
-                main_link = reason_data.get(
-                    "main_link",
-                    ""
-                )
-
-                # ------------------
-                # ニュースなし
-                # ------------------
-
-                if not news_list:
-
-                    news_rows.append(
-                        {
-                            "コード":
-                                code,
-
-                            "銘柄名":
-                                name,
-
-                            "強気度":
-                                row["強気度"],
-
-                            "前日比%":
-                                row["前日比%"],
-
-                            "急騰理由":
-                                reason,
-
-                            "主な材料":
-                                "",
-
-                            "情報元":
-                                "",
-
-                            "ニュース日時":
-                                "",
-
-                            "ニュースタイトル":
-                                "ニュースなし",
-
-                            "ニュースリンク":
-                                "",
-                        }
-                    )
-
-                else:
-
-                    # ------------------
-                    # 主材料
-                    # ------------------
-
-                    news_rows.append(
-                        {
-                            "コード":
-                                code,
-
-                            "銘柄名":
-                                name,
-
-                            "強気度":
-                                row["強気度"],
-
-                            "前日比%":
-                                row["前日比%"],
-
-                            "急騰理由":
-                                reason,
-
-                            "主な材料":
-                                main_title,
-
-                            "情報元":
-                                main_source,
-
-                            "ニュース日時":
-                                main_published,
-
-                            "ニュースタイトル":
-                                main_title,
-
-                            "ニュースリンク":
-                                main_link,
-                        }
-                    )
-
-                    # ------------------
-                    # その他ニュース
-                    # ------------------
-
-                    for news in news_list:
-
-                        if (
-                            news.get(
-                                "title",
-                                ""
-                            )
-                            == main_title
-                        ):
-                            continue
-
-                        news_rows.append(
-                            {
-                                "コード":
-                                    code,
-
-                                "銘柄名":
-                                    name,
-
-                                "強気度":
-                                    row["強気度"],
-
-                                "前日比%":
-                                    row["前日比%"],
-
-                                "急騰理由":
-                                    "",
-
-                                "主な材料":
-                                    "",
-
-                                "情報元":
-                                    news.get(
-                                        "source",
-                                        ""
-                                    ),
-
-                                "ニュース日時":
-                                    news.get(
-                                        "published",
-                                        ""
-                                    ),
-
-                                "ニュースタイトル":
-                                    news.get(
-                                        "title",
-                                        ""
-                                    ),
-
-                                "ニュースリンク":
-                                    news.get(
-                                        "link",
-                                        ""
-                                    ),
-                            }
-                        )
-
-            news_df = pd.DataFrame(
-                news_rows
-            )
-
-            news_df.to_excel(
-                writer,
-                sheet_name="TOP20ニュース",
-                index=False
-            )
-
-            # ==================================================
-            # 買い候補
-            # ==================================================
-
-            buy_df.to_excel(
-                writer,
-                sheet_name="買い候補",
-                index=False
-            )
-
-            workbook = writer.book
-
-            # ==================================================
-            # 色設定
-            # ==================================================
-
-            green_fill = PatternFill(
-                fill_type="solid",
-                start_color="CCFFCC",
-                end_color="CCFFCC"
-            )
-
-            blue_font = Font(
-                color="0000FF"
-            )
-
-            red_font = Font(
-                color="FF0000"
-            )
-
-            purple_font = Font(
-                color="800080"
-            )
-
-            # ==================================================
-            # 各シート基本整形
-            # ==================================================
-
-            for sheet in workbook.worksheets:
-
-                sheet.freeze_panes = "C2"
-
-                sheet.auto_filter.ref = (
-                    sheet.dimensions
-                )
-
-                # ----------------------
-                # ヘッダー太字
-                # ----------------------
-
-                for cell in sheet[1]:
-
-                    cell.font = Font(
-                        bold=True
-                    )
-
-                # ----------------------
-                # ヘッダー取得
-                # ----------------------
-
-                headers = {}
-
-                for cell in sheet[1]:
-
-                    headers[cell.value] = (
-                        cell.column
-                    )
-
-                # ----------------------
-                # 分析コメント
-                # ----------------------
-
-                if "分析コメント" in headers:
-
-                    comment_col = headers[
-                        "分析コメント"
-                    ]
-
-                    for row in range(
-                        2,
-                        sheet.max_row + 1
-                    ):
-
-                        cell = sheet.cell(
-                            row,
-                            comment_col
-                        )
-
-                        cell.alignment = Alignment(
-                            wrap_text=True,
-                            vertical="top"
-                        )
-
-                # ----------------------
-                # 列幅調整
-                # ----------------------
-
-                for column_cells in sheet.columns:
-
-                    column = get_column_letter(
-                        column_cells[0].column
-                    )
-
-                    max_length = 0
-
-                    for cell in column_cells:
-
-                        if cell.value is None:
-                            continue
-
-                        values = str(
-                            cell.value
-                        ).split("\n")
-
-                        length = max(
-                            len(value)
-                            for value in values
-                        )
-
-                        if length > max_length:
-
-                            max_length = length
-
-                    sheet.column_dimensions[
-                        column
-                    ].width = min(
-                        max_length + 3,
-                        40
-                    )
-
-                # ----------------------
-                # 色付け
-                # ----------------------
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    # ------------------
-                    # 買い候補
-                    # ------------------
-
-                    if "総合判定" in headers:
-
-                        cell = sheet.cell(
-                            row,
-                            headers["総合判定"]
-                        )
-
-                        if cell.value == "買い候補":
-
-                            for col in range(
-                                1,
-                                sheet.max_column + 1
-                            ):
-
-                                sheet.cell(
-                                    row,
-                                    col
-                                ).fill = green_fill
-
-                    # ------------------
-                    # 監視ランク
-                    # ------------------
-
-                    if "監視ランク" in headers:
-
-                        cell = sheet.cell(
-                            row,
-                            headers["監視ランク"]
-                        )
-
-                        if str(
-                            cell.value
-                        ).startswith("A"):
-
-                            cell.font = blue_font
-
-                    # ------------------
-                    # RSI
-                    # ------------------
-
-                    if "RSI" in headers:
-
-                        cell = sheet.cell(
-                            row,
-                            headers["RSI"]
-                        )
-
-                        try:
-
-                            if float(
-                                cell.value
-                            ) >= 75:
-
-                                cell.font = red_font
-
-                        except Exception:
-
-                            pass
-
-                    # ------------------
-                    # ブレイク
-                    # ------------------
-
-                    if "ブレイク" in headers:
-
-                        cell = sheet.cell(
-                            row,
-                            headers["ブレイク"]
-                        )
-
-                        if cell.value:
-
-                            cell.font = purple_font
-
-                # ----------------------
-                # 強気度グラデーション
-                # ----------------------
-
-                if "強気度" in headers:
-
-                    col = get_column_letter(
-                        headers["強気度"]
-                    )
-
-                    sheet.conditional_formatting.add(
-                        f"{col}2:{col}{sheet.max_row}",
-                        ColorScaleRule(
-                            start_type="min",
-                            start_color="63BE7B",
-                            mid_type="percentile",
-                            mid_value=50,
-                            mid_color="FFEB84",
-                            end_type="max",
-                            end_color="F8696B",
-                        )
-                    )
-
-            # ==================================================
-            # TOP20シート
-            # ==================================================
-
-            sheet = workbook["TOP20"]
-
-            headers = {}
-
-            for cell in sheet[1]:
-
-                headers[cell.value] = (
-                    cell.column
-                )
-
-            # ----------------------
-            # 列幅
-            # ----------------------
-
-            sheet.column_dimensions["A"].width = 7    # コード
-            sheet.column_dimensions["B"].width = 16   # 銘柄名
-            sheet.column_dimensions["C"].width = 8    # 株価
-            sheet.column_dimensions["D"].width = 7    # 強気度
-            sheet.column_dimensions["E"].width = 10   # 分析コメント
-            sheet.column_dimensions["F"].width = 14   # 急騰理由
-            sheet.column_dimensions["G"].width = 18   # 主な材料
-            sheet.column_dimensions["H"].width = 11   # ニュース日時
-
-            # ----------------------
-            # 強気度グラデーション
-            # ----------------------
-
-            score_col = headers["強気度"]
-
-            scores = []
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                value = sheet.cell(
-                    row,
-                    score_col
-                ).value
-
-                if value is not None:
-
-                    try:
-
-                        scores.append(
-                            int(value)
-                        )
-
-                    except Exception:
-
-                        pass
-
-            if scores:
-
-                min_score = min(scores)
-                max_score = max(scores)
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        score_col
-                    )
-
-                    try:
-
-                        score = int(
-                            cell.value
-                        )
-
-                    except Exception:
-
-                        continue
-
-                    if max_score == min_score:
-
-                        ratio = 1
-
-                    else:
-
-                        ratio = (
-                            score - min_score
-                        ) / (
-                            max_score - min_score
-                        )
-
-                    red = 255
-
-                    green = int(
-                        255 * (1 - ratio)
-                    )
-
-                    color = (
-                        f"FF{green:02X}00"
-                    )
-
-                    cell.fill = PatternFill(
-                        fill_type="solid",
-                        start_color=color,
-                        end_color=color,
-                    )
-
-            # ----------------------
-            # TOP20文字整形
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                for col in range(
-                    1,
-                    sheet.max_column + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        col
-                    )
-
-                    cell.alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # 主な材料をリンク化
-            # ----------------------
-
-            for index, (_, row) in enumerate(
-                top20.iterrows(),
-                start=2
-            ):
-
-                code = str(
-                    row["コード"]
-                )
-
-                reason_data = (
-                    reason_data_all.get(
-                        code,
-                        {}
-                    )
-                )
-
-                link = reason_data.get(
-                    "main_link",
-                    ""
-                )
-
-                if link:
-
-                    material_cell = sheet.cell(
-                        index,
-                        headers["主な材料"]
-                    )
-
-                    material_cell.hyperlink = link
-                    material_cell.style = "Hyperlink"
-
-            # ----------------------
-            # 行の高さ
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                sheet.row_dimensions[
-                    row
-                ].height = 120
-
-            # ----------------------
-            # 日足チャート
-            # ----------------------
-
-            chart_column = (
-                sheet.max_column + 1
-            )
-
-            sheet.cell(
-                1,
-                chart_column
-            ).value = "日足チャート"
-
-            for index, (_, row) in enumerate(
-                top20.iterrows(),
-                start=2
-            ):
-
-                code = str(
-                    row["コード"]
-                )
-
-                if code in chart_files:
-
-                    img = Image(
-                        str(
-                            chart_files[code]
-                        )
-                    )
-
-                    img.width = 320
-                    img.height = 160
-
-                    cell = (
-                        get_column_letter(
-                            chart_column
-                        )
-                        + str(index)
-                    )
-
-                    sheet.add_image(
-                        img,
-                        cell
-                    )
-
-            sheet.column_dimensions[
-                get_column_letter(
-                    chart_column
-                )
-            ].width = 30
-
-            # ----------------------
-            # TOP20最終整形
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                for col in range(
-                    1,
-                    sheet.max_column + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        col
-                    )
-
-                    cell.alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # TOP20最終列幅
-            # ----------------------
-
-            sheet.column_dimensions["A"].width = 7
-            sheet.column_dimensions["B"].width = 16
-            sheet.column_dimensions["C"].width = 8
-            sheet.column_dimensions["D"].width = 7
-            sheet.column_dimensions["E"].width = 10
-            sheet.column_dimensions["F"].width = 14
-            sheet.column_dimensions["G"].width = 18
-            sheet.column_dimensions["H"].width = 11
-
-            # ----------------------
-            # 主な材料を確実に
-            # 折り返し・上詰め
-            # ----------------------
-
-            if "主な材料" in headers:
-
-                material_col = headers[
-                    "主な材料"
-                ]
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    sheet.cell(
-                        row,
-                        material_col
-                    ).alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # チャート列ヘッダー
-            # ----------------------
-
-            sheet.cell(
-                1,
-                chart_column
-            ).alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=True
-            )
-
-            # ==================================================
-            # 初動スコアTOP20シート
-            # ==================================================
-
-            sheet = workbook[
-                "初動スコアTOP20"
-            ]
-
-            headers = {}
-
-            for cell in sheet[1]:
-
-                headers[cell.value] = (
-                    cell.column
-                )
-
-            # ----------------------
-            # 列幅
-            # ----------------------
-
-            sheet.column_dimensions["A"].width = 7
-            sheet.column_dimensions["B"].width = 16
-            sheet.column_dimensions["C"].width = 8
-            sheet.column_dimensions["D"].width = 7
-            sheet.column_dimensions["E"].width = 7
-            sheet.column_dimensions["F"].width = 10
-            sheet.column_dimensions["G"].width = 14
-            sheet.column_dimensions["H"].width = 18
-            sheet.column_dimensions["I"].width = 11
-
-            # ----------------------
-            # 初動スコア
-            # グラデーション
-            # ----------------------
-
-            score_col = headers[
-                "初動スコア"
-            ]
-
-            scores = []
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                value = sheet.cell(
-                    row,
-                    score_col
-                ).value
-
-                if value is not None:
-
-                    try:
-
-                        scores.append(
-                            float(value)
-                        )
-
-                    except Exception:
-
-                        pass
-
-            if scores:
-
-                min_score = min(scores)
-                max_score = max(scores)
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        score_col
-                    )
-
-                    try:
-
-                        score = float(
-                            cell.value
-                        )
-
-                    except Exception:
-
-                        continue
-
-                    if max_score == min_score:
-
-                        ratio = 1
-
-                    else:
-
-                        ratio = (
-                            score - min_score
-                        ) / (
-                            max_score - min_score
-                        )
-
-                    red = 255
-
-                    green = int(
-                        255 * (1 - ratio)
-                    )
-
-                    color = (
-                        f"FF{green:02X}00"
-                    )
-
-                    cell.fill = PatternFill(
-                        fill_type="solid",
-                        start_color=color,
-                        end_color=color,
-                    )
-
-            # ----------------------
-            # 初動TOP20文字整形
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                for col in range(
-                    1,
-                    sheet.max_column + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        col
-                    )
-
-                    cell.alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # 主な材料・急騰理由などを上詰め
-            # ----------------------
-
-            for header_name in [
-                "分析コメント",
-                "急騰理由",
-                "主な材料",
-                "ニュース日時",
-            ]:
-
-                if header_name not in headers:
-                    continue
-
-                col = headers[header_name]
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    sheet.cell(
-                        row,
-                        col
-                    ).alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # 主な材料をリンク化
-            # ----------------------
-
-            for index, (_, row) in enumerate(
-                initial_move_top20.iterrows(),
-                start=2
-            ):
-
-                code = str(
-                    row["コード"]
-                )
-
-                reason_data = (
-                    initial_move_reason_data_all.get(
-                        code,
-                        {}
-                    )
-                )
-
-                link = reason_data.get(
-                    "main_link",
-                    ""
-                )
-
-                if link:
-
-                    material_cell = sheet.cell(
-                        index,
-                        headers["主な材料"]
-                    )
-
-                    material_cell.hyperlink = link
-                    material_cell.style = "Hyperlink"
-
-            # ----------------------
-            # 行の高さ
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                sheet.row_dimensions[
-                    row
-                ].height = 120
-
-            # ----------------------
-            # 日足チャート
-            # ----------------------
-
-            chart_column = (
-                sheet.max_column + 1
-            )
-
-            sheet.cell(
-                1,
-                chart_column
-            ).value = "日足チャート"
-
-            for index, (_, row) in enumerate(
-                initial_move_top20.iterrows(),
-                start=2
-            ):
-
-                code = str(
-                    row["コード"]
-                )
-
-                if code in chart_files:
-
-                    img = Image(
-                        str(
-                            chart_files[code]
-                        )
-                    )
-
-                    img.width = 320
-                    img.height = 160
-
-                    cell = (
-                        get_column_letter(
-                            chart_column
-                        )
-                        + str(index)
-                    )
-
-                    sheet.add_image(
-                        img,
-                        cell
-                    )
-
-            sheet.column_dimensions[
-                get_column_letter(
-                    chart_column
-                )
-            ].width = 30
-
-            # ----------------------
-            # 初動TOP20最終整形
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                for col in range(
-                    1,
-                    sheet.max_column + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        col
-                    )
-
-                    cell.alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # 初動TOP20最終列幅
-            # ----------------------
-
-            sheet.column_dimensions["A"].width = 7
-            sheet.column_dimensions["B"].width = 16
-            sheet.column_dimensions["C"].width = 8
-            sheet.column_dimensions["D"].width = 7
-            sheet.column_dimensions["E"].width = 7
-            sheet.column_dimensions["F"].width = 10
-            sheet.column_dimensions["G"].width = 14
-            sheet.column_dimensions["H"].width = 18
-            sheet.column_dimensions["I"].width = 11
-
-            # ----------------------
-            # 主な材料を確実に
-            # 折り返し・上詰め
-            # ----------------------
-
-            if "主な材料" in headers:
-
-                material_col = headers[
-                    "主な材料"
-                ]
-
-                for row in range(
-                    2,
-                    sheet.max_row + 1
-                ):
-
-                    sheet.cell(
-                        row,
-                        material_col
-                    ).alignment = Alignment(
-                        horizontal="left",
-                        vertical="top",
-                        wrap_text=True
-                    )
-
-            # ----------------------
-            # チャート列ヘッダー
-            # ----------------------
-
-            sheet.cell(
-                1,
-                chart_column
-            ).alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=True
-            )
-
-            # ==================================================
-            # TOP20を最初に開く
-            # ==================================================
-
-            workbook.active = workbook.index(
-                workbook["TOP20"]
-            )
-
-            # ==================================================
-            # TOP20ニュース整形
-            # ==================================================
-
-            sheet = workbook[
-                "TOP20ニュース"
-            ]
-
-            sheet.freeze_panes = "A2"
-
-            sheet.auto_filter.ref = (
-                sheet.dimensions
-            )
-
-            # ----------------------
-            # ヘッダー
-            # ----------------------
-
-            for cell in sheet[1]:
-
-                cell.font = Font(
-                    bold=True
-                )
-
-                cell.alignment = Alignment(
-                    wrap_text=True,
-                    vertical="center",
-                    horizontal="center"
-                )
-
-            # ----------------------
-            # 列幅
-            # ----------------------
-
-            news_widths = {
-                "A": 8,
-                "B": 16,
-                "C": 8,
-                "D": 9,
-                "E": 20,
-                "F": 25,
-                "G": 12,
-                "H": 12,
-                "I": 40,
-                "J": 10,
-            }
-
-            for column, width in news_widths.items():
-
-                sheet.column_dimensions[
-                    column
-                ].width = width
-
-            # ----------------------
-            # セル折り返し
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                for col in range(
-                    5,
-                    10
-                ):
-
-                    sheet.cell(
-                        row,
-                        col
-                    ).alignment = Alignment(
-                        wrap_text=True,
-                        vertical="top"
-                    )
-
-            # ----------------------
-            # ニュースリンク
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                cell = sheet.cell(
-                    row,
-                    10
-                )
-
-                if cell.value:
-
-                    cell.hyperlink = (
-                        cell.value
-                    )
-
-                    cell.style = "Hyperlink"
-
-            # ----------------------
-            # 行の高さ
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                sheet.row_dimensions[
-                    row
-                ].height = 60
-
-            # ----------------------
-            # TOP20ニュース全セル
-            # ----------------------
-
-            for row in range(
-                2,
-                sheet.max_row + 1
-            ):
-
-                for col in range(
-                    1,
-                    sheet.max_column + 1
-                ):
-
-                    cell = sheet.cell(
-                        row,
-                        col
-                    )
-
-                    cell.alignment = Alignment(
-                        wrap_text=True,
-                        vertical="top"
-                    )
-
-        # ==========================
-        # TOP20 CSV
-        # ==========================
-
-        top20.to_csv(
-            top20_csv,
-            index=False,
-            encoding="utf-8-sig"
+        workbook.save(
+            excel_file
         )
 
     except PermissionError:
@@ -1749,13 +1698,13 @@ def save_result(df):
             "=============================================="
         )
         print(
-            f"保存できません：{excel_file.name}"
+            f"Excelを保存できません: {excel_file}"
         )
         print(
-            "Excelで開いている可能性があります。"
+            "Excelファイルが開いている可能性があります。"
         )
         print(
-            "閉じてから再実行してください。"
+            "Excelを閉じてから再実行してください。"
         )
         print(
             "=============================================="
@@ -1763,9 +1712,18 @@ def save_result(df):
 
         return
 
-    # ==========================
-    # 保存完了表示
-    # ==========================
+    # ======================================================
+    # TOP20 CSV
+    # ======================================================
+
+    save_top20_csv(
+        initial_move_top20,
+        top20_csv,
+    )
+
+    # ======================================================
+    # 完了表示
+    # ======================================================
 
     print()
     print(

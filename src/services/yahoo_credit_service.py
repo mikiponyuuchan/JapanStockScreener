@@ -932,8 +932,10 @@ def load_latest_credit_data(
 ) -> dict[str, pd.Series]:
     """
     data/yahoo_credit/ に保存されているYahoo信用データから
-    各銘柄の最新信用データを読み込み、
-    {コード: 最新行} の辞書を返す。
+    各銘柄の最新信用データを読み込む。
+
+    最新週と前週の売残を比較し、
+    「売残前週比」を追加して返す。
     """
 
     credit_map = {}
@@ -975,7 +977,10 @@ def load_latest_credit_data(
         if df.empty:
             continue
 
-        # 日付の新しい順に並べる
+        # --------------------------
+        # 日付をdatetimeへ変換
+        # --------------------------
+
         if "日付" in df.columns:
 
             df["日付"] = pd.to_datetime(
@@ -993,9 +998,53 @@ def load_latest_credit_data(
             df = df.sort_values(
                 "日付",
                 ascending=False,
-            )
+            ).reset_index(drop=True)
 
-        latest = df.iloc[0]
+        # --------------------------
+        # 最新データ
+        # --------------------------
+
+        latest = df.iloc[0].copy()
+
+        # --------------------------
+        # 売残前週比
+        # --------------------------
+
+        latest["売残前週比"] = pd.NA
+
+        if len(df) >= 2:
+
+            try:
+
+                current_sell = float(
+                    latest["売残"]
+                )
+
+                previous_sell = float(
+                    df.iloc[1]["売残"]
+                )
+
+                # 前週の売残が0の場合は
+                # 比率を計算しない
+                if previous_sell != 0:
+
+                    latest["売残前週比"] = round(
+                        (
+                            current_sell
+                            / previous_sell
+                            - 1
+                        )
+                        * 100,
+                        2,
+                    )
+
+            except (
+                TypeError,
+                ValueError,
+                ZeroDivisionError,
+            ):
+
+                latest["売残前週比"] = pd.NA
 
         credit_map[code] = latest
 
