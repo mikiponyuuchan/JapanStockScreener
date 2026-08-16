@@ -34,6 +34,9 @@ class YahooCreditNotFound(Exception):
     """Yahooに銘柄ページが存在しない場合"""
     pass
 
+class YahooCreditTemporaryError(Exception):
+    """Yahooの一時エラーが連続した場合"""
+    pass
 
 def get_credit_history(
     code: str,
@@ -386,7 +389,9 @@ def download_credit_batch(
     ・ブラックリスト登録銘柄はYahooへアクセスしない
     ・YahooCreditNotFound（404）はブラックリストへ追加
     ・500 / timeout / 通信エラー等はブラックリストへ追加しない
-    ・500等の一時エラーが連続した場合はバッチを中断する
+    ・一時エラーが3回連続した場合は30分待機する
+    ・30分待機後、自動的に同じ銘柄から再開する
+    ・Yahooが復旧するまで30分待機→再開を繰り返す
     """
 
     results = {}
@@ -429,26 +434,35 @@ def download_credit_batch(
             )
 
     # ==========================
-    # 500等の連続エラー管理
+    # 一時エラー管理
     # ==========================
 
     consecutive_errors = 0
 
-    # 500等がこの回数連続したら中断
+    # この回数連続したら30分待機
     MAX_CONSECUTIVE_ERRORS = 3
+
+    # Yahoo負荷対策
+    SHORT_WAIT_SECONDS = 30
+    LONG_WAIT_SECONDS = 30 * 60
+
+    # ==========================
+    # 取得位置
+    # ==========================
+
+    index = 0
 
     # ==========================
     # 取得ループ
     # ==========================
 
-    for index, code in enumerate(
-        codes,
-        start=1,
-    ):
+    while index < total:
 
-        code = str(code).strip()
+        code = str(codes[index]).strip()
 
         if not code:
+
+            index += 1
             continue
 
         # ==========================
@@ -458,10 +472,11 @@ def download_credit_batch(
         if code in failed_codes:
 
             print(
-                f"[{index}/{total}] "
+                f"[{index + 1}/{total}] "
                 f"{code} : ブラックリスト除外"
             )
 
+            index += 1
             continue
 
         # ==========================
@@ -490,19 +505,20 @@ def download_credit_batch(
                     results[code] = df
 
                     print(
-                        f"[{index}/{total}] "
+                        f"[{index + 1}/{total}] "
                         f"{code} : CSV利用"
                     )
 
-                    # 成功したので連続エラーをリセット
+                    # 成功したのでリセット
                     consecutive_errors = 0
 
+                    index += 1
                     continue
 
             except Exception as e:
 
                 print(
-                    f"[{index}/{total}] "
+                    f"[{index + 1}/{total}] "
                     f"{code} : CSV読込失敗 "
                     f"{e}"
                 )
@@ -512,24 +528,24 @@ def download_credit_batch(
         # ==========================
 
         if (
-            index > 1
-            and (index - 1) % 20 == 0
+            index > 0
+            and index % 20 == 0
         ):
 
             print()
             print(
                 "Yahoo負荷対策: "
-                "15秒待機..."
+                "20秒待機..."
             )
 
-            time.sleep(15)
+            time.sleep(20)
 
         # ==========================
         # Yahoo取得
         # ==========================
 
         print(
-            f"[{index}/{total}] "
+            f"[{index + 1}/{total}] "
             f"{code} : Yahoo取得開始"
         )
 
@@ -540,7 +556,7 @@ def download_credit_batch(
             )
 
             # ==========================
-            # 取得失敗
+            # None / empty
             # ==========================
 
             if (
@@ -549,14 +565,9 @@ def download_credit_batch(
             ):
 
                 print(
-                    f"[{index}/{total}] "
+                    f"[{index + 1}/{total}] "
                     f"{code} : 取得失敗"
                 )
-
-                # --------------------------------
-                # None / empty は
-                # 「対象外」と断定しない
-                # --------------------------------
 
                 consecutive_errors += 1
 
@@ -567,6 +578,10 @@ def download_credit_batch(
                     f"{MAX_CONSECUTIVE_ERRORS})"
                 )
 
+                # --------------------------
+                # 3回連続 → 30分待機
+                # --------------------------
+
                 if (
                     consecutive_errors
                     >= MAX_CONSECUTIVE_ERRORS
@@ -574,20 +589,92 @@ def download_credit_batch(
 
                     print()
                     print(
+                        "===================================="
+                    )
+                    print(
                         "Yahoo一時エラーが"
-                        "連続したため、"
-                        "今回のバッチを中断します。"
+                        f"{MAX_CONSECUTIVE_ERRORS}回連続しました。"
+                    )
+                    print(
+                        "Yahoo負荷対策のため"
+                    )
+                    print(
+                        "15分待機してから自動再開します。"
+                    )
+                    print(
+                        "===================================="
+                    )
+
+                    try:
+
+                        for remaining in range(
+                            LONG_WAIT_SECONDS,
+                            0,
+                            -60,
+                        ):
+
+                            minutes = remaining // 60
+
+                            print(
+                                f"再開まで約 {minutes} 分..."
+                            )
+
+                            time.sleep(
+                                min(60, remaining)
+                            )
+
+                    except KeyboardInterrupt:
+
+                        print()
+                        print(
+                            "ユーザー操作により"
+                            "取得を中断しました。"
+                        )
+
+                        break
+
+                    print()
+                    print(
+                        "30分待機が完了しました。"
+                    )
+                    print(
+                        f"{code} から自動再開します。"
+                    )
+                    print()
+
+                    # 重要：
+                    # indexを進めない
+                    # → 同じ銘柄を再取得する
+                    consecutive_errors = 0
+
+                    continue
+
+                # --------------------------
+                # 3回未満なら短時間待機
+                # --------------------------
+
+                print(
+                    "Yahoo負荷対策: "
+                    f"{SHORT_WAIT_SECONDS}秒待機..."
+                )
+
+                try:
+
+                    time.sleep(
+                        SHORT_WAIT_SECONDS
+                    )
+
+                except KeyboardInterrupt:
+
+                    print()
+                    print(
+                        "ユーザー操作により"
+                        "取得を中断しました。"
                     )
 
                     break
 
-                print(
-                    "Yahoo負荷対策: "
-                    "30秒待機..."
-                )
-
-                time.sleep(30)
-
+                # 同じ銘柄を再取得
                 continue
 
             # ==========================
@@ -602,13 +689,16 @@ def download_credit_batch(
             results[code] = df
 
             print(
-                f"[{index}/{total}] "
+                f"[{index + 1}/{total}] "
                 f"{code} : 保存完了 "
                 f"({len(df)} rows)"
             )
 
             # 成功したのでリセット
             consecutive_errors = 0
+
+            # 次の銘柄へ
+            index += 1
 
         # ==========================
         # 404
@@ -617,14 +707,11 @@ def download_credit_batch(
         except YahooCreditNotFound:
 
             print(
-                f"[{index}/{total}] "
+                f"[{index + 1}/{total}] "
                 f"{code} : Yahoo対象外"
             )
 
-            # --------------------------------
             # 404だけブラックリストへ追加
-            # --------------------------------
-
             failed_codes.add(
                 code
             )
@@ -659,10 +746,11 @@ def download_credit_batch(
             # 連続エラーには含めない
             consecutive_errors = 0
 
-            continue
+            # 次の銘柄へ
+            index += 1
 
         # ==========================
-        # その他のエラー
+        # Ctrl+C
         # ==========================
 
         except KeyboardInterrupt:
@@ -675,19 +763,19 @@ def download_credit_batch(
 
             break
 
+        # ==========================
+        # その他のエラー
+        # ==========================
+
         except Exception as e:
 
             print(
-                f"[{index}/{total}] "
+                f"[{index + 1}/{total}] "
                 f"{code} : ERROR "
                 f"{type(e).__name__}: {e}"
             )
 
-            # --------------------------------
-            # 500 / timeout / 通信エラー等
-            # --------------------------------
             # ブラックリストには入れない
-
             consecutive_errors += 1
 
             print(
@@ -697,6 +785,10 @@ def download_credit_batch(
                 f"{MAX_CONSECUTIVE_ERRORS})"
             )
 
+            # --------------------------
+            # 3回連続 → 30分待機
+            # --------------------------
+
             if (
                 consecutive_errors
                 >= MAX_CONSECUTIVE_ERRORS
@@ -704,20 +796,88 @@ def download_credit_batch(
 
                 print()
                 print(
+                    "===================================="
+                )
+                print(
                     "Yahoo一時エラーが"
-                    "連続したため、"
-                    "今回のバッチを中断します。"
+                    f"{MAX_CONSECUTIVE_ERRORS}回連続しました。"
+                )
+                print(
+                    "Yahoo負荷対策のため"
+                )
+                print(
+                    "15分待機してから自動再開します。"
+                )
+                print(
+                    "===================================="
                 )
 
-                break
+                try:
+
+                    for remaining in range(
+                        LONG_WAIT_SECONDS,
+                        0,
+                        -60,
+                    ):
+
+                        minutes = remaining // 60
+
+                        print(
+                            f"再開まで約 {minutes} 分..."
+                        )
+
+                        time.sleep(
+                            min(60, remaining)
+                        )
+
+                except KeyboardInterrupt:
+
+                    print()
+                    print(
+                        "ユーザー操作により"
+                        "取得を中断しました。"
+                    )
+
+                    break
+
+                print()
+                print(
+                    "30分待機が完了しました。"
+                )
+                print(
+                    f"{code} から自動再開します。"
+                )
+                print()
+
+                # 同じ銘柄から再開
+                consecutive_errors = 0
+
+                continue
+
+            # --------------------------
+            # 3回未満なら60秒待機
+            # --------------------------
 
             print(
                 "Yahoo負荷対策: "
                 "60秒待機..."
             )
 
-            time.sleep(60)
+            try:
 
+                time.sleep(60)
+
+            except KeyboardInterrupt:
+
+                print()
+                print(
+                    "ユーザー操作により"
+                    "取得を中断しました。"
+                )
+
+                break
+
+            # 同じ銘柄を再取得
             continue
 
     # ==========================
@@ -766,7 +926,6 @@ def download_credit_batch(
     )
 
     return results
-
 
 def load_latest_credit_data(
     codes=None,
