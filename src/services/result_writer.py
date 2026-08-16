@@ -518,7 +518,7 @@ def create_charts(
                 "コード",
                 ""
             )
-        )
+        ).replace(".0", "")
 
         if not code:
             continue
@@ -634,6 +634,10 @@ def dataframe_to_sheet(
 # 初動スコアTOP20 Excel
 # ==========================================================
 
+# ==========================================================
+# 初動スコアTOP20 Excel
+# ==========================================================
+
 def create_top20_sheet(
     workbook,
     initial_move_top20,
@@ -642,54 +646,47 @@ def create_top20_sheet(
     news_data,
 ):
     """
-    初動スコアTOP20を1枚にまとめる。
+    初動スコアTOP20をコンパクトに1枚へまとめる。
 
-    ・初動スコア
-    ・初動判定
-    ・テクニカル情報
-    ・高騰理由
-    ・ニュース
-    ・ニュースリンク
-    ・日足チャート
-
-    を同じシートに配置する。
+    表示項目：
+        コード
+        銘柄名
+        終値
+        初動スコア
+        高騰理由
+        ニュース
+        ニュース日時
+        日足チャート
     """
 
+    # ======================================================
+    # TOP20の列
+    # ======================================================
+
     columns = [
-        "順位",
         "コード",
         "銘柄名",
-        "市場",
         "終値",
-        "前日比",
-        "5日騰落率",
-        "20日騰落率",
-        "RSI",
-        "ATR",
         "初動スコア",
-        "初動シグナル",
-        "押し目判定",
-        "ブレイクアウト",
-        "MACD GC",
-        "30日高値更新",
-        "出来高倍率",
-        "出来高20日倍率",
         "高騰理由",
-        "ニュースタイトル",
-        "ニュース要約",
+        "ニュース",
         "ニュース日時",
-        "ニュースリンク",
         "日足チャート",
     ]
 
     rows = []
 
+    # ======================================================
+    # データ作成
+    # ======================================================
+
     if not initial_move_top20.empty:
 
-        for rank, (_, row) in enumerate(
-            initial_move_top20.iterrows(),
-            start=1
-        ):
+        for _, row in initial_move_top20.iterrows():
+
+            # ------------------------------------------------
+            # コード
+            # ------------------------------------------------
 
             code = str(
                 get_value(
@@ -697,7 +694,14 @@ def create_top20_sheet(
                     "コード",
                     ""
                 )
+            ).replace(
+                ".0",
+                ""
             )
+
+            # ------------------------------------------------
+            # ニュース情報
+            # ------------------------------------------------
 
             reason = reason_data_all.get(
                 code,
@@ -709,9 +713,9 @@ def create_top20_sheet(
                 []
             )
 
-            # ------------------------------------------
+            # ------------------------------------------------
             # 高騰理由
-            # ------------------------------------------
+            # ------------------------------------------------
 
             main_reason = get_reason_value(
                 reason,
@@ -726,177 +730,243 @@ def create_top20_sheet(
                 "",
             )
 
-            # ------------------------------------------
-            # ニュース情報
-            # ------------------------------------------
+            # ------------------------------------------------
+            # ニュースタイトル
+            # ------------------------------------------------
 
-            news_title = (
-                get_reason_value(
-                    reason,
-                    [
-                        "main_title",
-                        "news_title",
-                        "title",
-                    ],
-                    "",
-                )
+            news_title = get_reason_value(
+                reason,
+                [
+                    "main_title",
+                    "news_title",
+                    "title",
+                ],
+                "",
             )
 
             if not news_title:
 
-                news_title = (
-                    get_first_news_title(
-                        news_list
-                    )
+                news_title = get_first_news_title(
+                    news_list
                 )
 
-            news_summary = (
-                get_reason_value(
-                    reason,
-                    [
-                        "main_summary",
-                        "news_summary",
-                        "summary",
-                        "description",
-                    ],
-                    "",
-                )
-            )
+            # ------------------------------------------------
+            # ニュース日時
+            # ------------------------------------------------
 
-            if not news_summary:
-
-                news_summary = (
-                    get_first_news_summary(
-                        news_list
-                    )
-                )
-
-            news_date = (
-                get_reason_value(
-                    reason,
-                    [
-                        "published",
-                        "date",
-                        "news_date",
-                    ],
-                    "",
-                )
+            news_date = get_reason_value(
+                reason,
+                [
+                    "published",
+                    "date",
+                    "news_date",
+                ],
+                "",
             )
 
             if not news_date:
 
-                news_date = (
-                    get_first_news_date(
-                        news_list
-                    )
+                news_date = get_first_news_date(
+                    news_list
                 )
 
-            news_link = (
-                get_reason_value(
-                    reason,
-                    [
-                        "main_link",
-                        "news_url",
-                        "url",
-                        "link",
-                    ],
-                    "",
-                )
+            # ------------------------------------------------
+            # ニュースURL
+            # ------------------------------------------------
+
+            news_link = get_reason_value(
+                reason,
+                [
+                    "main_link",
+                    "news_url",
+                    "url",
+                    "link",
+                ],
+                "",
             )
 
             if not news_link:
 
-                news_link = (
-                    get_first_news_url(
-                        news_list
-                    )
+                news_link = get_first_news_url(
+                    news_list
                 )
 
-            # ------------------------------------------
-            # 行
-            # ------------------------------------------
+            # ------------------------------------------------
+            # ニュース表示
+            #
+            # URLがあれば「ニュースを見る」と表示。
+            # URLが無ければニュースタイトルを表示。
+            # ------------------------------------------------
+
+            if news_link:
+
+                news_display = (
+                    news_title
+                    if news_title
+                    else "ニュースを見る"
+                )
+
+            else:
+
+                news_display = news_title
+
+            # ------------------------------------------------
+            # 高騰理由のフォールバック
+            #
+            # ニュース理由分析が空だった場合でも、
+            # 初動スコアの主要な根拠を表示する。
+            # ------------------------------------------------
+
+            if not main_reason:
+
+                reasons = []
+
+                if get_value(
+                    row,
+                    "InitialMoveSignal",
+                    False
+                ) is True:
+
+                    reasons.append(
+                        "初動シグナル"
+                    )
+
+                if get_value(
+                    row,
+                    "BreakoutSignal",
+                    False
+                ) is True:
+
+                    reasons.append(
+                        "ブレイクアウト"
+                    )
+
+                if get_value(
+                    row,
+                    "New30High",
+                    False
+                ) is True:
+
+                    reasons.append(
+                        "30日高値更新"
+                    )
+
+                if get_value(
+                    row,
+                    "MACD_GC",
+                    False
+                ) is True:
+
+                    reasons.append(
+                        "MACD GC"
+                    )
+
+                volume_ratio = get_value(
+                    row,
+                    "VolumeRatio",
+                    ""
+                )
+
+                try:
+
+                    volume_ratio_float = float(
+                        volume_ratio
+                    )
+
+                    if volume_ratio_float >= 1.5:
+
+                        reasons.append(
+                            f"出来高{volume_ratio_float:.1f}倍"
+                        )
+
+                except Exception:
+
+                    pass
+
+                price_change = get_value(
+                    row,
+                    "前日比",
+                    ""
+                )
+
+                try:
+
+                    price_change_float = float(
+                        price_change
+                    )
+
+                    if price_change_float > 0:
+
+                        reasons.append(
+                            f"当日+{price_change_float:.1f}%"
+                        )
+
+                except Exception:
+
+                    pass
+
+                if reasons:
+
+                    main_reason = " / ".join(
+                        reasons
+                    )
+
+                else:
+
+                    main_reason = (
+                        "初動スコアによる抽出"
+                    )
+
+            # ------------------------------------------------
+            # 1行追加
+            # ------------------------------------------------
 
             rows.append(
                 {
-                    "順位": rank,
                     "コード": code,
+
                     "銘柄名": get_value(
                         row,
-                        "銘柄名"
+                        "銘柄名",
+                        ""
                     ),
-                    "市場": get_value(
-                        row,
-                        "市場"
-                    ),
+
                     "終値": get_value(
                         row,
-                        "終値"
+                        "終値",
+                        ""
                     ),
-                    "前日比": get_value(
-                        row,
-                        "前日比"
-                    ),
-                    "5日騰落率": get_value(
-                        row,
-                        "5日騰落率"
-                    ),
-                    "20日騰落率": get_value(
-                        row,
-                        "20日騰落率"
-                    ),
-                    "RSI": get_value(
-                        row,
-                        "RSI"
-                    ),
-                    "ATR": get_value(
-                        row,
-                        "ATR"
-                    ),
+
                     "初動スコア": get_value(
                         row,
-                        "初動スコア"
+                        "初動スコア",
+                        ""
                     ),
-                    "初動シグナル": get_value(
-                        row,
-                        "InitialMoveSignal"
-                    ),
-                    "押し目判定": get_value(
-                        row,
-                        "PullbackSignal"
-                    ),
-                    "ブレイクアウト": get_value(
-                        row,
-                        "BreakoutSignal"
-                    ),
-                    "MACD GC": get_value(
-                        row,
-                        "MACD_GC"
-                    ),
-                    "30日高値更新": get_value(
-                        row,
-                        "New30High"
-                    ),
-                    "出来高倍率": get_value(
-                        row,
-                        "VolumeRatio"
-                    ),
-                    "出来高20日倍率": get_value(
-                        row,
-                        "VolumeRatio20"
-                    ),
+
                     "高騰理由": main_reason,
-                    "ニュースタイトル": news_title,
-                    "ニュース要約": news_summary,
+
+                    "ニュース": news_display,
+
                     "ニュース日時": news_date,
-                    "ニュースリンク": news_link,
+
+                    # Excel上では空欄。
+                    # 下で画像を直接貼り付ける。
                     "日足チャート": "",
                 }
             )
+
+    # ======================================================
+    # DataFrame作成
+    # ======================================================
 
     output = pd.DataFrame(
         rows,
         columns=columns
     )
+
+    # ======================================================
+    # シート作成
+    # ======================================================
 
     sheet = dataframe_to_sheet(
         workbook,
@@ -911,30 +981,14 @@ def create_top20_sheet(
     set_column_widths(
         sheet,
         {
-            "A": 7,
-            "B": 9,
-            "C": 18,
-            "D": 18,
-            "E": 10,
-            "F": 10,
-            "G": 11,
-            "H": 11,
-            "I": 9,
-            "J": 10,
-            "K": 11,
-            "L": 12,
-            "M": 12,
-            "N": 14,
-            "O": 10,
-            "P": 14,
-            "Q": 12,
-            "R": 14,
-            "S": 45,
-            "T": 45,
-            "U": 60,
-            "V": 20,
-            "W": 45,
-            "X": 32,
+            "A": 7,    # コード
+            "B": 15,   # 銘柄名
+            "C": 9,    # 終値
+            "D": 7,    # 初動スコア
+            "E": 22,   # 高騰理由
+            "F": 22,   # ニュース
+            "G": 11,   # ニュース日時
+            "H": 25,   # 日足チャート
         }
     )
 
@@ -943,6 +997,16 @@ def create_top20_sheet(
     # ======================================================
 
     sheet.freeze_panes = "A2"
+
+    # ======================================================
+    # オートフィルター
+    # ======================================================
+
+    if sheet.max_row >= 1:
+
+        sheet.auto_filter.ref = (
+            sheet.dimensions
+        )
 
     # ======================================================
     # 行高
@@ -955,10 +1019,10 @@ def create_top20_sheet(
 
         sheet.row_dimensions[
             row_number
-        ].height = 125
+        ].height = 105
 
     # ======================================================
-    # 初動スコア色
+    # 初動スコア色付け
     # ======================================================
 
     apply_score_color(
@@ -967,7 +1031,7 @@ def create_top20_sheet(
     )
 
     # ======================================================
-    # ニュースリンク
+    # ヘッダー位置取得
     # ======================================================
 
     headers = {}
@@ -978,49 +1042,146 @@ def create_top20_sheet(
             cell.value
         ] = cell.column
 
+    # ======================================================
+    # ニュースリンク
+    #
+    # 「ニュース」セルそのものをクリック可能にする。
+    # ======================================================
+
+    news_col = headers.get(
+        "ニュース"
+    )
+
     if (
-        "ニュースリンク" in headers
+        news_col is not None
+        and not initial_move_top20.empty
     ):
 
-        link_col = headers[
-            "ニュースリンク"
-        ]
-
-        for row_number in range(
-            2,
-            sheet.max_row + 1
+        for row_number, (
+            _,
+            row
+        ) in enumerate(
+            initial_move_top20.iterrows(),
+            start=2
         ):
 
-            cell = sheet.cell(
-                row_number,
-                link_col
+            code = str(
+                get_value(
+                    row,
+                    "コード",
+                    ""
+                )
+            ).replace(
+                ".0",
+                ""
             )
 
-            if not cell.value:
+            reason = reason_data_all.get(
+                code,
+                {}
+            )
+
+            news_list = news_data.get(
+                code,
+                []
+            )
+
+            # ----------------------------------------------
+            # URL
+            # ----------------------------------------------
+
+            news_link = get_reason_value(
+                reason,
+                [
+                    "main_link",
+                    "news_url",
+                    "url",
+                    "link",
+                ],
+                "",
+            )
+
+            if not news_link:
+
+                news_link = get_first_news_url(
+                    news_list
+                )
+
+            if not news_link:
+
                 continue
 
-            url = str(
-                cell.value
+            news_link = str(
+                news_link
             ).strip()
 
-            if (
-                url.startswith(
+            if not (
+                news_link.startswith(
                     "http://"
                 )
                 or
-                url.startswith(
+                news_link.startswith(
                     "https://"
                 )
             ):
 
-                cell.hyperlink = url
-                cell.style = "Hyperlink"
+                continue
 
-                # 表示文字を短くする
+            # ----------------------------------------------
+            # ニュースタイトル
+            # ----------------------------------------------
+
+            news_title = get_reason_value(
+                reason,
+                [
+                    "main_title",
+                    "news_title",
+                    "title",
+                ],
+                "",
+            )
+
+            if not news_title:
+
+                news_title = get_first_news_title(
+                    news_list
+                )
+
+            cell = sheet.cell(
+                row_number,
+                news_col
+            )
+
+            # タイトルがあればタイトル表示
+            # なければ「ニュースを見る」
+            if news_title:
+
+                cell.value = news_title
+
+            else:
+
                 cell.value = "ニュースを見る"
 
+            cell.hyperlink = news_link
+            cell.style = "Hyperlink"
+
+            cell.alignment = Alignment(
+                horizontal="left",
+                vertical="top",
+                wrap_text=True,
+            )
+
     # ======================================================
-    # チャート
+    # 日足チャート
+    #
+    # chart_files:
+    #     {
+    #         "3994": Path(...),
+    #         "7936": Path(...),
+    #         ...
+    #     }
+    #
+    # TOP20のコードと照合して画像を直接貼り付ける。
     # ======================================================
 
     chart_col = headers.get(
@@ -1046,6 +1207,9 @@ def create_top20_sheet(
                     "コード",
                     ""
                 )
+            ).replace(
+                ".0",
+                ""
             )
 
             chart_path = chart_files.get(
@@ -1053,6 +1217,7 @@ def create_top20_sheet(
             )
 
             if not chart_path:
+
                 continue
 
             chart_path = Path(
@@ -1060,6 +1225,7 @@ def create_top20_sheet(
             )
 
             if not chart_path.exists():
+
                 continue
 
             try:
@@ -1068,8 +1234,9 @@ def create_top20_sheet(
                     str(chart_path)
                 )
 
-                image.width = 320
-                image.height = 160
+                # コンパクトTOP20用
+                image.width = 300
+                image.height = 150
 
                 cell = (
                     get_column_letter(
@@ -1089,8 +1256,32 @@ def create_top20_sheet(
                     f"画像貼付ERROR {code} : {e}"
                 )
 
-    return sheet
+    # ======================================================
+    # チャート列の中央配置
+    # ======================================================
 
+    if chart_col is not None:
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
+
+            cell = sheet.cell(
+                row_number,
+                chart_col
+            )
+
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+            )
+
+    # ======================================================
+    # 完了
+    # ======================================================
+
+    return sheet
 
 # ==========================================================
 # ニュースシート
@@ -1119,8 +1310,7 @@ def create_news_sheet(
                     "コード",
                     ""
                 )
-            )
-
+            ).replace(".0", "")
             name = get_value(
                 row,
                 "銘柄名",
@@ -1208,13 +1398,14 @@ def create_news_sheet(
     set_column_widths(
         sheet,
         {
-            "A": 9,
-            "B": 18,
-            "C": 11,
-            "D": 45,
-            "E": 60,
-            "F": 20,
-            "G": 55,
+            "A": 7,    # コード
+            "B": 15,   # 銘柄名
+            "C": 9,    # 終値
+            "D": 7,    # 初動スコア
+            "E": 22,   # 高騰理由
+            "F": 22,   # ニュース
+            "G": 11,   # ニュース日時
+            "H": 25,   # 日足チャート
         }
     )
 
@@ -1274,7 +1465,7 @@ def create_news_sheet(
 
         sheet.row_dimensions[
             row_number
-        ].height = 60
+        ].height = 105
 
     return sheet
 
@@ -1305,7 +1496,7 @@ def analyze_top20_news(
                 "コード",
                 ""
             )
-        )
+        ).replace(".0", "")
 
         news_list = news_data.get(
             code,
@@ -1514,6 +1705,10 @@ def save_result(df):
         "初動スコアTOP20ニュース取得完了"
     )
 
+    print(
+        f"news_data件数 : {len(news_data)}"
+    )
+
     # ======================================================
     # ニュース理由分析
     # ======================================================
@@ -1534,6 +1729,10 @@ def save_result(df):
         "ニュース理由分析完了"
     )
 
+    print(
+        f"reason_data_all件数 : {len(reason_data_all)}"
+    )
+
     # ======================================================
     # チャート
     # ======================================================
@@ -1549,6 +1748,10 @@ def save_result(df):
 
         chart_files = create_charts(
             initial_move_top20
+        )
+
+        print(
+            f"chart_files件数 : {len(chart_files)}"
         )
 
     # ======================================================
@@ -1569,6 +1772,22 @@ def save_result(df):
     workbook.remove(
         default_sheet
     )
+
+    print()
+    print("===== chart_files DEBUG =====")
+
+    for k in list(chart_files.keys())[:5]:
+        print("chart key :", repr(k))
+
+    print()
+
+    for _, row in initial_move_top20.head().iterrows():
+        print(
+            "top20 code:",
+            repr(str(get_value(row, "コード", "")))
+        )
+
+    print("=============================")
 
     # ======================================================
     # TOP20
