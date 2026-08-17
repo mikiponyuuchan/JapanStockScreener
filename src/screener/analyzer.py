@@ -4,30 +4,35 @@ import pandas as pd
 from services.yahoo_service import get_history
 from indicators.technical import add_indicators
 
-
-# ============================================================
-# 初動スコア
-#
-# 目的：
-# 「すでに大きく上昇した銘柄」ではなく
-# 「上昇が始まりそうな銘柄」を早い段階で拾う
-#
-# 最大15点
-#
-# 出来高        最大4点
-# 当日上昇      最大3点
-# MA5上        最大2点
-# 信用倍率      最大3点
-# 売り残増加    最大3点
-# ============================================================
-
-
 def calculate_initial_score(latest, credit_row=None):
+    """
+    初動スコア Ver3
+
+    目的:
+        「すでに大きく上昇した銘柄」ではなく、
+        「上昇が始まったばかりの銘柄」を上位にする。
+
+    基本方針:
+        1. 出来高急増を重視
+        2. ブレイク初日を最重要級に評価
+        3. 30日高値更新を強く評価
+        4. 前日比は補助評価に縮小
+        5. 出来高増加日数は短いほど高評価
+        6. 5日・20日の上昇が進みすぎた銘柄は減点
+        7. MA・MACD・信用需給は補助材料
+        8. RSIによる過熱減点は別処理
+
+    点数は固定の満点を設けない。
+    初動を捕まえるための相対評価を目的とする。
+    """
 
     score = 0
 
     # ========================================================
     # 1. 出来高急増
+    # ========================================================
+    # 初動では「値上がり」よりも
+    # 「資金が入り始めたこと」を重視する。
     # ========================================================
 
     volume_ratio = latest.get(
@@ -38,29 +43,36 @@ def calculate_initial_score(latest, credit_row=None):
     if pd.notna(volume_ratio):
 
         try:
+            volume_ratio = float(volume_ratio)
 
-            volume_ratio = float(
-                volume_ratio
-            )
+            if volume_ratio >= 5.0:
+                score += 5
 
-            if volume_ratio >= 2:
-
+            elif volume_ratio >= 3.0:
                 score += 4
 
-            elif volume_ratio >= 1.5:
-
+            elif volume_ratio >= 2.0:
                 score += 3
 
-            elif volume_ratio >= 1.2:
-
+            elif volume_ratio >= 1.5:
                 score += 2
 
-        except Exception:
+            elif volume_ratio >= 1.2:
+                score += 1
 
+        except Exception:
             pass
 
     # ========================================================
-    # 2. 当日上昇率
+    # 2. 前日比
+    # ========================================================
+    # 前日比は「急騰した銘柄」を過大評価しない。
+    #
+    # +1～3%   → +1
+    # +3～5%   → +2
+    # +5%以上  → +2
+    #
+    # +10%、+20%でも追加点は与えない。
     # ========================================================
 
     change_percent = latest.get(
@@ -71,90 +83,247 @@ def calculate_initial_score(latest, credit_row=None):
     if pd.notna(change_percent):
 
         try:
+            change_percent = float(change_percent)
 
-            change_percent = float(
-                change_percent
-            )
-
-            if change_percent >= 3:
-
-                score += 3
-
-            elif change_percent >= 1:
-
+            if change_percent >= 3.0:
                 score += 2
 
-        except Exception:
+            elif change_percent >= 1.0:
+                score += 1
 
+        except Exception:
             pass
 
     # ========================================================
-    # 3. MA5より上
+    # 3. ブレイクアウト
     # ========================================================
 
-    above_ma5 = latest.get(
-        "AboveMA5",
+    breakout_signal = latest.get(
+        "BreakoutSignal",
         False
     )
 
-    if bool(above_ma5):
+    breakout_first_day = latest.get(
+        "BreakoutFirstDay",
+        False
+    )
 
+    new_30_high = latest.get(
+        "New30High",
+        False
+    )
+
+    # ブレイクアウト発生
+    if bool(breakout_signal):
+        score += 2
+
+    # ブレイク初日は最重要級
+    if bool(breakout_first_day):
+        score += 5
+
+    # 30日高値更新
+    if bool(new_30_high):
         score += 2
 
     # ========================================================
-    # 4. 信用倍率
+    # 4. 出来高増加日数
+    # ========================================================
+    # 初動では「出来高増加が始まったばかり」を評価。
     #
-    # 信用倍率が低いほど買い圧力を評価
+    # 1日 → +3
+    # 2日 → +2
+    # 3日 → +1
+    # 4日以上 → 0
+    #
+    # 長期間出来高が増えている銘柄を
+    # 初動として過大評価しない。
+    # ========================================================
+
+    volume_increase_days = latest.get(
+        "VolumeIncreaseDays",
+        0
+    )
+
+    if pd.notna(volume_increase_days):
+
+        try:
+            volume_increase_days = int(
+                volume_increase_days
+            )
+
+            if volume_increase_days == 1:
+                score += 3
+
+            elif volume_increase_days == 2:
+                score += 2
+
+            elif volume_increase_days == 3:
+                score += 1
+
+        except Exception:
+            pass
+
+    # ========================================================
+    # 5. 5日騰落率
+    # ========================================================
+    # ここは「初動からどれだけ進んでいるか」の減点。
+    #
+    # 5%未満   → 0
+    # 5～10%   → -1
+    # 10～20%  → -2
+    # 20%以上  → -3
+    # ========================================================
+
+    change_5days = latest.get(
+        "Change5Days",
+        pd.NA
+    )
+
+    if pd.notna(change_5days):
+
+        try:
+            change_5days = float(
+                change_5days
+            )
+
+            if change_5days >= 20.0:
+                score -= 3
+
+            elif change_5days >= 10.0:
+                score -= 2
+
+            elif change_5days >= 5.0:
+                score -= 1
+
+        except Exception:
+            pass
+
+    # ========================================================
+    # 6. 20日騰落率
+    # ========================================================
+    # 中期的にすでに上がりすぎている銘柄を減点。
+    #
+    # 10%未満   → 0
+    # 10～20%   → -1
+    # 20～30%   → -2
+    # 30%以上   → -3
+    # ========================================================
+
+    change_20days = latest.get(
+        "Change20Days",
+        pd.NA
+    )
+
+    if pd.notna(change_20days):
+
+        try:
+            change_20days = float(
+                change_20days
+            )
+
+            if change_20days >= 30.0:
+                score -= 3
+
+            elif change_20days >= 20.0:
+                score -= 2
+
+            elif change_20days >= 10.0:
+                score -= 1
+
+        except Exception:
+            pass
+
+    # ========================================================
+    # 7. MAトレンド
+    # ========================================================
+    # MAは初動判定の補助。
+    # ========================================================
+
+    if bool(
+        latest.get(
+            "AboveMA5",
+            False
+        )
+    ):
+        score += 1
+
+    if bool(
+        latest.get(
+            "AboveMA25",
+            False
+        )
+    ):
+        score += 1
+
+    if bool(
+        latest.get(
+            "AboveMA75",
+            False
+        )
+    ):
+        score += 1
+
+    # ========================================================
+    # 8. MACDゴールデンクロス
+    # ========================================================
+
+    if bool(
+        latest.get(
+            "MACD_GC",
+            False
+        )
+    ):
+        score += 2
+
+    # ========================================================
+    # 9. 信用需給
     # ========================================================
 
     if credit_row is not None:
+
+        # ----------------------------------------------------
+        # 信用倍率
+        # ----------------------------------------------------
 
         try:
 
             credit_ratio = float(
                 str(
                     credit_row["信用倍率"]
-                ).replace(",", "")
+                ).replace(
+                    ",",
+                    ""
+                )
             )
 
             if credit_ratio < 1:
-
-                score += 3
-
-            elif credit_ratio < 2:
-
-                score += 2
+                score += 1
 
         except Exception:
-
             pass
 
-        # ====================================================
-        # 5. 売り残前週比
-        # ====================================================
+        # ----------------------------------------------------
+        # 売り残前週比
+        # ----------------------------------------------------
 
         try:
 
             sell_change = float(
                 str(
                     credit_row["売り残前週比"]
-                ).replace(",", "")
+                ).replace(
+                    ",",
+                    ""
+                )
             )
 
             if sell_change >= 10:
-
-                score += 3
-
-            elif sell_change >= 5:
-
                 score += 2
 
-            elif sell_change >= 1:
-
+            elif sell_change >= 5:
                 score += 1
 
         except Exception:
-
             pass
 
     return score

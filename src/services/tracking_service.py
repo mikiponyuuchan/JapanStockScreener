@@ -11,8 +11,26 @@ from services.yahoo_service import (
 
 
 # ============================================================
-# 設定
+# Initial Move Tracking Ver.2
+#
+# 目的
+# ------------------------------------------------------------
+# 初動スコアで検出した銘柄について、
+# 検出後10営業日までの値動きを追跡する。
+#
+# 旧仕様の「強気度」は完全に廃止。
+#
+# 保存項目
+# ------------------------------------------------------------
+# 検出日
+# コード
+# 銘柄名
+# 検出時株価
+# 初動スコア
+# 1～10営業日後株価
+# 1～10営業日後騰落率
 # ============================================================
+
 
 TRACKING_DIR = Path("data/tracking")
 
@@ -34,7 +52,7 @@ def ensure_tracking_folder():
 
 
 # ============================================================
-# 空の追跡データ
+# 空の追跡DataFrame
 # ============================================================
 
 def empty_tracking_dataframe():
@@ -43,16 +61,14 @@ def empty_tracking_dataframe():
         "検出日",
         "コード",
         "銘柄名",
-        "検出時終値",
-        "強気度",
+        "検出時株価",
         "初動スコア",
     ]
 
-    # 1～10営業日後
     for day in range(1, 11):
 
         columns.append(
-            f"{day}日後終値"
+            f"{day}日後株価"
         )
 
         columns.append(
@@ -103,7 +119,7 @@ def load_tracking():
 
             df[column] = ""
 
-    # 列順を統一
+    # 新仕様の列だけ残す
     df = df[
         list(required_columns)
     ]
@@ -112,7 +128,7 @@ def load_tracking():
 
 
 # ============================================================
-# 営業日計算
+# 日本の営業日を計算
 # ============================================================
 
 def add_business_days(
@@ -157,7 +173,7 @@ def add_business_days(
 
 
 # ============================================================
-# Yahoo履歴から価格取得
+# Yahoo履歴から対象日の株価を取得
 # ============================================================
 
 def _find_price(
@@ -279,7 +295,7 @@ def _find_price(
 
 
 # ============================================================
-# 指定日以降の株価取得
+# 指定日の株価取得
 # ============================================================
 
 def get_price_on_or_after(
@@ -420,11 +436,11 @@ def update_tracking_results(
 
     print()
     print(
-        "過去の初動銘柄を追跡中..."
+        "初動銘柄を追跡中..."
     )
 
     # --------------------------------------------------------
-    # 将来日のデータを除去
+    # 将来日付のデータを削除
     # --------------------------------------------------------
 
     tracking_dates = pd.to_datetime(
@@ -443,7 +459,7 @@ def update_tracking_results(
     if future_count > 0:
 
         print(
-            "未来日付の追跡データを除去 :",
+            "未来日付の追跡データを削除 :",
             future_count,
             "件"
         )
@@ -461,12 +477,12 @@ def update_tracking_results(
     )
 
     # --------------------------------------------------------
-    # 更新対象コード
+    # Yahoo取得対象コード
     # --------------------------------------------------------
 
     target_codes = set()
 
-    for index, row in tracking_df.iterrows():
+    for _, row in tracking_df.iterrows():
 
         try:
 
@@ -482,8 +498,12 @@ def update_tracking_results(
             row["コード"]
         )
 
+        if not code or code == "nan":
+
+            continue
+
         base_price = pd.to_numeric(
-            row["検出時終値"],
+            row["検出時株価"],
             errors="coerce"
         )
 
@@ -498,13 +518,12 @@ def update_tracking_results(
                 day
             )
 
-            # まだ対象日になっていない
             if market_date < target_date:
 
                 continue
 
             price_column = (
-                f"{day}日後終値"
+                f"{day}日後株価"
             )
 
             existing_price = pd.to_numeric(
@@ -512,7 +531,6 @@ def update_tracking_results(
                 errors="coerce"
             )
 
-            # 既に取得済み
             if pd.notna(existing_price):
 
                 continue
@@ -559,7 +577,7 @@ def update_tracking_results(
             yahoo_results = {}
 
     # --------------------------------------------------------
-    # 各銘柄更新
+    # 各銘柄を更新
     # --------------------------------------------------------
 
     updated_count = 0
@@ -581,7 +599,7 @@ def update_tracking_results(
         )
 
         base_price = pd.to_numeric(
-            row["検出時終値"],
+            row["検出時株価"],
             errors="coerce"
         )
 
@@ -593,6 +611,8 @@ def update_tracking_results(
             code
         )
 
+        row_updated = False
+
         for day in range(1, 11):
 
             target_date = add_business_days(
@@ -601,14 +621,14 @@ def update_tracking_results(
             )
 
             price_column = (
-                f"{day}日後終値"
+                f"{day}日後株価"
             )
 
             change_column = (
                 f"{day}日後騰落率"
             )
 
-            # まだ対象日ではない
+            # まだ対象営業日になっていない
             if market_date < target_date:
 
                 continue
@@ -654,7 +674,7 @@ def update_tracking_results(
                 continue
 
             # ------------------------------------------------
-            # 終値
+            # 株価保存
             # ------------------------------------------------
 
             tracking_df.at[
@@ -666,7 +686,7 @@ def update_tracking_results(
             )
 
             # ------------------------------------------------
-            # 騰落率
+            # 騰落率保存
             # ------------------------------------------------
 
             change = calculate_change(
@@ -680,6 +700,10 @@ def update_tracking_results(
                     index,
                     change_column
                 ] = change
+
+            row_updated = True
+
+        if row_updated:
 
             updated_count += 1
 
@@ -699,11 +723,16 @@ def update_tracking_results(
         "件"
     )
 
+    print(
+        "初動追跡データ保存 :",
+        TRACKING_FILE
+    )
+
     return tracking_df
 
 
 # ============================================================
-# 初動銘柄を記録
+# 初動銘柄を新規記録
 # ============================================================
 
 def record_initial_move(df):
@@ -713,13 +742,10 @@ def record_initial_move(df):
     tracking_df = load_tracking()
 
     # --------------------------------------------------------
-    # データ日
+    # データ日付
     # --------------------------------------------------------
 
-    if (
-        "_data_date" in df.columns
-        and not df.empty
-    ):
+    if "_data_date" in df.columns:
 
         data_date = str(
             df["_data_date"].iloc[0]
@@ -732,91 +758,131 @@ def record_initial_move(df):
             .strftime("%Y-%m-%d")
         )
 
+    try:
+
+        data_date = pd.Timestamp(
+            data_date
+        ).strftime("%Y-%m-%d")
+
+    except Exception:
+
+        data_date = (
+            datetime.now()
+            .strftime("%Y-%m-%d")
+        )
+
     # --------------------------------------------------------
-    # 過去データ更新
+    # 初動スコア列確認
     # --------------------------------------------------------
 
-    tracking_df = update_tracking_results(
-        tracking_df,
-        data_date
-    )
-
-    # --------------------------------------------------------
-    # 対象データ無し
-    # --------------------------------------------------------
-
-    if df.empty:
+    if "初動スコア" not in df.columns:
 
         print(
-            "初動スコア対象データなし"
+            "初動追跡SKIP : 初動スコア列がありません"
         )
 
         return tracking_df
 
     # --------------------------------------------------------
-    # 初動スコアTOP20を対象
+    # TOP20を対象
     #
-    # 呼び出し側からTOP20が渡される想定。
-    # 念のためここでも初動スコア順に整列。
+    # runner.pyから渡されたdfが既にTOP20なら
+    # そのまま利用する。
+    #
+    # 全銘柄の場合は初動スコア順にTOP20を取得。
     # --------------------------------------------------------
 
-    if "初動スコア" in df.columns:
+    work_df = df.copy()
 
-        try:
+    try:
 
-            df = (
-                df.sort_values(
-                    "初動スコア",
-                    ascending=False
-                )
-                .head(20)
-                .copy()
+        work_df["初動スコア"] = pd.to_numeric(
+            work_df["初動スコア"],
+            errors="coerce"
+        )
+
+        work_df = (
+            work_df
+            .dropna(
+                subset=["初動スコア"]
             )
+            .sort_values(
+                "初動スコア",
+                ascending=False
+            )
+            .head(20)
+        )
 
-        except Exception:
+    except Exception:
 
-            df = df.head(20).copy()
+        return tracking_df
 
-    else:
-
-        df = df.head(20).copy()
+    new_rows = []
 
     # --------------------------------------------------------
     # 新規記録
     # --------------------------------------------------------
 
-    new_rows = []
-
-    for _, row in df.iterrows():
+    for _, row in work_df.iterrows():
 
         # ----------------------------------------------------
         # コード
         # ----------------------------------------------------
 
-        if "コード" not in row.index:
+        code = ""
 
-            continue
+        for code_column in [
+            "コード",
+            "Code",
+            "code"
+        ]:
 
-        code = str(
-            row["コード"]
-        )
+            if code_column not in row.index:
+
+                continue
+
+            value = row[code_column]
+
+            if pd.notna(value):
+
+                code = str(value)
+
+                if code.endswith(".0"):
+
+                    code = code[:-2]
+
+                break
 
         if not code or code == "nan":
 
             continue
 
         # ----------------------------------------------------
-        # 終値取得
-        #
-        # ★今回のエラー対策
-        #
-        # analyzerの結果で
-        # 「終値」が無い場合でも停止しない。
-        #
-        # 優先順位：
-        #   1. 終値
-        #   2. Close
-        #   3. 株価
+        # 銘柄名
+        # ----------------------------------------------------
+
+        name = ""
+
+        for name_column in [
+            "銘柄名",
+            "Name",
+            "name"
+        ]:
+
+            if name_column not in row.index:
+
+                continue
+
+            value = row[name_column]
+
+            if pd.notna(value):
+
+                name = str(value)
+
+                break
+
+        # ----------------------------------------------------
+        # 検出時株価
         # ----------------------------------------------------
 
         base_price = None
@@ -824,7 +890,7 @@ def record_initial_move(df):
         for price_column in [
             "終値",
             "Close",
-            "株価",
+            "株価"
         ]:
 
             if price_column not in row.index:
@@ -844,86 +910,60 @@ def record_initial_move(df):
 
                 break
 
-        # ----------------------------------------------------
-        # 終値が無ければ記録しない
-        #
-        # ここで main 全体を落とさない。
-        # ----------------------------------------------------
-
         if base_price is None:
 
-            print(
-                f"初動追跡SKIP {code} : "
-                "終値データなし"
-            )
-
             continue
-
-        # ----------------------------------------------------
-        # 銘柄名
-        # ----------------------------------------------------
-
-        name = ""
-
-        if "銘柄名" in row.index:
-
-            value = row["銘柄名"]
-
-            if pd.notna(value):
-
-                name = value
-
-        # ----------------------------------------------------
-        # 強気度
-        #
-        # 旧バージョンとの互換性を残す。
-        # ----------------------------------------------------
-
-        bullish_score = ""
-
-        if "強気度" in row.index:
-
-            value = row["強気度"]
-
-            if pd.notna(value):
-
-                bullish_score = value
 
         # ----------------------------------------------------
         # 初動スコア
         # ----------------------------------------------------
 
-        initial_score = ""
+        initial_score = pd.to_numeric(
+            row["初動スコア"],
+            errors="coerce"
+        )
 
-        if "初動スコア" in row.index:
+        if pd.isna(initial_score):
 
-            value = row["初動スコア"]
+            continue
 
-            if pd.notna(value):
-
-                initial_score = value
+        initial_score = int(
+            initial_score
+        )
 
         # ----------------------------------------------------
-        # 同日・同銘柄の重複確認
+        # 同一日・同一銘柄チェック
         # ----------------------------------------------------
 
         if not tracking_df.empty:
 
+            existing_date = (
+                tracking_df["検出日"]
+                .astype(str)
+                .str[:10]
+            )
+
+            existing_code = (
+                tracking_df["コード"]
+                .astype(str)
+                .str.replace(
+                    ".0",
+                    "",
+                    regex=False
+                )
+            )
+
             already_exists = (
                 (
-                    tracking_df[
-                        "検出日"
-                    ]
-                    .astype(str)
-                    == data_date
+                    existing_date
+                    ==
+                    data_date
                 )
                 &
                 (
-                    tracking_df[
-                        "コード"
-                    ]
-                    .astype(str)
-                    == code
+                    existing_code
+                    ==
+                    code
                 )
             ).any()
 
@@ -950,27 +990,20 @@ def record_initial_move(df):
             "銘柄名":
                 name,
 
-            "検出時終値":
+            "検出時株価":
                 round(
                     base_price,
                     2
                 ),
 
-            "強気度":
-                bullish_score,
-
             "初動スコア":
                 initial_score,
         }
 
-        # ----------------------------------------------------
-        # 1～10営業日後
-        # ----------------------------------------------------
-
         for day in range(1, 11):
 
             new_row[
-                f"{day}日後終値"
+                f"{day}日後株価"
             ] = ""
 
             new_row[

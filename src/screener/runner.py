@@ -8,6 +8,12 @@ from screener.loader import load_stock_list
 from screener.analyzer import analyze_stock
 from services.yahoo_credit_service import load_latest_credit_data
 
+from services.tracking_service import (
+    load_tracking,
+    update_tracking_results,
+    record_initial_move,
+)
+
 # ============================================================
 # スクリーナー実行
 #
@@ -193,6 +199,30 @@ def run_screener(start=0, limit=None):
                 f"{error_path}"
             )
 
+    # ========================================================
+    # 初動スコア追跡 Ver2
+    # ========================================================
+
+    try:
+
+        tracking_df = load_tracking()
+
+        # 過去の追跡銘柄を更新
+        tracking_df = update_tracking_results(
+            tracking_df
+        )
+
+        # 本日の初動スコアTOP20を登録
+        tracking_df = record_initial_move(
+            result_df
+        )
+
+    except Exception as e:
+
+        print(
+            "初動追跡処理 ERROR :",
+            e
+        )
 
         return result_df
 
