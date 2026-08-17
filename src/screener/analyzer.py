@@ -1,79 +1,40 @@
 import time
+
 import pandas as pd
 
 from services.yahoo_service import get_history
 from indicators.technical import add_indicators
 
+
+# ================================================
+# 初動スコア Ver4
+# ================================================
+
 def calculate_initial_score(latest, credit_row=None):
     """
-    初動スコア Ver3
+    初動スコア Ver4
 
-    目的:
-        「すでに大きく上昇した銘柄」ではなく、
-        「上昇が始まったばかりの銘柄」を上位にする。
+    コア4条件のみで加点する。
 
-    基本方針:
-        1. 出来高急増を重視
-        2. ブレイク初日を最重要級に評価
-        3. 30日高値更新を強く評価
-        4. 前日比は補助評価に縮小
-        5. 出来高増加日数は短いほど高評価
-        6. 5日・20日の上昇が進みすぎた銘柄は減点
-        7. MA・MACD・信用需給は補助材料
-        8. RSIによる過熱減点は別処理
+    前日比+5%以上       : +3
+    出来高3倍以上       : +2
+    ブレイク            : +1
+    30日高値更新        : +1
 
-    点数は固定の満点を設けない。
-    初動を捕まえるための相対評価を目的とする。
+    コア最大 : 7点
+
+    RSIによる減点はこの関数では行わない。
+    calculate_rsi_penalty() で別途処理する。
+
+    強気度・信用需給・MA・MACD・5日騰落率・20日騰落率
+    などはスコアに使用しない。
     """
 
     score = 0
 
-    # ========================================================
-    # 1. 出来高急増
-    # ========================================================
-    # 初動では「値上がり」よりも
-    # 「資金が入り始めたこと」を重視する。
-    # ========================================================
-
-    volume_ratio = latest.get(
-        "VolumeRatio",
-        pd.NA
-    )
-
-    if pd.notna(volume_ratio):
-
-        try:
-            volume_ratio = float(volume_ratio)
-
-            if volume_ratio >= 5.0:
-                score += 5
-
-            elif volume_ratio >= 3.0:
-                score += 4
-
-            elif volume_ratio >= 2.0:
-                score += 3
-
-            elif volume_ratio >= 1.5:
-                score += 2
-
-            elif volume_ratio >= 1.2:
-                score += 1
-
-        except Exception:
-            pass
-
-    # ========================================================
-    # 2. 前日比
-    # ========================================================
-    # 前日比は「急騰した銘柄」を過大評価しない。
-    #
-    # +1～3%   → +1
-    # +3～5%   → +2
-    # +5%以上  → +2
-    #
-    # +10%、+20%でも追加点は与えない。
-    # ========================================================
+    # ========================================
+    # 1. 前日比 +5%以上
+    # ========================================
 
     change_percent = latest.get(
         "ChangePercent",
@@ -83,251 +44,77 @@ def calculate_initial_score(latest, credit_row=None):
     if pd.notna(change_percent):
 
         try:
-            change_percent = float(change_percent)
 
-            if change_percent >= 3.0:
-                score += 2
+            change_percent = float(
+                change_percent
+            )
 
-            elif change_percent >= 1.0:
-                score += 1
+            if change_percent >= 5.0:
+                score += 3
 
         except Exception:
             pass
 
-    # ========================================================
-    # 3. ブレイクアウト
-    # ========================================================
+    # ========================================
+    # 2. 出来高3倍以上
+    # ========================================
+
+    volume_ratio = latest.get(
+        "VolumeRatio",
+        pd.NA
+    )
+
+    if pd.notna(volume_ratio):
+
+        try:
+
+            volume_ratio = float(
+                volume_ratio
+            )
+
+            if volume_ratio >= 3.0:
+                score += 2
+
+        except Exception:
+            pass
+
+    # ========================================
+    # 3. ブレイク
+    # ========================================
+    #
+    # BreakoutSignalのみを使用。
+    # BreakoutFirstDayは別加点しない。
+    # ========================================
 
     breakout_signal = latest.get(
         "BreakoutSignal",
         False
     )
 
-    breakout_first_day = latest.get(
-        "BreakoutFirstDay",
-        False
-    )
+    if bool(breakout_signal):
+        score += 1
+
+    # ========================================
+    # 4. 30日高値更新
+    # ========================================
 
     new_30_high = latest.get(
         "New30High",
         False
     )
 
-    # ブレイクアウト発生
-    if bool(breakout_signal):
-        score += 2
-
-    # ブレイク初日は最重要級
-    if bool(breakout_first_day):
-        score += 5
-
-    # 30日高値更新
     if bool(new_30_high):
-        score += 2
-
-    # ========================================================
-    # 4. 出来高増加日数
-    # ========================================================
-    # 初動では「出来高増加が始まったばかり」を評価。
-    #
-    # 1日 → +3
-    # 2日 → +2
-    # 3日 → +1
-    # 4日以上 → 0
-    #
-    # 長期間出来高が増えている銘柄を
-    # 初動として過大評価しない。
-    # ========================================================
-
-    volume_increase_days = latest.get(
-        "VolumeIncreaseDays",
-        0
-    )
-
-    if pd.notna(volume_increase_days):
-
-        try:
-            volume_increase_days = int(
-                volume_increase_days
-            )
-
-            if volume_increase_days == 1:
-                score += 3
-
-            elif volume_increase_days == 2:
-                score += 2
-
-            elif volume_increase_days == 3:
-                score += 1
-
-        except Exception:
-            pass
-
-    # ========================================================
-    # 5. 5日騰落率
-    # ========================================================
-    # ここは「初動からどれだけ進んでいるか」の減点。
-    #
-    # 5%未満   → 0
-    # 5～10%   → -1
-    # 10～20%  → -2
-    # 20%以上  → -3
-    # ========================================================
-
-    change_5days = latest.get(
-        "Change5Days",
-        pd.NA
-    )
-
-    if pd.notna(change_5days):
-
-        try:
-            change_5days = float(
-                change_5days
-            )
-
-            if change_5days >= 20.0:
-                score -= 3
-
-            elif change_5days >= 10.0:
-                score -= 2
-
-            elif change_5days >= 5.0:
-                score -= 1
-
-        except Exception:
-            pass
-
-    # ========================================================
-    # 6. 20日騰落率
-    # ========================================================
-    # 中期的にすでに上がりすぎている銘柄を減点。
-    #
-    # 10%未満   → 0
-    # 10～20%   → -1
-    # 20～30%   → -2
-    # 30%以上   → -3
-    # ========================================================
-
-    change_20days = latest.get(
-        "Change20Days",
-        pd.NA
-    )
-
-    if pd.notna(change_20days):
-
-        try:
-            change_20days = float(
-                change_20days
-            )
-
-            if change_20days >= 30.0:
-                score -= 3
-
-            elif change_20days >= 20.0:
-                score -= 2
-
-            elif change_20days >= 10.0:
-                score -= 1
-
-        except Exception:
-            pass
-
-    # ========================================================
-    # 7. MAトレンド
-    # ========================================================
-    # MAは初動判定の補助。
-    # ========================================================
-
-    if bool(
-        latest.get(
-            "AboveMA5",
-            False
-        )
-    ):
         score += 1
 
-    if bool(
-        latest.get(
-            "AboveMA25",
-            False
-        )
-    ):
-        score += 1
-
-    if bool(
-        latest.get(
-            "AboveMA75",
-            False
-        )
-    ):
-        score += 1
-
-    # ========================================================
-    # 8. MACDゴールデンクロス
-    # ========================================================
-
-    if bool(
-        latest.get(
-            "MACD_GC",
-            False
-        )
-    ):
-        score += 2
-
-    # ========================================================
-    # 9. 信用需給
-    # ========================================================
-
-    if credit_row is not None:
-
-        # ----------------------------------------------------
-        # 信用倍率
-        # ----------------------------------------------------
-
-        try:
-
-            credit_ratio = float(
-                str(
-                    credit_row["信用倍率"]
-                ).replace(
-                    ",",
-                    ""
-                )
-            )
-
-            if credit_ratio < 1:
-                score += 1
-
-        except Exception:
-            pass
-
-        # ----------------------------------------------------
-        # 売り残前週比
-        # ----------------------------------------------------
-
-        try:
-
-            sell_change = float(
-                str(
-                    credit_row["売り残前週比"]
-                ).replace(
-                    ",",
-                    ""
-                )
-            )
-
-            if sell_change >= 10:
-                score += 2
-
-            elif sell_change >= 5:
-                score += 1
-
-        except Exception:
-            pass
+    # ========================================
+    # コア最大7点
+    # ========================================
 
     return score
 
+# ============================================================
+# RSI過熱減点
+# ============================================================
 
 def calculate_rsi_penalty(latest):
     """
@@ -348,6 +135,7 @@ def calculate_rsi_penalty(latest):
         return 0
 
     try:
+
         rsi = float(rsi)
 
         if rsi >= 95:
@@ -364,12 +152,13 @@ def calculate_rsi_penalty(latest):
 
     return 0
 
+
 # ============================================================
 # 初動スコアコメント
 # ============================================================
 
 def make_analysis_comment(
-    initial_score,
+    final_score,
     latest=None,
     credit_row=None
 ):
@@ -377,7 +166,7 @@ def make_analysis_comment(
     comments = []
 
     comments.append(
-        f"初動スコア{initial_score}点"
+        f"初動スコア{final_score}点"
     )
 
     if latest is not None:
@@ -412,7 +201,6 @@ def make_analysis_comment(
                     )
 
             except Exception:
-
                 pass
 
         # ----------------------------------------------------
@@ -439,7 +227,6 @@ def make_analysis_comment(
                     )
 
             except Exception:
-
                 pass
 
         # ----------------------------------------------------
@@ -557,7 +344,6 @@ def make_analysis_comment(
                     )
 
             except Exception:
-
                 pass
 
         # ----------------------------------------------------
@@ -584,7 +370,6 @@ def make_analysis_comment(
                     )
 
             except Exception:
-
                 pass
 
     # ========================================================
@@ -598,7 +383,10 @@ def make_analysis_comment(
             credit_ratio = float(
                 str(
                     credit_row["信用倍率"]
-                ).replace(",", "")
+                ).replace(
+                    ",",
+                    ""
+                )
             )
 
             if credit_ratio < 1:
@@ -614,7 +402,6 @@ def make_analysis_comment(
                 )
 
         except Exception:
-
             pass
 
         try:
@@ -622,7 +409,10 @@ def make_analysis_comment(
             sell_change = float(
                 str(
                     credit_row["売り残前週比"]
-                ).replace(",", "")
+                ).replace(
+                    ",",
+                    ""
+                )
             )
 
             if sell_change >= 5:
@@ -632,7 +422,6 @@ def make_analysis_comment(
                 )
 
         except Exception:
-
             pass
 
     return " / ".join(comments)
@@ -863,17 +652,17 @@ def analyze_stock(
 
             credit_condition = "未判定"
 
-
     # ========================================================
     # 初動スコア
     #
-    # 基本スコアは15点満点。
-    # RSIは基本スコアを変更せず、過熱時のみ減点する。
+    # 基本スコアを計算。
+    # RSIは基本スコアを変更せず、
+    # 過熱時のみ減点する。
     # ========================================================
 
     judge_start = time.time()
 
-    # 15点満点の原点スコア
+    # 基本初動スコア
     initial_score = calculate_initial_score(
         latest,
         credit_row
@@ -887,9 +676,9 @@ def analyze_stock(
     # 最終初動スコア
     final_score = initial_score + rsi_penalty
 
-    # コメントには原点スコアとRSI減点を残す
+    # コメントには基本スコアを表示
     analysis_comment = make_analysis_comment(
-        initial_score,
+        final_score,
         latest,
         credit_row
     )
@@ -903,7 +692,9 @@ def analyze_stock(
 
         try:
 
-            rsi_value = float(rsi_value)
+            rsi_value = float(
+                rsi_value
+            )
 
             if rsi_penalty < 0:
 
@@ -914,7 +705,6 @@ def analyze_stock(
                 )
 
         except Exception:
-
             pass
 
     judge_time = (
@@ -979,9 +769,9 @@ def analyze_stock(
     # ========================================================
     # 結果
     #
-    # 重要：
-    # 「強気度」は完全に廃止
-    # 「初動スコア」を唯一のスコアとする
+    # 重要:
+    # 「強気度」は完全に廃止。
+    # 「初動スコア」を唯一のスコアとする。
     # ========================================================
 
     return {
@@ -1191,8 +981,11 @@ def analyze_stock(
         "信用情報日付":
             (
                 credit_row["日付"]
-                if credit_row is not None
-                and "日付" in credit_row
+                if (
+                    credit_row is not None
+                    and
+                    "日付" in credit_row
+                )
                 else pd.NA
             ),
 
@@ -1215,7 +1008,7 @@ def analyze_stock(
             credit_condition,
 
         # ----------------------------------------------------
-        # Sprint / 計測情報
+        # 計測情報
         # ----------------------------------------------------
 
         "_data_date":
