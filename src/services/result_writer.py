@@ -983,7 +983,7 @@ def create_top20_sheet(
         {
             "A": 7,    # コード
             "B": 15,   # 銘柄名
-            "C": 9,    # 終値
+            "C": 8,    # 終値
             "D": 7,    # 初動スコア
             "E": 22,   # 高騰理由
             "F": 22,   # ニュース
@@ -1400,7 +1400,7 @@ def create_news_sheet(
         {
             "A": 7,    # コード
             "B": 15,   # 銘柄名
-            "C": 9,    # 終値
+            "C": 8,    # 終値
             "D": 7,    # 初動スコア
             "E": 22,   # 高騰理由
             "F": 22,   # ニュース
@@ -1802,18 +1802,14 @@ def save_result(df):
     )
 
     # ======================================================
-    # TOP20ニュース
-    # ======================================================
-
-    create_news_sheet(
-        workbook,
-        initial_move_top20,
-        news_data,
-    )
-
-    # ======================================================
     # 全銘柄
     # ======================================================
+
+    # 不要な重複項目を削除
+    df = df.drop(
+        columns=["信用倍率計算値"],
+        errors="ignore",
+    )
 
     result_sheet = dataframe_to_sheet(
         workbook,
@@ -1821,12 +1817,63 @@ def save_result(df):
         df,
     )
 
-    result_sheet.freeze_panes = "A2"
+    # コード・銘柄名を固定
+    result_sheet.freeze_panes = "C2"
 
+    # 初動スコア色付け
     apply_score_color(
         result_sheet,
         "初動スコア",
     )
+
+    # ======================================================
+    # 全銘柄シート体裁調整
+    # ======================================================
+
+    headers = {}
+
+    for cell in result_sheet[1]:
+        headers[cell.value] = cell.column
+
+    # 分析コメント列を広げる
+    if "分析コメント" in headers:
+
+        col = get_column_letter(
+            headers["分析コメント"]
+        )
+
+        result_sheet.column_dimensions[
+            col
+        ].width = 60
+
+    # 信用情報日付
+    if "信用情報日付" in headers:
+
+        col = headers["信用情報日付"]
+
+        # 日付だけ表示
+        for row in range(
+            2,
+            result_sheet.max_row + 1
+        ):
+
+            cell = result_sheet.cell(
+                row,
+                col
+            )
+
+            cell.number_format = "yyyy/mm/dd"
+
+            cell.alignment = Alignment(
+                horizontal="left",
+                vertical="center",
+                wrap_text=False,
+            )
+
+        # ######## を防ぐため列幅を確保
+        result_sheet.column_dimensions[
+            get_column_letter(col)
+        ].width = 14
 
     # ======================================================
     # 初動追跡
@@ -1865,7 +1912,6 @@ def save_result(df):
 
     desired_order = [
         "TOP20",
-        "TOP20ニュース",
         "全銘柄",
         "初動追跡",
     ]

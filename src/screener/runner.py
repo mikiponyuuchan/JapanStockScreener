@@ -6,7 +6,7 @@ import pandas as pd
 import config
 from screener.loader import load_stock_list
 from screener.analyzer import analyze_stock
-
+from services.yahoo_credit_service import load_latest_credit_data
 
 # ============================================================
 # スクリーナー実行
@@ -42,6 +42,19 @@ def run_screener(start=0, limit=None):
         limit
     )
 
+    # ========================================================
+    # 最新Yahoo信用データ読込
+    # ========================================================
+
+    credit_map = load_latest_credit_data(
+        codes=stocks["コード"].tolist()
+    )
+
+    print(
+        f"信用データ読込 : "
+        f"{len(credit_map)}銘柄"
+    )
+
     results = []
     error_list = []
 
@@ -61,13 +74,29 @@ def run_screener(start=0, limit=None):
         max_workers=MAX_WORKERS
     ) as executor:
 
-        futures = {
-            executor.submit(
-                analyze_stock,
-                stock
-            ): stock
-            for _, stock in stocks.iterrows()
-        }
+        futures = {}
+
+        for _, stock in stocks.iterrows():
+
+            code = str(
+                stock["コード"]
+            ).replace(
+                ".0",
+                ""
+            ).strip()
+
+            credit_row = credit_map.get(
+                code
+            )
+
+            futures[
+                executor.submit(
+                    analyze_stock,
+                    stock,
+                    None,
+                    credit_row
+                )
+            ] = stock
 
 
         for future in as_completed(futures):
@@ -320,59 +349,6 @@ def run_screener(start=0, limit=None):
             f"取得エラー : "
             f"{len(error_list)} 件"
         )
-
-
-    # ========================================================
-    # 本日の初動スコア TOP20表示
-    # ========================================================
-
-    print()
-
-    print(
-        "=== 本日の初動スコア TOP20 ==="
-    )
-
-
-    if top20_df.empty:
-
-        print(
-            "対象銘柄はありません。"
-        )
-
-    else:
-
-        # 表示用に必要な列だけ選択
-        display_columns = [
-            "コード",
-            "銘柄名",
-            "株価",
-            "前日比",
-            "出来高倍率",
-            "5MA上",
-            "信用倍率",
-            "売り残前週比",
-            "初動スコア",
-            "分析コメント"
-        ]
-
-
-        available_columns = [
-            column
-            for column in display_columns
-            if column in top20_df.columns
-        ]
-
-
-        print(
-            top20_df[
-                available_columns
-            ].to_string(
-                index=False
-            )
-        )
-
-
-    print()
 
 
     # ========================================================

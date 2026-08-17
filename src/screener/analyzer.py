@@ -160,6 +160,41 @@ def calculate_initial_score(latest, credit_row=None):
     return score
 
 
+def calculate_rsi_penalty(latest):
+    """
+    RSIによる過熱減点
+
+    RSI <= 84.99 :  0点
+    RSI 85-89.99 : -1点
+    RSI 90-94.99 : -2点
+    RSI >= 95    : -3点
+    """
+
+    rsi = latest.get(
+        "RSI",
+        pd.NA
+    )
+
+    if pd.isna(rsi):
+        return 0
+
+    try:
+        rsi = float(rsi)
+
+        if rsi >= 95:
+            return -3
+
+        elif rsi >= 90:
+            return -2
+
+        elif rsi >= 85:
+            return -1
+
+    except Exception:
+        pass
+
+    return 0
+
 # ============================================================
 # 初動スコアコメント
 # ============================================================
@@ -513,93 +548,205 @@ def analyze_stock(
     latest = df.iloc[-1]
 
     # ========================================================
-    # 信用倍率
+    # 信用情報
     # ========================================================
 
     credit_ratio = pd.NA
+    credit_condition = "未判定"
+
+    credit_sell = pd.NA
+    credit_buy = pd.NA
+    credit_sell_change = pd.NA
+    credit_buy_change = pd.NA
 
     if credit_row is not None:
 
+        # ----------------------------------------------------
+        # 売り残
+        # ----------------------------------------------------
+
         try:
 
-            sell_balance = float(
-                str(
-                    credit_row["売り残"]
-                ).replace(",", "")
+            credit_sell = pd.to_numeric(
+                credit_row.get(
+                    "売残",
+                    pd.NA
+                ),
+                errors="coerce"
             )
-
-            buy_balance = float(
-                str(
-                    credit_row["買い残"]
-                ).replace(",", "")
-            )
-
-            if sell_balance > 0:
-
-                credit_ratio = round(
-                    buy_balance / sell_balance,
-                    2
-                )
 
         except Exception:
 
-            pass
+            credit_sell = pd.NA
 
-    # ========================================================
-    # 信用条件
-    #
-    # 初動スコアの補助情報として保持
-    # ========================================================
-
-    credit_condition = "未判定"
-
-    if credit_row is not None:
+        # ----------------------------------------------------
+        # 買い残
+        # ----------------------------------------------------
 
         try:
 
-            ratio = float(
-                str(
-                    credit_row["信用倍率"]
-                ).replace(",", "")
+            credit_buy = pd.to_numeric(
+                credit_row.get(
+                    "買残",
+                    pd.NA
+                ),
+                errors="coerce"
             )
 
-            sell_change = float(
-                str(
-                    credit_row["売り残前週比"]
-                ).replace(",", "")
+        except Exception:
+
+            credit_buy = pd.NA
+
+        # ----------------------------------------------------
+        # 売り残前週比
+        # ----------------------------------------------------
+
+        try:
+
+            credit_sell_change = pd.to_numeric(
+                credit_row.get(
+                    "売残前週比",
+                    pd.NA
+                ),
+                errors="coerce"
             )
+
+        except Exception:
+
+            credit_sell_change = pd.NA
+
+        # ----------------------------------------------------
+        # 買い残前週比
+        # ----------------------------------------------------
+
+        try:
+
+            credit_buy_change = pd.to_numeric(
+                credit_row.get(
+                    "買残前週比",
+                    pd.NA
+                ),
+                errors="coerce"
+            )
+
+        except Exception:
+
+            credit_buy_change = pd.NA
+
+        # ----------------------------------------------------
+        # Yahoo取得の信用倍率
+        # ----------------------------------------------------
+
+        try:
+
+            credit_ratio = pd.to_numeric(
+                credit_row.get(
+                    "信用倍率",
+                    pd.NA
+                ),
+                errors="coerce"
+            )
+
+        except Exception:
+
+            credit_ratio = pd.NA
+
+        # ----------------------------------------------------
+        # 信用条件
+        #
+        # 信用倍率 < 1
+        # かつ
+        # 売り残前週比 > 0
+        #
+        # の場合のみ「該当」
+        # ----------------------------------------------------
+
+        try:
+
+            ratio_for_condition = credit_ratio
 
             if (
-                ratio < 1
-                and sell_change > 0
+                pd.notna(ratio_for_condition)
+                and
+                pd.notna(credit_sell_change)
             ):
 
-                credit_condition = "該当"
+                if (
+                    float(ratio_for_condition) < 1
+                    and
+                    float(credit_sell_change) > 0
+                ):
+
+                    credit_condition = "該当"
+
+                else:
+
+                    credit_condition = ""
 
             else:
 
-                credit_condition = ""
+                credit_condition = "未判定"
 
-        except Exception:
+        except (
+            TypeError,
+            ValueError,
+        ):
 
             credit_condition = "未判定"
 
+
     # ========================================================
     # 初動スコア
+    #
+    # 基本スコアは15点満点。
+    # RSIは基本スコアを変更せず、過熱時のみ減点する。
     # ========================================================
 
     judge_start = time.time()
 
+    # 15点満点の原点スコア
     initial_score = calculate_initial_score(
         latest,
         credit_row
     )
 
+    # RSIによる過熱減点
+    rsi_penalty = calculate_rsi_penalty(
+        latest
+    )
+
+    # 最終初動スコア
+    final_score = initial_score + rsi_penalty
+
+    # コメントには原点スコアとRSI減点を残す
     analysis_comment = make_analysis_comment(
         initial_score,
         latest,
         credit_row
     )
+
+    rsi_value = latest.get(
+        "RSI",
+        pd.NA
+    )
+
+    if pd.notna(rsi_value):
+
+        try:
+
+            rsi_value = float(rsi_value)
+
+            if rsi_penalty < 0:
+
+                analysis_comment += (
+                    f" / RSI{rsi_value:.2f}"
+                    f" / RSI減点{rsi_penalty}点"
+                    f" / 最終初動スコア{final_score}点"
+                )
+
+        except Exception:
+
+            pass
 
     judge_time = (
         time.time()
@@ -728,8 +875,14 @@ def analyze_stock(
         # 初動スコア
         # ----------------------------------------------------
 
-        "初動スコア":
+        "基本初動スコア":
             initial_score,
+
+        "RSI減点":
+            rsi_penalty,
+
+        "初動スコア":
+            final_score,
 
         "分析コメント":
             analysis_comment,
@@ -874,47 +1027,19 @@ def analyze_stock(
                 else pd.NA
             ),
 
-        "売り残":
-            (
-                credit_row["売り残"]
-                if credit_row is not None
-                and "売り残" in credit_row
-                else pd.NA
-            ),
+        "売残":
+            credit_sell,
 
-        "買い残":
-            (
-                credit_row["買い残"]
-                if credit_row is not None
-                and "買い残" in credit_row
-                else pd.NA
-            ),
+        "買残":
+            credit_buy,
 
-        "売り残前週比":
-            (
-                credit_row["売り残前週比"]
-                if credit_row is not None
-                and "売り残前週比" in credit_row
-                else pd.NA
-            ),
+        "売残前週比":
+            credit_sell_change,
 
-        "買い残前週比":
-            (
-                credit_row["買い残前週比"]
-                if credit_row is not None
-                and "買い残前週比" in credit_row
-                else pd.NA
-            ),
+        "買残前週比":
+            credit_buy_change,
 
         "信用倍率":
-            (
-                credit_row["信用倍率"]
-                if credit_row is not None
-                and "信用倍率" in credit_row
-                else pd.NA
-            ),
-
-        "信用倍率計算値":
             credit_ratio,
 
         "信用条件":

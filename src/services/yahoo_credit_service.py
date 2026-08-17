@@ -1046,6 +1046,44 @@ def load_latest_credit_data(
 
                 latest["売残前週比"] = pd.NA
 
+        # --------------------------
+        # 買残前週比
+        # --------------------------
+
+        latest["買残前週比"] = pd.NA
+
+        if len(df) >= 2:
+
+            try:
+
+                current_buy = float(
+                    latest["買残"]
+                )
+
+                previous_buy = float(
+                    df.iloc[1]["買残"]
+                )
+
+                if previous_buy != 0:
+
+                    latest["買残前週比"] = round(
+                        (
+                            current_buy
+                            / previous_buy
+                            - 1
+                        )
+                        * 100,
+                        2,
+                    )
+                    
+            except (
+                TypeError,
+                ValueError,
+                ZeroDivisionError,
+            ):
+
+                latest["買残前週比"] = pd.NA
+
         credit_map[code] = latest
 
     return credit_map
