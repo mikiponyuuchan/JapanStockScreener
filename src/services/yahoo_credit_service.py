@@ -353,7 +353,6 @@ def get_credit_history(
 
     return df
 
-
 def save_credit_history(
     df: pd.DataFrame,
     code: str,
@@ -369,10 +368,79 @@ def save_credit_history(
 
     path = DATA_DIR / f"{code}.csv"
 
-    df.to_csv(
+    existing_df = None
+
+    if path.exists():
+
+        try:
+
+            existing_df = pd.read_csv(
+                path,
+                encoding="utf-8-sig",
+            )
+
+        except Exception as e:
+
+            print(
+                f"[{code}] existing CSV read error: {e}"
+            )
+
+            existing_df = None
+
+    frames = []
+
+    if (
+        existing_df is not None
+        and not existing_df.empty
+    ):
+
+        frames.append(
+            existing_df
+        )
+
+    frames.append(
+        df.copy()
+    )
+
+    combined = pd.concat(
+        frames,
+        ignore_index=True,
+    )
+
+    if "日付" in combined.columns:
+
+        combined["日付"] = pd.to_datetime(
+            combined["日付"],
+            errors="coerce",
+        )
+
+        combined = combined.dropna(
+            subset=["日付"]
+        )
+
+        combined = combined.drop_duplicates(
+            subset=["日付"],
+            keep="last",
+        )
+
+        combined = (
+            combined
+            .sort_values(
+                "日付",
+                ascending=False,
+            )
+            .reset_index(drop=True)
+        )
+
+    combined.to_csv(
         path,
         index=False,
         encoding="utf-8-sig",
+    )
+
+    print(
+        f"[{code}] credit history saved: "
+        f"{len(combined)} rows"
     )
 
     return path
@@ -490,39 +558,11 @@ def download_credit_batch(
 
         if path.exists():
 
-            try:
-
-                df = pd.read_csv(
-                    path,
-                    encoding="utf-8-sig",
-                )
-
-                if (
-                    df is not None
-                    and not df.empty
-                ):
-
-                    results[code] = df
-
-                    print(
-                        f"[{index + 1}/{total}] "
-                        f"{code} : CSV利用"
-                    )
-
-                    # 成功したのでリセット
-                    consecutive_errors = 0
-
-                    index += 1
-                    continue
-
-            except Exception as e:
-
-                print(
-                    f"[{index + 1}/{total}] "
-                    f"{code} : CSV読込失敗 "
-                    f"{e}"
-                )
-
+            print(
+                f"[{index + 1}/{total}] "
+                f"{code} : 既存CSVあり"
+            )
+        
         # ==========================
         # 20銘柄ごとの休憩
         # ==========================
@@ -980,6 +1020,9 @@ def load_latest_credit_data(
         # --------------------------
         # 日付をdatetimeへ変換
         # --------------------------
+        # --------------------------
+        # Convert date column
+        # --------------------------
 
         if "日付" in df.columns:
 
@@ -992,13 +1035,13 @@ def load_latest_credit_data(
                 subset=["日付"]
             )
 
-            if df.empty:
-                continue
-
-            df = df.sort_values(
-                "日付",
-                ascending=False,
-            ).reset_index(drop=True)
+            df = (
+                df.sort_values(
+                    "日付",
+                    ascending=False,
+                )
+                .reset_index(drop=True)
+            )
 
         # --------------------------
         # 最新データ

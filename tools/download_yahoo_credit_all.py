@@ -6,7 +6,7 @@ import pandas as pd
 
 
 # ==========================================
-# プロジェクトの src を import 対象にする
+# Project paths
 # ==========================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +22,7 @@ from services.yahoo_credit_service import (  # noqa: E402
 
 
 # ==========================================
-# 設定
+# Settings
 # ==========================================
 
 JPX_LIST = (
@@ -38,6 +38,7 @@ FAILED_FILE = (
 )
 
 BATCH_SIZE = 50
+BATCH_WAIT_SECONDS = 20 * 60
 
 
 TARGET_MARKETS = [
@@ -48,7 +49,7 @@ TARGET_MARKETS = [
 
 
 # ==========================================
-# JPX銘柄一覧を取得
+# Load JPX target codes
 # ==========================================
 
 def load_target_codes():
@@ -74,7 +75,7 @@ def load_target_codes():
 
 
 # ==========================================
-# 取得済み銘柄
+# Existing CSV codes
 # ==========================================
 
 def get_existing_codes():
@@ -86,7 +87,7 @@ def get_existing_codes():
 
 
 # ==========================================
-# ブラックリスト
+# Failed codes
 # ==========================================
 
 def get_failed_codes():
@@ -114,7 +115,7 @@ def get_failed_codes():
     except Exception as e:
 
         print(
-            "ブラックリスト読込失敗:"
+            "Failed-code list read error:"
             f" {e}"
         )
 
@@ -122,56 +123,62 @@ def get_failed_codes():
 
 
 # ==========================================
-# メイン
+# Main
 # ==========================================
 
 def main():
 
     print()
     print("=" * 60)
-    print(" Yahoo信用データ 夜間自動取得")
+    print(" Yahoo credit data automatic download")
     print("=" * 60)
     print()
 
     # --------------------------------------
-    # 対象銘柄
+    # Target codes
     # --------------------------------------
 
     codes = load_target_codes()
 
     # --------------------------------------
-    # 状態確認
+    # Current status
     # --------------------------------------
 
     existing = get_existing_codes()
-
     failed = get_failed_codes()
 
+    # IMPORTANT:
+    # Existing CSV files are NOT excluded.
+    # Every eligible code is checked on Yahoo.
     remaining = [
         code
         for code in codes
-        if code not in existing
-        and code not in failed
+        if code not in failed
     ]
 
     print(
-        f"対象銘柄数   : {len(codes)}"
+        f"Target codes       : {len(codes)}"
     )
 
     print(
-        f"取得済み     : {len(existing)}"
+        f"Existing CSV       : {len(existing)}"
     )
 
     print(
-        f"ブラックリスト: {len(failed)}"
+        f"Blacklist          : {len(failed)}"
     )
 
     print(
-        f"残り未取得   : {len(remaining)}"
+        f"Yahoo check target : {len(remaining)}"
     )
 
     print(
-        f"1バッチ      : {BATCH_SIZE} 銘柄"
+        f"Batch size         : {BATCH_SIZE}"
+    )
+
+    print(
+        f"Batch wait         : "
+        f"{BATCH_WAIT_SECONDS // 60} minutes"
     )
 
     print()
@@ -179,13 +186,13 @@ def main():
     if not remaining:
 
         print(
-            "未取得銘柄はありません。"
+            "No target codes."
         )
 
         return
 
     # ======================================
-    # 50銘柄ずつ自動取得
+    # Process 50 codes at a time
     # ======================================
 
     batch_number = 0
@@ -195,18 +202,15 @@ def main():
         batch_number += 1
 
         # ----------------------------------
-        # 最新状態を再確認
+        # Refresh blacklist
         # ----------------------------------
-
-        existing = get_existing_codes()
 
         failed = get_failed_codes()
 
         remaining = [
             code
             for code in codes
-            if code not in existing
-            and code not in failed
+            if code not in failed
         ]
 
         if not remaining:
@@ -218,30 +222,34 @@ def main():
         print("=" * 60)
 
         print(
-            f"バッチ {batch_number}"
+            f"Batch {batch_number}"
         )
 
         print(
-            f"今回の対象 : {len(targets)} 銘柄"
+            f"Target this batch : "
+            f"{len(targets)} codes"
         )
 
         print(
-            f"残り       : {len(remaining)} 銘柄"
+            f"Remaining         : "
+            f"{len(remaining)} codes"
         )
 
         print(
-            f"先頭       : {targets[0]}"
+            f"First             : "
+            f"{targets[0]}"
         )
 
         print(
-            f"末尾       : {targets[-1]}"
+            f"Last              : "
+            f"{targets[-1]}"
         )
 
         print("=" * 60)
         print()
 
         # ----------------------------------
-        # 取得
+        # Download
         # ----------------------------------
 
         try:
@@ -252,20 +260,19 @@ def main():
 
             print()
             print(
-                f"バッチ {batch_number} 完了"
+                f"Batch {batch_number} completed"
             )
 
             print(
-                f"今回取得成功 : "
-                f"{len(result)} 銘柄"
+                f"Successful : "
+                f"{len(result)} codes"
             )
 
         except KeyboardInterrupt:
 
             print()
             print(
-                "ユーザー操作により"
-                "取得を停止しました。"
+                "Download stopped by user."
             )
 
             break
@@ -274,8 +281,7 @@ def main():
 
             print()
             print(
-                "バッチ処理で予期しない"
-                "エラーが発生しました。"
+                "Unexpected batch error:"
             )
 
             print(
@@ -284,7 +290,7 @@ def main():
 
             print()
             print(
-                "30分後に自動再開します。"
+                "Waiting 30 minutes before restart."
             )
 
             try:
@@ -297,25 +303,22 @@ def main():
 
                 print()
                 print(
-                    "ユーザー操作により"
-                    "取得を停止しました。"
+                    "Download stopped by user."
                 )
 
                 break
 
         # ----------------------------------
-        # 次のバッチ前に状態更新
+        # Refresh status
         # ----------------------------------
 
         existing = get_existing_codes()
-
         failed = get_failed_codes()
 
         remaining = [
             code
             for code in codes
-            if code not in existing
-            and code not in failed
+            if code not in failed
         ]
 
         print()
@@ -324,21 +327,21 @@ def main():
         )
 
         print(
-            "現在の進捗"
+            "Current progress"
         )
 
         print(
-            f"取得済み       : "
+            f"Existing CSV       : "
             f"{len(existing)}"
         )
 
         print(
-            f"ブラックリスト : "
+            f"Blacklist          : "
             f"{len(failed)}"
         )
 
         print(
-            f"残り未取得     : "
+            f"Yahoo check remain : "
             f"{len(remaining)}"
         )
 
@@ -351,21 +354,23 @@ def main():
             break
 
         # ----------------------------------
-        # 次バッチ
+        # Wait before next batch
         # ----------------------------------
 
         print()
         print(
-            "Yahoo負荷対策:"
+            "Yahoo load protection:"
         )
+
         print(
-            "15分休憩します..."
+            f"{BATCH_WAIT_SECONDS // 60} "
+            "minutes waiting..."
         )
 
         try:
 
             for wait_seconds in range(
-                15 * 60,
+                BATCH_WAIT_SECONDS,
                 0,
                 -60,
             ):
@@ -373,7 +378,8 @@ def main():
                 minutes = wait_seconds // 60
 
                 print(
-                    f"再開まで約 {minutes} 分..."
+                    f"Restart in about "
+                    f"{minutes} minutes..."
                 )
 
                 time.sleep(
@@ -384,54 +390,52 @@ def main():
 
             print()
             print(
-                "ユーザー操作により"
-                "取得を中断しました。"
+                "Download stopped by user."
             )
 
             break
 
         print()
         print(
-            "15分休憩が完了しました。"
+            "20-minute wait completed."
         )
+
         print(
-            "次の50銘柄へ進みます。"
+            "Starting next 50 codes."
         )
 
     # ======================================
-    # 完了
+    # Final status
     # ======================================
 
     existing = get_existing_codes()
-
     failed = get_failed_codes()
 
     remaining = [
         code
         for code in codes
-        if code not in existing
-        and code not in failed
+        if code not in failed
     ]
 
     print()
     print("=" * 60)
-    print(" Yahoo信用データ取得終了")
+    print(" Yahoo credit data download finished")
     print("=" * 60)
 
     print(
-        f"対象銘柄数       : {len(codes)}"
+        f"Target codes       : {len(codes)}"
     )
 
     print(
-        f"取得済み         : {len(existing)}"
+        f"Existing CSV       : {len(existing)}"
     )
 
     print(
-        f"ブラックリスト   : {len(failed)}"
+        f"Blacklist          : {len(failed)}"
     )
 
     print(
-        f"残り未取得       : {len(remaining)}"
+        f"Yahoo check remain : {len(remaining)}"
     )
 
     print("=" * 60)
