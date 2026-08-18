@@ -187,10 +187,6 @@ def get_credit_history(
 
     tables = soup.find_all("table")
 
-    print(
-        f"[{code}] tables={len(tables)}"
-    )
-
     if not tables:
 
         print(
@@ -438,11 +434,6 @@ def save_credit_history(
         encoding="utf-8-sig",
     )
 
-    print(
-        f"[{code}] credit history saved: "
-        f"{len(combined)} rows"
-    )
-
     return path
 
 def download_credit_batch(
@@ -453,7 +444,6 @@ def download_credit_batch(
 
     ルール
     ------
-    ・既存CSVがある銘柄はYahooへアクセスしない
     ・ブラックリスト登録銘柄はYahooへアクセスしない
     ・YahooCreditNotFound（404）はブラックリストへ追加
     ・500 / timeout / 通信エラー等はブラックリストへ追加しない
@@ -546,22 +536,6 @@ def download_credit_batch(
 
             index += 1
             continue
-
-        # ==========================
-        # 既存CSV
-        # ==========================
-
-        path = (
-            DATA_DIR
-            / f"{code}.csv"
-        )
-
-        if path.exists():
-
-            print(
-                f"[{index + 1}/{total}] "
-                f"{code} : 既存CSVあり"
-            )
         
         # ==========================
         # 20銘柄ごとの休憩
@@ -639,7 +613,7 @@ def download_credit_batch(
                         "Yahoo負荷対策のため"
                     )
                     print(
-                        "15分待機してから自動再開します。"
+                        "30分待機してから自動再開します。"
                     )
                     print(
                         "===================================="
@@ -846,7 +820,7 @@ def download_credit_batch(
                     "Yahoo負荷対策のため"
                 )
                 print(
-                    "15分待機してから自動再開します。"
+                    "30分待機してから自動再開します。"
                 )
                 print(
                     "===================================="
