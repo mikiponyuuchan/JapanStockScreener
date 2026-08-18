@@ -19,9 +19,14 @@ from services.news_service import (
 )
 
 from services.tracking_service import (
+    load_tracking,
+    update_tracking_results,
     record_initial_move,
 )
 
+from services.yahoo_credit_service import (
+    load_latest_credit_data,
+)
 
 # ==========================================================
 # 共通設定
@@ -631,11 +636,7 @@ def dataframe_to_sheet(
 
 
 # ==========================================================
-# 初動スコアTOP20 Excel
-# ==========================================================
-
-# ==========================================================
-# 初動スコアTOP20 Excel
+# 初動スコアTOP20 Excel 信用情報添付
 # ==========================================================
 
 def create_top20_sheet(
@@ -646,17 +647,23 @@ def create_top20_sheet(
     news_data,
 ):
     """
-    初動スコアTOP20をコンパクトに1枚へまとめる。
+    7点方式で選出された初動スコアTOP20を
+    コンパクトに1枚へまとめる。
 
     表示項目：
         コード
         銘柄名
         終値
         初動スコア
+        信用倍率
+        売り残増加
         高騰理由
         ニュース
         ニュース日時
         日足チャート
+
+    ※信用情報はTOP20選出には使用しない。
+      あくまでTOP20シートへの表示用。
     """
 
     # ======================================================
@@ -668,6 +675,8 @@ def create_top20_sheet(
         "銘柄名",
         "終値",
         "初動スコア",
+        "信用倍率",
+        "売り残増加",
         "高騰理由",
         "ニュース",
         "ニュース日時",
@@ -675,6 +684,51 @@ def create_top20_sheet(
     ]
 
     rows = []
+
+    # ======================================================
+    # TOP20銘柄の信用情報を取得
+    #
+    # ここではTOP20選出後に取得する。
+    # 初動スコア計算・順位には一切使用しない。
+    # ======================================================
+
+    top20_codes = []
+
+    if not initial_move_top20.empty:
+
+        for _, row in initial_move_top20.iterrows():
+
+            code = str(
+                get_value(
+                    row,
+                    "コード",
+                    ""
+                )
+            ).replace(
+                ".0",
+                ""
+            ).strip()
+
+            if code:
+                top20_codes.append(code)
+
+    credit_map = {}
+
+    if top20_codes:
+
+        try:
+
+            credit_map = load_latest_credit_data(
+                codes=top20_codes
+            )
+
+        except Exception as e:
+
+            print(
+                f"TOP20信用情報取得エラー: {e}"
+            )
+
+            credit_map = {}
 
     # ======================================================
     # データ作成
@@ -697,7 +751,60 @@ def create_top20_sheet(
             ).replace(
                 ".0",
                 ""
+            ).strip()
+
+            # ------------------------------------------------
+            # 信用情報
+            # ------------------------------------------------
+
+            credit = credit_map.get(
+                code
             )
+
+            credit_ratio = ""
+
+            sell_increase = ""
+
+            if credit is not None:
+
+                # --------------------------------------------
+                # 信用倍率
+                # --------------------------------------------
+
+                credit_ratio = get_value(
+                    credit,
+                    "信用倍率",
+                    ""
+                )
+
+                # --------------------------------------------
+                # 売り残増加
+                #
+                # 売り残前週比がプラスなら〇
+                # --------------------------------------------
+
+                sell_change = get_value(
+                    credit,
+                    "売り残前週比",
+                    ""
+                )
+
+                try:
+
+                    if (
+                        sell_change != ""
+                        and pd.notna(sell_change)
+                        and float(sell_change) > 0
+                    ):
+
+                        sell_increase = "〇"
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+
+                    sell_increase = ""
 
             # ------------------------------------------------
             # ニュース情報
@@ -793,9 +900,6 @@ def create_top20_sheet(
 
             # ------------------------------------------------
             # ニュース表示
-            #
-            # URLがあれば「ニュースを見る」と表示。
-            # URLが無ければニュースタイトルを表示。
             # ------------------------------------------------
 
             if news_link:
@@ -812,9 +916,6 @@ def create_top20_sheet(
 
             # ------------------------------------------------
             # 高騰理由のフォールバック
-            #
-            # ニュース理由分析が空だった場合でも、
-            # 初動スコアの主要な根拠を表示する。
             # ------------------------------------------------
 
             if not main_reason:
@@ -943,14 +1044,16 @@ def create_top20_sheet(
                         ""
                     ),
 
+                    "信用倍率": credit_ratio,
+
+                    "売り残増加": sell_increase,
+
                     "高騰理由": main_reason,
 
                     "ニュース": news_display,
 
                     "ニュース日時": news_date,
 
-                    # Excel上では空欄。
-                    # 下で画像を直接貼り付ける。
                     "日足チャート": "",
                 }
             )
@@ -981,14 +1084,16 @@ def create_top20_sheet(
     set_column_widths(
         sheet,
         {
-            "A": 7,    # コード
-            "B": 15,   # 銘柄名
-            "C": 8,    # 終値
-            "D": 7,    # 初動スコア
-            "E": 22,   # 高騰理由
-            "F": 22,   # ニュース
-            "G": 11,   # ニュース日時
-            "H": 25,   # 日足チャート
+            "A": 7,     # コード
+            "B": 15,    # 銘柄名
+            "C": 8,     # 終値
+            "D": 7,     # 初動スコア
+            "E": 7,    # 信用倍率
+            "F": 7,    # 売り残増加
+            "G": 22,    # 高騰理由
+            "H": 22,    # ニュース
+            "I": 11,    # ニュース日時
+            "J": 25,    # 日足チャート
         }
     )
 
@@ -1019,7 +1124,7 @@ def create_top20_sheet(
 
         sheet.row_dimensions[
             row_number
-        ].height = 105
+        ].height = 120
 
     # ======================================================
     # 初動スコア色付け
@@ -1043,24 +1148,69 @@ def create_top20_sheet(
         ] = cell.column
 
     # ======================================================
+    # 信用倍率の表示形式
+    #
+    # 1未満：
+    #   ・太字
+    #   ・赤字
+    #   ・フォントサイズ拡大
+    # ======================================================
+
+    if "信用倍率" in headers:
+
+        credit_col = headers[
+            "信用倍率"
+        ]
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
+
+            cell = sheet.cell(
+                row=row_number,
+                column=credit_col
+            )
+
+            try:
+
+                if (
+                    cell.value != ""
+                    and cell.value is not None
+                    and pd.notna(cell.value)
+                    and float(cell.value) < 1
+                ):
+
+                    cell.font = Font(
+                        name=cell.font.name,
+                        size=14,
+                        bold=True,
+                        italic=cell.font.italic,
+                        color="FF0000",
+                    )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                pass
+
+    
+    # ======================================================
     # ニュースリンク
     #
     # 「ニュース」セルそのものをクリック可能にする。
+    # 上揃え＋折り返し表示。
     # ======================================================
 
-    news_col = headers.get(
-        "ニュース"
-    )
+    if "ニュース" in headers:
 
-    if (
-        news_col is not None
-        and not initial_move_top20.empty
-    ):
+        news_col = headers[
+            "ニュース"
+        ]
 
-        for row_number, (
-            _,
-            row
-        ) in enumerate(
+        for row_number, (_, row) in enumerate(
             initial_move_top20.iterrows(),
             start=2
         ):
@@ -1074,7 +1224,7 @@ def create_top20_sheet(
             ).replace(
                 ".0",
                 ""
-            )
+            ).strip()
 
             reason = reason_data_all.get(
                 code,
@@ -1085,10 +1235,6 @@ def create_top20_sheet(
                 code,
                 []
             )
-
-            # ----------------------------------------------
-            # URL
-            # ----------------------------------------------
 
             news_link = get_reason_value(
                 reason,
@@ -1107,63 +1253,61 @@ def create_top20_sheet(
                     news_list
                 )
 
-            if not news_link:
-
-                continue
-
-            news_link = str(
-                news_link
-            ).strip()
-
-            if not (
-                news_link.startswith(
-                    "http://"
-                )
-                or
-                news_link.startswith(
-                    "https://"
-                )
-            ):
-
-                continue
-
-            # ----------------------------------------------
-            # ニュースタイトル
-            # ----------------------------------------------
-
-            news_title = get_reason_value(
-                reason,
-                [
-                    "main_title",
-                    "news_title",
-                    "title",
-                ],
-                "",
+            cell = sheet.cell(
+                row=row_number,
+                column=news_col
             )
 
-            if not news_title:
+            # ----------------------------------------------
+            # ニュース列：左揃え・上揃え・折り返し
+            # ----------------------------------------------
 
-                news_title = get_first_news_title(
-                    news_list
+            cell.alignment = Alignment(
+                horizontal="left",
+                vertical="top",
+                wrap_text=True,
+            )
+
+            # ----------------------------------------------
+            # ニュースリンク
+            # ----------------------------------------------
+
+            if news_link:
+
+                cell.hyperlink = news_link
+
+                cell.style = (
+                    "Hyperlink"
                 )
+
+                # Hyperlinkスタイル適用後も
+                # 上揃え＋折り返しを維持
+                cell.alignment = Alignment(
+                    horizontal="left",
+                    vertical="top",
+                    wrap_text=True,
+                )
+
+
+    # ======================================================
+    # ニュース日時
+    # ======================================================
+
+    if "ニュース日時" in headers:
+
+        news_date_col = headers[
+            "ニュース日時"
+        ]
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
 
             cell = sheet.cell(
-                row_number,
-                news_col
+                row=row_number,
+                column=news_date_col
             )
-
-            # タイトルがあればタイトル表示
-            # なければ「ニュースを見る」
-            if news_title:
-
-                cell.value = news_title
-
-            else:
-
-                cell.value = "ニュースを見る"
-
-            cell.hyperlink = news_link
-            cell.style = "Hyperlink"
 
             cell.alignment = Alignment(
                 horizontal="left",
@@ -1172,31 +1316,16 @@ def create_top20_sheet(
             )
 
     # ======================================================
-    # 日足チャート
-    #
-    # chart_files:
-    #     {
-    #         "3994": Path(...),
-    #         "7936": Path(...),
-    #         ...
-    #     }
-    #
-    # TOP20のコードと照合して画像を直接貼り付ける。
+    # 日足チャート貼り付け
     # ======================================================
 
-    chart_col = headers.get(
-        "日足チャート"
-    )
+    if "日足チャート" in headers:
 
-    if (
-        chart_col is not None
-        and not initial_move_top20.empty
-    ):
+        chart_col = headers[
+            "日足チャート"
+        ]
 
-        for row_number, (
-            _,
-            row
-        ) in enumerate(
+        for row_number, (_, row) in enumerate(
             initial_move_top20.iterrows(),
             start=2
         ):
@@ -1210,51 +1339,42 @@ def create_top20_sheet(
             ).replace(
                 ".0",
                 ""
-            )
+            ).strip()
 
             chart_path = chart_files.get(
                 code
             )
 
-            if not chart_path:
+            if chart_path:
 
-                continue
+                try:
 
-            chart_path = Path(
-                chart_path
-            )
-
-            if not chart_path.exists():
-
-                continue
-
-            try:
-
-                image = Image(
-                    str(chart_path)
-                )
-
-                # コンパクトTOP20用
-                image.width = 300
-                image.height = 150
-
-                cell = (
-                    get_column_letter(
-                        chart_col
+                    image = Image(
+                        str(chart_path)
                     )
-                    + str(row_number)
-                )
 
-                sheet.add_image(
-                    image,
-                    cell
-                )
+                    image.width = 400
+                    image.height = 160
 
-            except Exception as e:
+                    cell = sheet.cell(
+                        row=row_number,
+                        column=chart_col
+                    )
 
-                print(
-                    f"画像貼付ERROR {code} : {e}"
-                )
+                    image.anchor = (
+                        cell.coordinate
+                    )
+
+                    sheet.add_image(
+                        image
+                    )
+
+                except Exception as e:
+
+                    print(
+                        f"[{code}] "
+                        f"チャート貼り付けエラー: {e}"
+                    )
 
     # ======================================================
     # チャート列の中央配置
@@ -1661,6 +1781,12 @@ def save_result(df):
     )
 
     try:
+
+        tracking_df = load_tracking()
+
+        tracking_df = update_tracking_results(
+            tracking_df
+        )
 
         record_initial_move(
             initial_move_top20

@@ -560,7 +560,7 @@ def download_credit_batch(
 
         print(
             f"[{index + 1}/{total}] "
-            f"{code} : Yahoo取得開始"
+            f"{code} : Yahoo信用データ取得開始"
         )
 
         try:

@@ -11,7 +11,8 @@ from services.yahoo_service import get_history
 def save_chart(code):
 
     """
-    ローソク足 + 出来高 + MA + 年初来高値
+    ローソク足 + 出来高 + MA5 + MA25 + 年初来高値
+    直近60営業日を横長で表示
     """
 
     df = get_history(
@@ -22,9 +23,8 @@ def save_chart(code):
     if df is None or df.empty:
         return None
 
-
     # ==========================
-    # 指標
+    # 指標計算
     # ==========================
 
     df["MA5"] = (
@@ -33,30 +33,26 @@ def save_chart(code):
         .mean()
     )
 
-
     df["MA25"] = (
         df["Close"]
         .rolling(25)
         .mean()
     )
 
-
     year_high = (
         df["High"]
         .max()
     )
 
-
     # ==========================
-    # mplfinance用
+    # 直近60営業日に絞る
     # ==========================
 
-    chart_df = df.copy()
+    chart_df = df.tail(60).copy()
 
     chart_df = chart_df.set_index(
         "Date"
     )
-
 
     # ==========================
     # 保存先
@@ -71,13 +67,11 @@ def save_chart(code):
         exist_ok=True
     )
 
-
     filename = (
         folder
         /
         f"{code}.png"
     )
-
 
     # ==========================
     # 追加ライン
@@ -100,9 +94,8 @@ def save_chart(code):
 
     ]
 
-
     # ==========================
-    # チャート
+    # チャート作成
     # ==========================
 
     mpf.plot(
@@ -117,7 +110,8 @@ def save_chart(code):
 
         volume=True,
 
-        figsize=(8,5),
+        # 横長化
+        figsize=(10, 4),
 
         tight_layout=True,
 
@@ -128,6 +122,5 @@ def save_chart(code):
         )
 
     )
-
 
     return filename

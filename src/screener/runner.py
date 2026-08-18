@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -57,7 +57,7 @@ def run_screener(start=0, limit=None):
     )
 
     print(
-        f"信用データ読込 : "
+        f"Yahoo信用データ読込 : "
         f"{len(credit_map)}銘柄"
     )
 
@@ -278,7 +278,7 @@ def run_screener(start=0, limit=None):
     # 初動スコア順に全銘柄を保存。
     #
     # ここでは勝手に点数の足切りをしない。
-    # 「初動スコア15点」が唯一の評価軸。
+    # 「初動スコア7点＋RSI減点」が唯一の評価軸。
     # ========================================================
 
     screening_df = result_df.copy()
