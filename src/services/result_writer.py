@@ -1803,56 +1803,9 @@ def save_result(df):
         )
     )
 
-    print()
-    print(
-        "=============================="
-    )
-    print(
-        " 初動スコア TOP20"
-    )
-    print(
-        "=============================="
-    )
-
-    if initial_move_top20.empty:
-
-        print(
-            "初動スコア対象銘柄なし"
-        )
-
-    else:
-
-        display_columns = [
-            column
-            for column in [
-                "コード",
-                "銘柄名",
-                "終値",
-                "5日騰落率",
-                "20日騰落率",
-                "RSI",
-                "ATR",
-                "初動スコア",
-            ]
-            if column in initial_move_top20.columns
-        ]
-
-        print(
-            initial_move_top20[
-                display_columns
-            ].to_string(
-                index=False
-            )
-        )
-
     # ======================================================
     # 初動追跡
     # ======================================================
-
-    print()
-    print(
-        "過去の初動銘柄を追跡中..."
-    )
 
     try:
 
@@ -1877,11 +1830,6 @@ def save_result(df):
     # ニュース取得
     # ======================================================
 
-    print()
-    print(
-        "初動スコアTOP20ニュース取得中..."
-    )
-
     news_data = {}
 
     if not initial_move_top20.empty:
@@ -1901,36 +1849,15 @@ def save_result(df):
 
             news_data = {}
 
-    print(
-        "初動スコアTOP20ニュース取得完了"
-    )
-
-    print(
-        f"news_data件数 : {len(news_data)}"
-    )
-
     # ======================================================
     # ニュース理由分析
     # ======================================================
-
-    print()
-    print(
-        "初動スコアTOP20ニュース理由分析中..."
-    )
 
     reason_data_all = (
         analyze_top20_news(
             initial_move_top20,
             news_data,
         )
-    )
-
-    print(
-        "ニュース理由分析完了"
-    )
-
-    print(
-        f"reason_data_all件数 : {len(reason_data_all)}"
     )
 
     # ======================================================
@@ -1941,17 +1868,8 @@ def save_result(df):
 
     if not initial_move_top20.empty:
 
-        print()
-        print(
-            "日足チャート作成中..."
-        )
-
         chart_files = create_charts(
             initial_move_top20
-        )
-
-        print(
-            f"chart_files件数 : {len(chart_files)}"
         )
 
     # ======================================================
@@ -2057,21 +1975,6 @@ def save_result(df):
 
         number += 1
 
-    print()
-    print("===== chart_files DEBUG =====")
-
-    for k in list(chart_files.keys())[:5]:
-        print("chart key :", repr(k))
-
-    print()
-
-    for _, row in initial_move_top20.head().iterrows():
-        print(
-            "top20 code:",
-            repr(str(get_value(row, "コード", "")))
-        )
-
-    print("=============================")
 
     # ======================================================
     # TOP20

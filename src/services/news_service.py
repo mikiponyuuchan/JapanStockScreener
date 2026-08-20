@@ -595,12 +595,6 @@ def get_top20_news(top20):
             row["銘柄名"]
         )
 
-        print(
-            f"[{position}/{len(top20)}] "
-            f"{code} {name}"
-        )
-
-
         news = get_news(
             code=code,
             name=name,
@@ -608,17 +602,9 @@ def get_top20_news(top20):
             limit=5
         )
 
-
         news_data[code] = news
 
-
-        print(
-            f"  ニュース {len(news)}件"
-        )
-
-
     return news_data
-
 
 # ==========================
 # TOP20急騰理由分析
