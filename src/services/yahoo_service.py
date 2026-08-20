@@ -1099,6 +1099,29 @@ def _download_history_batch(
                 if df.empty:
                     continue
 
+                # ======================================
+                # 約定データが有効な日足だけを使用
+                #
+                # 場中に当日行が作られていても、
+                # まだ約定がなく OHLCV が NaN の場合は
+                # その行を除外して前営業日を最新行とする。
+                #
+                # 当日に約定があれば当日行はそのまま残す。
+                # ======================================
+
+                df = df.dropna(
+                    subset=[
+                        "Open",
+                        "High",
+                        "Low",
+                        "Close",
+                        "Volume",
+                    ]
+                ).copy()
+
+                if df.empty:
+                    continue
+
                 result = pd.DataFrame()
 
                 result["Date"] = df["Date"]
