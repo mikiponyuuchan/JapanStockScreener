@@ -223,9 +223,30 @@ def save_chart(code):
         .mean()
     )
 
-    year_high = (
+    # ==========================
+    # ブレイクライン
+    # 前日までの20営業日高値
+    # ==========================
+
+    breakout_line = (
         df["High"]
+        .shift(1)
+        .rolling(20)
         .max()
+        .iloc[-1]
+    )
+
+    # ==========================
+    # 30日高値ライン
+    # 前日までの30営業日高値
+    # ==========================
+
+    high30_line = (
+        df["High"]
+        .shift(1)
+        .rolling(30)
+        .max()
+        .iloc[-1]
     )
 
     # ==========================
@@ -275,10 +296,19 @@ def save_chart(code):
             chart_df["MA25"]
         ),
 
+         mpf.make_addplot(
+            [high30_line] * len(chart_df),
+            color="green",
+            linestyle="--",
+            secondary_y=False
+        ),
+
         mpf.make_addplot(
-            [year_high] * len(chart_df),
-            linestyle="--"
-        )
+            [breakout_line] * len(chart_df),
+            color="purple",
+            linestyle="--",
+            secondary_y=False
+        )       
 
     ]
 
