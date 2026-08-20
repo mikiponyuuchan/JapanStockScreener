@@ -2,7 +2,10 @@
 from datetime import datetime
 from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import (
+    Workbook,
+    load_workbook,
+)
 from openpyxl.styles import (
     Font,
     PatternFill,
@@ -645,6 +648,7 @@ def create_top20_sheet(
     chart_files,
     reason_data_all,
     news_data,
+    sheet_name="TOP20",
 ):
     """
     7点方式で選出された初動スコアTOP20を
@@ -1073,7 +1077,7 @@ def create_top20_sheet(
 
     sheet = dataframe_to_sheet(
         workbook,
-        "TOP20",
+        sheet_name,
         output,
     )
 
@@ -1889,15 +1893,99 @@ def save_result(df):
         "Excel作成中..."
     )
 
-    workbook = Workbook()
+    # ======================================================
+    # Excel読込 / 新規作成
+    # ======================================================
 
-    default_sheet = (
-        workbook.active
+    run_time = datetime.now().strftime(
+        "%H-%M"
     )
 
-    workbook.remove(
-        default_sheet
+    if excel_file.exists():
+
+        workbook = load_workbook(
+            excel_file
+        )
+
+        # ----------------------------------------------
+        # 旧形式のTOP20が残っていれば
+        # Excelファイルの更新時刻を使って保存
+        # ----------------------------------------------
+
+        if "TOP20" in workbook.sheetnames:
+
+            file_time = datetime.fromtimestamp(
+                excel_file.stat().st_mtime
+            ).strftime(
+                "%H-%M"
+            )
+
+            legacy_name = (
+                f"TOP20_{file_time}"
+            )
+
+            candidate = legacy_name
+            number = 2
+
+            while candidate in workbook.sheetnames:
+
+                candidate = (
+                    f"{legacy_name}_{number}"
+                )
+                number += 1
+
+            workbook["TOP20"].title = (
+                candidate
+            )
+
+        # ----------------------------------------------
+        # 最新結果へ更新するシートだけ削除
+        # ----------------------------------------------
+
+        for sheet_name in [
+            "全銘柄",
+            "初動追跡",
+        ]:
+
+            if sheet_name in workbook.sheetnames:
+
+                workbook.remove(
+                    workbook[sheet_name]
+                )
+
+    else:
+
+        workbook = Workbook()
+
+        default_sheet = (
+            workbook.active
+        )
+
+        workbook.remove(
+            default_sheet
+        )
+
+    # ======================================================
+    # 今回のTOP20シート名
+    # ======================================================
+
+    top20_sheet_name = (
+        f"TOP20_{run_time}"
     )
+
+    base_name = top20_sheet_name
+    number = 2
+
+    while (
+        top20_sheet_name
+        in workbook.sheetnames
+    ):
+
+        top20_sheet_name = (
+            f"{base_name}_{number}"
+        )
+
+        number += 1
 
     print()
     print("===== chart_files DEBUG =====")
@@ -1925,6 +2013,7 @@ def save_result(df):
         chart_files,
         reason_data_all,
         news_data,
+        sheet_name=top20_sheet_name,
     )
 
     # ======================================================
@@ -2034,15 +2123,38 @@ def save_result(df):
 
     # ======================================================
     # シート順
+    #
+    # 最新TOP20
+    # 過去TOP20（新しい順）
+    # 全銘柄
+    # 初動追跡
     # ======================================================
 
-    desired_order = [
-        "TOP20",
-        "全銘柄",
-        "初動追跡",
+    top20_sheet_names = [
+        name
+        for name in workbook.sheetnames
+        if name.startswith("TOP20_")
     ]
 
-    for sheet_name in reversed(
+    past_top20_sheet_names = sorted(
+        [
+            name
+            for name in top20_sheet_names
+            if name != top20_sheet_name
+        ],
+        reverse=True
+    )
+
+    desired_order = (
+        [top20_sheet_name]
+        + past_top20_sheet_names
+        + [
+            "全銘柄",
+            "初動追跡",
+        ]
+    )
+
+    for position, sheet_name in enumerate(
         desired_order
     ):
 
@@ -2058,18 +2170,18 @@ def save_result(df):
         )
 
         workbook._sheets.insert(
-            0,
+            position,
             sheet
         )
 
     # ======================================================
-    # TOP20を最初に表示
+    # 最新TOP20を最初に表示
     # ======================================================
 
-    if "TOP20" in workbook.sheetnames:
+    if top20_sheet_name in workbook.sheetnames:
 
         workbook.active = workbook.index(
-            workbook["TOP20"]
+            workbook[top20_sheet_name]
         )
 
     # ======================================================
