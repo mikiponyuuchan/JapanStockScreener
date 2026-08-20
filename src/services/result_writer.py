@@ -232,6 +232,76 @@ def apply_score_color(
             bold=True
         )
 
+def apply_tracking_change_color(
+    sheet
+):
+    """
+    初動追跡シートの騰落率を色付けする。
+
+    5%以上10%未満 : オレンジ太字
+    10%以上       : 赤太字
+    """
+
+    headers = {}
+
+    for cell in sheet[1]:
+        headers[cell.value] = cell.column
+
+    change_columns = [
+        column_number
+        for header_name, column_number in headers.items()
+        if (
+            isinstance(
+                header_name,
+                str
+            )
+            and header_name.endswith(
+                "騰落率"
+            )
+        )
+    ]
+
+    if not change_columns:
+        return
+
+    for row_number in range(
+        2,
+        sheet.max_row + 1
+    ):
+
+        for column_number in change_columns:
+
+            cell = sheet.cell(
+                row=row_number,
+                column=column_number
+            )
+
+            try:
+
+                value = float(
+                    cell.value
+                )
+
+            except Exception:
+
+                continue
+
+            if pd.isna(value):
+                continue
+
+            if value >= 10:
+
+                cell.font = Font(
+                    color="FF0000",
+                    bold=True
+                )
+
+            elif value >= 5:
+
+                cell.font = Font(
+                    color="0000FF",
+                    bold=True
+                )
 
 # ==========================================================
 # 初動スコアTOP20作成
@@ -2115,10 +2185,14 @@ def save_result(df):
 
         tracking_df = pd.DataFrame()
 
-    dataframe_to_sheet(
+    tracking_sheet = dataframe_to_sheet(
         workbook,
         "初動追跡",
         tracking_df,
+    )
+
+    apply_tracking_change_color(
+        tracking_sheet
     )
 
     # ======================================================
