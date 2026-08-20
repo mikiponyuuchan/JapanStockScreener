@@ -226,26 +226,7 @@ def main():
                         result
                     )
 
-                    # ----------------------------------
-                    # 初動スコア表示
-                    # ----------------------------------
-
-                    print(
-                        f"[{completed}/"
-                        f"{len(futures)}] "
-                        f"OK {code} : "
-                        f"終値={result.get('終値', '')} "
-                        f"初動スコア={result.get('初動スコア', 0)}"
-                    )
-
-                else:
-
-                    print(
-                        f"[{completed}/"
-                        f"{len(futures)}] "
-                        f"NONE {code}"
-                    )
-
+                    
             except Exception as e:
 
                 error_count += 1
@@ -254,6 +235,14 @@ def main():
                     f"[{completed}/"
                     f"{len(futures)}] "
                     f"ERROR {code} : {e}"
+                )
+
+            if (
+                completed % 1000 == 0
+                or completed == len(futures)
+            ):
+                print(
+                    f"進捗 : {completed} / {len(futures)}"
                 )
 
     analysis_time = (

@@ -80,11 +80,6 @@ def print_yahoo_stats():
     )
 
     print(
-        f"キャッシュ利用        : "
-        f"{stats['cache_hits']}"
-    )
-
-    print(
         f"キャッシュ更新        : "
         f"{stats['cache_updates']}"
     )
@@ -533,11 +528,6 @@ def get_history(
                             elapsed
                         )
 
-                        print(
-                            f"キャッシュ利用 : "
-                            f"{elapsed:.2f} 秒"
-                        )
-
                         return cached_df
 
                     # ==========================
@@ -596,11 +586,6 @@ def get_history(
                         _add_stat(
                             "total_get_history_time",
                             elapsed
-                        )
-
-                        print(
-                            f"データ更新(Yahoo) : "
-                            f"{elapsed:.2f} 秒"
                         )
 
                         return combined_df
@@ -662,8 +647,6 @@ def get_history(
     elapsed = time.time() - start_time
     _add_stat("total_get_history_time", elapsed)
 
-    print(f"データ取得(Yahoo) : {elapsed:.2f} 秒")
-
     return df
 
 # ==========================
@@ -720,13 +703,6 @@ def _read_parquet_history(code: str):
             )
 
         elapsed = time.time() - start_time
-
-        print(
-            f"Parquet利用 : "
-            f"{code} / "
-            f"{len(df)}行 / "
-            f"{elapsed:.4f}秒"
-        )
 
         return df
 
@@ -824,12 +800,6 @@ def _read_parquet_history(code: str):
                         - start_time
                     )
 
-                    print(
-                        f"Parquetメモリ読込 : "
-                        f"{len(df_all)}行 / "
-                        f"{elapsed:.4f}秒"
-                    )
-
         # --------------------------
         # メモリから対象銘柄だけ抽出
         # --------------------------
@@ -903,24 +873,12 @@ def get_history_parquet(
                 - start_time
             )
 
-            print(
-                f"Parquetキャッシュ利用 : "
-                f"{code} / "
-                f"{len(df)}行 / "
-                f"{elapsed:.4f}秒"
-            )
-
             return df
 
         # ==========================
         # 古い場合
         # Yahooから10日分取得
         # ==========================
-        print(
-            f"Parquet更新必要 : "
-            f"{code} / 最新={latest_date.date()} / 期待={expected_date.date()}"
-        )
-
         update_df = _download_history(code, period="10d")
 
         if update_df is not None and not update_df.empty:
@@ -934,8 +892,6 @@ def get_history_parquet(
                 .sort_values("Date")
                 .drop_duplicates(subset=["Date"], keep="last")
             )
-
-            print(f"Parquet更新取得成功 : {code} / {len(combined_df)}行")
 
             # ★★★ 追加：Parquetファイルを更新する ★★★
             combined_df.to_parquet(PARQUET_CACHE_FILE)
@@ -958,11 +914,6 @@ def get_history_parquet(
     # Parquetに存在しない場合
     # ==========================
 
-    print(
-        f"Parquet未登録 : "
-        f"{code} / Yahoo取得"
-    )
-
     df = _download_history(
         code,
         period=period
@@ -974,13 +925,6 @@ def get_history_parquet(
     elapsed = (
         time.time()
         - start_time
-    )
-
-    print(
-        f"Yahoo初回取得 : "
-        f"{code} / "
-        f"{len(df)}行 / "
-        f"{elapsed:.4f}秒"
     )
 
     return df.copy()
@@ -1033,12 +977,20 @@ def _download_history_batch(
             for code in batch_codes
         ]
 
-        print(
-            f"Yahoo batch download "
-            f"{batch_start + 1}-"
-            f"{batch_start + len(batch_codes)} / "
-            f"{total}"
+        completed_count = (
+            batch_start
+            + len(batch_codes)
         )
+
+        if (
+            completed_count % 1000 == 0
+            or completed_count == total
+        ):
+            print(
+                f"Yahoo進捗 : "
+                f"{completed_count} / "
+                f"{total}"
+            )
 
         try:
 
