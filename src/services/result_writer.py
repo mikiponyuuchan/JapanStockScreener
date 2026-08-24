@@ -238,7 +238,7 @@ def apply_tracking_change_color(
     """
     初動追跡シートの騰落率を色付けする。
 
-    5%以上10%未満 : オレンジ太字
+    5%以上10%未満 : 青太字
     10%以上       : 赤太字
     """
 
@@ -712,6 +712,348 @@ def dataframe_to_sheet(
 # 初動スコアTOP20 Excel 信用情報添付
 # ==========================================================
 
+
+# ==========================================================
+# Buy avoidance alert
+#
+# This alert is completely independent from Initial Score.
+#
+# A : high-zone stall
+# C : one-day spike
+# D : extreme overheating
+# F : deceleration after previous-day surge
+# H2: low score + weak 20-day volume
+# ==========================================================
+
+def _alert_float(value):
+    try:
+        if value is None or pd.isna(value):
+            return float("nan")
+        return float(value)
+    except Exception:
+        return float("nan")
+
+
+def _load_previous_chg1_map():
+    """
+    Load CHG1 from the most recent stock_result.csv
+    before today.
+
+    Used only for F alert.
+    """
+
+    today = pd.Timestamp(
+        datetime.now().date()
+    )
+
+    previous_file = None
+    previous_date = None
+
+    for p in RESULT_DIR.glob(
+        "*_stock_result.csv"
+    ):
+        try:
+            d = pd.Timestamp(
+                p.name[:10]
+            )
+        except Exception:
+            continue
+
+        if d >= today:
+            continue
+
+        if (
+            previous_date is None
+            or d > previous_date
+        ):
+            previous_date = d
+            previous_file = p
+
+    if previous_file is None:
+        return {}
+
+    try:
+        prev = pd.read_csv(
+            previous_file,
+            encoding="utf-8-sig",
+            dtype=str,
+        )
+    except Exception as e:
+        print(
+            f"previous result load ERROR: {e}"
+        )
+        return {}
+
+    if len(prev.columns) <= 4:
+        return {}
+
+    code_col = prev.columns[0]
+    chg1_col = prev.columns[4]
+
+    chg1_numeric = pd.to_numeric(
+        prev[chg1_col],
+        errors="coerce",
+    )
+
+    result = {}
+
+    for i, row in prev.iterrows():
+
+        code = str(
+            row[code_col]
+        ).replace(
+            ".0",
+            ""
+        ).strip()
+
+        if not code:
+            continue
+
+        result[code] = (
+            chg1_numeric.iloc[i]
+        )
+
+    return result
+
+
+def _build_buy_avoidance_map(
+    initial_move_top20,
+):
+    """
+    Return:
+        {
+            code: {
+                "avoid": "??" or "?",
+                "comment": "...",
+            }
+        }
+
+    Initial Score itself is NOT changed.
+    """
+
+    result = {}
+
+    if initial_move_top20 is None:
+        return result
+
+    if initial_move_top20.empty:
+        return result
+
+    prev_chg1_map = (
+        _load_previous_chg1_map()
+    )
+
+    for _, row in (
+        initial_move_top20.iterrows()
+    ):
+
+        code = str(
+            get_value(
+                row,
+                "\u30b3\u30fc\u30c9",
+                "",
+            )
+        ).replace(
+            ".0",
+            ""
+        ).strip()
+
+        chg1 = _alert_float(
+            get_value(
+                row,
+                "\u524d\u65e5\u6bd4",
+                float("nan"),
+            )
+        )
+
+        chg5 = _alert_float(
+            get_value(
+                row,
+                "5\u65e5\u9a30\u843d\u7387",
+                float("nan"),
+            )
+        )
+
+        chg20 = _alert_float(
+            get_value(
+                row,
+                "20\u65e5\u9a30\u843d\u7387",
+                float("nan"),
+            )
+        )
+
+        rsi = _alert_float(
+            get_value(
+                row,
+                "RSI",
+                float("nan"),
+            )
+        )
+
+        score = _alert_float(
+            get_value(
+                row,
+                "\u521d\u52d5\u30b9\u30b3\u30a2",
+                float("nan"),
+            )
+        )
+
+        vol = _alert_float(
+            get_value(
+                row,
+                "VolumeRatio",
+                float("nan"),
+            )
+        )
+
+        vol20 = _alert_float(
+            get_value(
+                row,
+                "VolumeRatio20",
+                float("nan"),
+            )
+        )
+
+        ma25dev = _alert_float(
+            get_value(
+                row,
+                "MA25Deviation",
+                float("nan"),
+            )
+        )
+
+        prev_chg1 = (
+            prev_chg1_map.get(
+                code,
+                float("nan"),
+            )
+        )
+
+        # --------------------------------------------------
+        # A : high-zone stall
+        # CHG20 >= 25
+        # AND CHG1 < 8
+        # AND RSI >= 75
+        # AND VolumeRatio <= 2.5
+        # --------------------------------------------------
+
+        alert_a = (
+            pd.notna(chg20)
+            and pd.notna(chg1)
+            and pd.notna(rsi)
+            and pd.notna(vol)
+            and chg20 >= 25
+            and chg1 < 8
+            and rsi >= 75
+            and vol <= 2.5
+        )
+
+        # --------------------------------------------------
+        # C : one-day spike
+        # CHG1 >= 12
+        # AND CHG5 < 15
+        # AND RSI < 60
+        # AND VolumeRatio >= 4
+        # --------------------------------------------------
+
+        alert_c = (
+            pd.notna(chg1)
+            and pd.notna(chg5)
+            and pd.notna(rsi)
+            and pd.notna(vol)
+            and chg1 >= 12
+            and chg5 < 15
+            and rsi < 60
+            and vol >= 4
+        )
+
+        # --------------------------------------------------
+        # D : extreme overheating
+        # (RSI >= 95 AND CHG5 >= 40)
+        # OR MA25Deviation >= 80
+        # --------------------------------------------------
+
+        alert_d = (
+            (
+                pd.notna(rsi)
+                and pd.notna(chg5)
+                and rsi >= 95
+                and chg5 >= 40
+            )
+            or
+            (
+                pd.notna(ma25dev)
+                and ma25dev >= 80
+            )
+        )
+
+        # --------------------------------------------------
+        # F : previous-day surge -> deceleration
+        # PREV_CHG1 >= 10
+        # AND CHG1 < 8
+        # --------------------------------------------------
+
+        alert_f = (
+            pd.notna(prev_chg1)
+            and pd.notna(chg1)
+            and prev_chg1 >= 10
+            and chg1 < 8
+        )
+
+        # --------------------------------------------------
+        # H2 : low score + weak 20-day volume
+        # SCORE <= 2
+        # AND VolumeRatio20 < 3
+        # --------------------------------------------------
+
+        alert_h2 = (
+            pd.notna(score)
+            and pd.notna(vol20)
+            and score <= 2
+            and vol20 < 3
+        )
+
+        comments = []
+
+        if alert_a:
+            comments.append(
+                "\u9ad8\u5024\u570f\u5931\u901f"
+            )
+
+        if alert_c:
+            comments.append(
+                "\u5358\u65e5\u5439\u304d\u4e0a\u304c\u308a"
+            )
+
+        if alert_d:
+            comments.append(
+                "\u6975\u7aef\u904e\u71b1"
+            )
+
+        if alert_f:
+            comments.append(
+                "\u524d\u65e5\u6025\u9a30\u304b\u3089\u306e\u5931\u901f"
+            )
+
+        if alert_h2:
+            comments.append(
+                "\u4f4e\u30b9\u30b3\u30a2\u30fb\u4f4e\u51fa\u6765\u9ad8"
+            )
+
+        result[code] = {
+            "avoid": (
+                "\u56de\u907f"
+                if comments
+                else "\uff0d"
+            ),
+            "comment": (
+                " / ".join(comments)
+            ),
+        }
+
+    return result
+
+
 def create_top20_sheet(
     workbook,
     initial_move_top20,
@@ -1142,6 +1484,70 @@ def create_top20_sheet(
     )
 
     # ======================================================
+    # Buy avoidance alert
+    #
+    # Insert immediately after Initial Score.
+    # Initial Score ranking/calculation is unchanged.
+    # ======================================================
+
+    alert_map = (
+        _build_buy_avoidance_map(
+            initial_move_top20
+        )
+    )
+
+    avoid_values = []
+    comment_values = []
+
+    if not output.empty:
+
+        for code_value in output[
+            "\u30b3\u30fc\u30c9"
+        ]:
+
+            code = str(
+                code_value
+            ).replace(
+                ".0",
+                ""
+            ).strip()
+
+            info = alert_map.get(
+                code,
+                {
+                    "avoid": "\uff0d",
+                    "comment": "",
+                }
+            )
+
+            avoid_values.append(
+                info["avoid"]
+            )
+
+            comment_values.append(
+                info["comment"]
+            )
+
+        score_position = (
+            output.columns.get_loc(
+                "\u521d\u52d5\u30b9\u30b3\u30a2"
+            )
+            + 1
+        )
+
+        output.insert(
+            score_position,
+            "\u8cb7\u3044\u56de\u907f",
+            avoid_values,
+        )
+
+        output.insert(
+            score_position + 1,
+            "\u56de\u907f\u30b3\u30e1\u30f3\u30c8",
+            comment_values,
+        )
+
+    # ======================================================
     # シート作成
     # ======================================================
 
@@ -1158,16 +1564,18 @@ def create_top20_sheet(
     set_column_widths(
         sheet,
         {
-            "A": 7,     # コード
-            "B": 15,    # 銘柄名
-            "C": 8,     # 終値
-            "D": 7,     # 初動スコア
-            "E": 7,    # 信用倍率
-            "F": 7,    # 売り残増加
-            "G": 22,    # 高騰理由
-            "H": 22,    # ニュース
-            "I": 11,    # ニュース日時
-            "J": 25,    # 日足チャート
+            "A": 6,     # code
+            "B": 14,    # name
+            "C": 8,     # close
+            "D": 6,     # initial score
+            "E": 6,     # buy avoidance
+            "F": 12,    # avoidance comment
+            "G": 7,     # credit ratio
+            "H": 7,     # short increase
+            "I": 13,    # reason
+            "J": 20,    # news
+            "K": 11,    # news date
+            "L": 25,    # chart
         }
     )
 
@@ -1229,6 +1637,73 @@ def create_top20_sheet(
     #   ・赤字
     #   ・フォントサイズ拡大
     # ======================================================
+
+    # ======================================================
+    # Buy avoidance display
+    #
+    # "avoid" = red fill + white bold font
+    # ======================================================
+
+    if "\u8cb7\u3044\u56de\u907f" in headers:
+
+        avoid_col = headers[
+            "\u8cb7\u3044\u56de\u907f"
+        ]
+
+        red_fill = PatternFill(
+            fill_type="solid",
+            start_color="FFC00000",
+            end_color="FFC00000",
+        )
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
+
+            cell = sheet.cell(
+                row=row_number,
+                column=avoid_col,
+            )
+
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+            )
+
+            if str(
+                cell.value
+            ).strip() == "\u56de\u907f":
+
+                cell.fill = red_fill
+
+                cell.font = Font(
+                    name=cell.font.name,
+                    size=cell.font.sz or 11,
+                    bold=True,
+                    color="FFFFFFFF",
+                )
+
+    if "\u56de\u907f\u30b3\u30e1\u30f3\u30c8" in headers:
+
+        comment_col = headers[
+            "\u56de\u907f\u30b3\u30e1\u30f3\u30c8"
+        ]
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
+
+            cell = sheet.cell(
+                row=row_number,
+                column=comment_col,
+            )
+
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
 
     if "信用倍率" in headers:
 
@@ -1427,7 +1902,7 @@ def create_top20_sheet(
                         str(chart_path)
                     )
 
-                    image.width = 400
+                    image.width = 350
                     image.height = 160
 
                     cell = sheet.cell(
@@ -2032,7 +2507,7 @@ def save_result(df):
 
         result_sheet.column_dimensions[
             col
-        ].width = 60
+        ].width = 50
 
     # 信用情報日付
     if "信用情報日付" in headers:
