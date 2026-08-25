@@ -496,17 +496,17 @@ def main():
     )
 
     print(
-        f"データ取得時間       : "
+        f"データ取得累積       : "
         f"{data_total:.1f} 秒"
     )
 
     print(
-        f"指標計算時間         : "
+        f"指標計算累積         : "
         f"{indicator_total:.1f} 秒"
     )
 
     print(
-        f"判定時間             : "
+        f"判定累積             : "
         f"{judge_total:.1f} 秒"
     )
 
@@ -516,7 +516,7 @@ def main():
     )
 
     print(
-        f"分析時間             : "
+        f"分析実時間           : "
         f"{analysis_time:.1f} 秒"
     )
 
