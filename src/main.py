@@ -1,4 +1,4 @@
-import time
+﻿import time
 import pandas as pd
 
 from concurrent.futures import (
@@ -110,23 +110,12 @@ def main():
 
     # ==================================================
     # Yahoo信用データ
+    #
+    # 信用データはTOP20のみ更新する。
+    # result_writer.py 側でTOP20銘柄の信用データを更新する。
     # ==================================================
 
-    print()
-    print(
-        "Yahoo信用データ読み込み開始..."
-    )
-    print()
-
-    # ????????????????
-    # ?????TOP20????
-    # result_writer.py ?????????????
     credit_map = {}
-
-    print(
-        f"Yahoo信用データ : "
-        f"{len(credit_map)}銘柄"
-    )
 
     # ==================================================
     # 分析開始

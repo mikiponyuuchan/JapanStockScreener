@@ -824,7 +824,7 @@ def _build_buy_avoidance_map(
     Return:
         {
             code: {
-                "avoid": "??" or "?",
+                "avoid": "\u56de\u907f" or "\uff0d",
                 "comment": "...",
             }
         }
@@ -1057,12 +1057,12 @@ def _build_buy_avoidance_map(
 
 
 # ==========================================================
-# TOP20 Yahoo???? ??
+# TOP20 Yahoo\u4fe1\u7528\u30c7\u30fc\u30bf\u66f4\u65b0
 #
-# ??????????
-# ?TOP20????
-# ??????CSV?Yahoo????????
-# ??? / ??????Yahoo???
+# \u521d\u52d5\u30b9\u30b3\u30a2\u306b\u306f\u4f7f\u7528\u3057\u306a\u3044\u3002
+# TOP20\u9078\u51fa\u5f8c\u306b\u306e\u307f\u5b9f\u884c\u3059\u308b\u3002
+# \u4fdd\u5b58\u6e08\u307fCSV\u306e\u65e5\u4ed8\u3092\u78ba\u8a8d\u3057\u3001
+# \u53e4\u3044\u9298\u67c4\u30fb\u672a\u53d6\u5f97\u9298\u67c4\u3060\u3051Yahoo\u304b\u3089\u66f4\u65b0\u3059\u308b\u3002
 # ==========================================================
 
 YAHOO_CREDIT_DIR = Path(
@@ -1072,20 +1072,20 @@ YAHOO_CREDIT_DIR = Path(
 
 def _expected_yahoo_credit_date():
     """
-    Yahoo??????????????
+    Yahoo\u4fe1\u7528\u30c7\u30fc\u30bf\u306e\u671f\u5f85\u57fa\u6e96\u65e5\u3092\u8fd4\u3059\u3002
 
-    ?????????????
-    ?????????????????????
+    \u4fe1\u7528\u53d6\u5f15\u30c7\u30fc\u30bf\u306f\u9031\u6b21\u66f4\u65b0\u306e\u305f\u3081\u3001
+    \u57fa\u6e96\u65e5\u306f\u91d1\u66dc\u65e5\u3068\u3057\u3066\u6271\u3046\u3002
 
-    ?????18?????
-    1????????????????
+    \u91d1\u66dc\u65e5\u5206\u306e\u30c7\u30fc\u30bf\u306f\u7fcc\u9031\u706b\u66dc\u65e518\u6642\u4ee5\u964d\u306b
+    \u5229\u7528\u53ef\u80fd\u306b\u306a\u308b\u60f3\u5b9a\u3068\u3059\u308b\u3002
 
-    ?:
-        ??18??? -> ?????
-        ??         -> ???1??????
+    \u4f8b:
+        \u706b\u66dc\u65e518\u6642\u4ee5\u964d -> \u76f4\u524d\u306e\u91d1\u66dc\u65e5
+        \u305d\u308c\u4ee5\u524d       -> \u3055\u3089\u306b1\u9031\u9593\u524d\u306e\u91d1\u66dc\u65e5
 
-    Yahoo?????????????????
-    ?????????????
+    Yahoo\u5074\u306e\u66f4\u65b0\u524d\u306b\u4e0d\u8981\u306a\u518d\u53d6\u5f97\u3092\u884c\u308f\u306a\u3044\u305f\u3081\u306e
+    \u5224\u5b9a\u306b\u4f7f\u7528\u3059\u308b\u3002
     """
 
     now = pd.Timestamp.now()
@@ -1103,8 +1103,8 @@ def _expected_yahoo_credit_date():
         )
     )
 
-    # candidate(??)?????
-    # ????????? = ???18?
+    # candidate\uff08\u91d1\u66dc\u65e5\uff09\u306e\u30c7\u30fc\u30bf\u516c\u958b\u4e88\u5b9a\u6642\u523b
+    # \u7fcc\u9031\u706b\u66dc\u65e518\u6642 = \u91d1\u66dc\u65e5 + 4\u65e5 + 18\u6642\u9593
     publish_time = (
         candidate
         + pd.Timedelta(days=4)
@@ -1125,11 +1125,11 @@ def _get_credit_csv_latest_date(
     code,
 ):
     """
-    data/yahoo_credit/{code}.csv ?
-    ?????????
+    data/yahoo_credit/{code}.csv \u304b\u3089
+    \u6700\u65b0\u306e\u4fe1\u7528\u60c5\u5831\u65e5\u4ed8\u3092\u53d6\u5f97\u3059\u308b\u3002
 
-    ?????????????????
-    ?????????????2?????
+    CSV\u304c\u5b58\u5728\u3057\u306a\u3044\u5834\u5408\u3084\u3001
+    \u6709\u52b9\u306a\u65e5\u4ed8\u3092\u53d6\u5f97\u3067\u304d\u306a\u3044\u5834\u5408\u306fNone\u3092\u8fd4\u3059\u3002
     """
 
     path = (
@@ -1156,7 +1156,7 @@ def _get_credit_csv_latest_date(
         return None
 
     # ----------------------------------------------
-    # ??????
+    # \u65e5\u4ed8\u5217\u3092\u63a2\u3059
     # ----------------------------------------------
 
     date_col = None
@@ -1166,15 +1166,15 @@ def _get_credit_csv_latest_date(
         name = str(col)
 
         if (
-            "??" in name
+            "\u65e5\u4ed8" in name
             or "date" in name.lower()
         ):
 
             date_col = col
             break
 
-    # Yahoo??CSV???
-    # 2?????
+    # Yahoo\u4fe1\u7528CSV\u306e\u5f62\u5f0f\u5dee\u306b\u5099\u3048\u308b
+    # \u65e5\u4ed8\u5217\u304c\u898b\u3064\u304b\u3089\u306a\u3051\u308c\u30702\u5217\u76ee\u3092\u4f7f\u7528\u3059\u308b
     if date_col is None:
 
         if len(df.columns) >= 2:
@@ -1185,30 +1185,24 @@ def _get_credit_csv_latest_date(
 
             return None
 
-
     dates = pd.to_datetime(
         df[date_col],
         errors="coerce",
-    )
-
-    dates = dates.dropna()
+    ).dropna()
 
     if dates.empty:
         return None
 
-    return (
-        dates.max()
-        .normalize()
-    )
+    return dates.max().normalize()
 
 
 def _refresh_top20_credit(
     codes,
 ):
     """
-    TOP20????
-    ??CSV??? / ??????
-    Yahoo???????
+    TOP20銘柄の信用情報を確認する。
+    既存CSVの最新日を確認し、
+    必要な銘柄だけYahooから更新する。
     """
 
     if not codes:
@@ -1222,11 +1216,11 @@ def _refresh_top20_credit(
 
     print()
     print(
-        "TOP20 Yahoo??????..."
+        "TOP20 Yahoo信用データ確認..."
     )
 
     print(
-        "??????? :",
+        "信用データ基準日 :",
         expected_date.date()
     )
 
@@ -1250,11 +1244,10 @@ def _refresh_top20_credit(
 
             print(
                 f"{code} : "
-                "??CSV?? -> Yahoo??"
+                "既存CSVなし -> Yahoo更新"
             )
 
             continue
-
 
         if latest_date < expected_date:
 
@@ -1264,53 +1257,50 @@ def _refresh_top20_credit(
 
             print(
                 f"{code} : "
-                f"???={latest_date.date()} "
-                "-> Yahoo??"
+                f"最新={latest_date.date()} "
+                "-> Yahoo更新"
             )
 
             continue
 
-
     print()
 
     print(
-        "TOP20??        :",
+        "TOP20銘柄数      :",
         len(codes)
     )
 
     print(
-        "Yahoo????    :",
+        "Yahoo更新対象    :",
         len(refresh_codes)
     )
 
     print(
-        "????CSV??   :",
+        "既存CSV利用      :",
         len(codes)
         - len(refresh_codes)
     )
 
-
-    # ----------------------------------------------
-    # ??????Yahoo??????
-    # ----------------------------------------------
+    # ------------------------------------------------
+    # 更新が必要な銘柄だけYahooから取得
+    # ------------------------------------------------
 
     if not refresh_codes:
 
         print(
-            "TOP20????????????"
+            "TOP20信用データはすべて最新です。"
         )
 
         return
 
-
     print()
     print(
-        "?????Yahoo??????????..."
+        "更新対象のYahoo信用データを取得します..."
     )
 
-    # ??TOP20???
-    # ?? download_credit_batch() ?
-    # 500???????????????
+    # TOP20だけを対象にする。
+    # download_credit_batch() を使用し、
+    # Yahooの500エラー対策は既存処理に任せる。
     try:
 
         download_credit_batch(
@@ -1321,15 +1311,14 @@ def _refresh_top20_credit(
 
         print()
         print(
-            "TOP20??????????????"
+            "TOP20信用データ更新を中断しました。"
         )
 
     except Exception as e:
 
         print(
-            f"TOP20?????????: {e}"
+            f"TOP20信用データ更新エラー: {e}"
         )
-
 
 def create_top20_sheet(
     workbook,
@@ -1412,14 +1401,14 @@ def create_top20_sheet(
         try:
 
             # ==============================================
-            # TOP20?????????
+            # TOP20銘柄の信用情報を更新
             # ==============================================
 
             _refresh_top20_credit(
                 top20_codes
             )
 
-            # ????????CSV?????
+            # 更新済みCSVから最新信用データを読み込む
             credit_map = load_latest_credit_data(
                 codes=top20_codes
             )
