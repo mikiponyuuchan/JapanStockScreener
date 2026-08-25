@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.pyc
 
@@ -7,13 +7,15 @@ __pycache__/
 
 # ログ
 logs/
-
-# 一時ファイル
 *.log
 
 # 実行結果
 results/
 data/cache/
 
+# 自動取得データ
 data/jpx_credit/
 data/yahoo_credit/
+
+# 一時バックアップ
+*.bak_*
