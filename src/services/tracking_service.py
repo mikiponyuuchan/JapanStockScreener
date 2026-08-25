@@ -1043,11 +1043,6 @@ def record_initial_move(df):
 
     print()
     print(
-        "初動追跡データ保存 :",
-        TRACKING_FILE
-    )
-
-    print(
         "今回の新規記録件数 :",
         len(new_rows)
     )
