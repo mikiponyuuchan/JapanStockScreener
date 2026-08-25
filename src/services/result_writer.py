@@ -29,6 +29,7 @@ from services.tracking_service import (
 
 from services.yahoo_credit_service import (
     load_latest_credit_data,
+    download_credit_batch,
 )
 
 # ==========================================================
@@ -1054,6 +1055,282 @@ def _build_buy_avoidance_map(
     return result
 
 
+
+# ==========================================================
+# TOP20 Yahoo???? ??
+#
+# ??????????
+# ?TOP20????
+# ??????CSV?Yahoo????????
+# ??? / ??????Yahoo???
+# ==========================================================
+
+YAHOO_CREDIT_DIR = Path(
+    "data/yahoo_credit"
+)
+
+
+def _expected_yahoo_credit_date():
+    """
+    Yahoo??????????????
+
+    ?????????????
+    ?????????????????????
+
+    ?????18?????
+    1????????????????
+
+    ?:
+        ??18??? -> ?????
+        ??         -> ???1??????
+
+    Yahoo?????????????????
+    ?????????????
+    """
+
+    now = pd.Timestamp.now()
+
+    today = now.normalize()
+
+    days_since_friday = (
+        today.weekday() - 4
+    ) % 7
+
+    candidate = (
+        today
+        - pd.Timedelta(
+            days=days_since_friday
+        )
+    )
+
+    # candidate(??)?????
+    # ????????? = ???18?
+    publish_time = (
+        candidate
+        + pd.Timedelta(days=4)
+        + pd.Timedelta(hours=18)
+    )
+
+    if now < publish_time:
+
+        candidate = (
+            candidate
+            - pd.Timedelta(days=7)
+        )
+
+    return candidate.normalize()
+
+
+def _get_credit_csv_latest_date(
+    code,
+):
+    """
+    data/yahoo_credit/{code}.csv ?
+    ?????????
+
+    ?????????????????
+    ?????????????2?????
+    """
+
+    path = (
+        YAHOO_CREDIT_DIR
+        / f"{code}.csv"
+    )
+
+    if not path.exists():
+        return None
+
+    try:
+
+        df = pd.read_csv(
+            path,
+            encoding="utf-8-sig",
+            dtype=str,
+        )
+
+    except Exception:
+
+        return None
+
+    if df.empty:
+        return None
+
+    # ----------------------------------------------
+    # ??????
+    # ----------------------------------------------
+
+    date_col = None
+
+    for col in df.columns:
+
+        name = str(col)
+
+        if (
+            "??" in name
+            or "date" in name.lower()
+        ):
+
+            date_col = col
+            break
+
+    # Yahoo??CSV???
+    # 2?????
+    if date_col is None:
+
+        if len(df.columns) >= 2:
+
+            date_col = df.columns[1]
+
+        else:
+
+            return None
+
+
+    dates = pd.to_datetime(
+        df[date_col],
+        errors="coerce",
+    )
+
+    dates = dates.dropna()
+
+    if dates.empty:
+        return None
+
+    return (
+        dates.max()
+        .normalize()
+    )
+
+
+def _refresh_top20_credit(
+    codes,
+):
+    """
+    TOP20????
+    ??CSV??? / ??????
+    Yahoo???????
+    """
+
+    if not codes:
+        return
+
+    expected_date = (
+        _expected_yahoo_credit_date()
+    )
+
+    refresh_codes = []
+
+    print()
+    print(
+        "TOP20 Yahoo??????..."
+    )
+
+    print(
+        "??????? :",
+        expected_date.date()
+    )
+
+    for code in codes:
+
+        code = str(
+            code
+        ).strip()
+
+        latest_date = (
+            _get_credit_csv_latest_date(
+                code
+            )
+        )
+
+        if latest_date is None:
+
+            refresh_codes.append(
+                code
+            )
+
+            print(
+                f"{code} : "
+                "??CSV?? -> Yahoo??"
+            )
+
+            continue
+
+
+        if latest_date < expected_date:
+
+            refresh_codes.append(
+                code
+            )
+
+            print(
+                f"{code} : "
+                f"???={latest_date.date()} "
+                "-> Yahoo??"
+            )
+
+            continue
+
+
+    print()
+
+    print(
+        "TOP20??        :",
+        len(codes)
+    )
+
+    print(
+        "Yahoo????    :",
+        len(refresh_codes)
+    )
+
+    print(
+        "????CSV??   :",
+        len(codes)
+        - len(refresh_codes)
+    )
+
+
+    # ----------------------------------------------
+    # ??????Yahoo??????
+    # ----------------------------------------------
+
+    if not refresh_codes:
+
+        print(
+            "TOP20????????????"
+        )
+
+        return
+
+
+    print()
+    print(
+        "?????Yahoo??????????..."
+    )
+
+    # ??TOP20???
+    # ?? download_credit_batch() ?
+    # 500???????????????
+    try:
+
+        download_credit_batch(
+            refresh_codes
+        )
+
+    except KeyboardInterrupt:
+
+        print()
+        print(
+            "TOP20??????????????"
+        )
+
+    except Exception as e:
+
+        print(
+            f"TOP20?????????: {e}"
+        )
+
+
 def create_top20_sheet(
     workbook,
     initial_move_top20,
@@ -1134,6 +1411,15 @@ def create_top20_sheet(
 
         try:
 
+            # ==============================================
+            # TOP20?????????
+            # ==============================================
+
+            _refresh_top20_credit(
+                top20_codes
+            )
+
+            # ????????CSV?????
             credit_map = load_latest_credit_data(
                 codes=top20_codes
             )
@@ -2471,6 +2757,22 @@ def save_result(df):
     # 不要な重複項目を削除
     df = df.drop(
         columns=["信用倍率計算値"],
+        errors="ignore",
+    )
+
+    # REMOVE_CREDIT_COLUMNS_FROM_ALL_STOCKS
+    # Credit information is shown only on TOP20.
+    df = df.drop(
+        columns=[
+            '信用情報日付',
+            '売残',
+            '買残',
+            '売残前週比',
+            '買残前週比',
+            '信用倍率',
+            '信用条件',
+            '信用倍率計算値',
+        ],
         errors="ignore",
     )
 

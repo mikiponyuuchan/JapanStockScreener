@@ -3,6 +3,8 @@ from pathlib import Path
 from datetime import datetime
 
 import holidays
+import io
+from contextlib import redirect_stdout
 
 from services.yahoo_service import (
     get_history,
@@ -331,13 +333,14 @@ def get_price_on_or_after(
 
     try:
 
-        batch_result = (
-            _download_history_batch(
-                [str(code)],
-                period="10d",
-                batch_size=1
+        with redirect_stdout(io.StringIO()):
+            batch_result = (
+                _download_history_batch(
+                    [str(code)],
+                    period="10d",
+                    batch_size=1
+                )
             )
-        )
 
     except Exception:
 
@@ -543,11 +546,6 @@ def update_tracking_results(
         target_codes
     )
 
-    print(
-        "Yahoo一括取得対象銘柄 :",
-        len(target_codes),
-        "件"
-    )
 
     # --------------------------------------------------------
     # Yahoo一括取得
@@ -559,13 +557,14 @@ def update_tracking_results(
 
         try:
 
-            yahoo_results = (
-                _download_history_batch(
-                    target_codes,
-                    period="10d",
-                    batch_size=100
+            with redirect_stdout(io.StringIO()):
+                yahoo_results = (
+                    _download_history_batch(
+                        target_codes,
+                        period="10d",
+                        batch_size=100
+                    )
                 )
-            )
 
         except Exception as e:
 
