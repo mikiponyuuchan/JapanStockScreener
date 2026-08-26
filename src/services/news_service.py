@@ -1,7 +1,10 @@
 import os
 import re
+import json
 import requests
 import xml.etree.ElementTree as ET
+
+from pathlib import Path
 
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -26,6 +29,177 @@ HEADERS = {
     )
 }
 
+# ==========================
+# ニュース日次キャッシュ
+# ==========================
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
+NEWS_CACHE_DIR = (
+    ROOT_DIR
+    / "data"
+    / "cache"
+    / "news"
+)
+
+
+def _get_news_cache_file():
+    """
+    当日のニュースキャッシュファイル。
+    """
+
+    jst = timezone(
+        timedelta(hours=9)
+    )
+
+    today = datetime.now(
+        jst
+    ).strftime(
+        "%Y-%m-%d"
+    )
+
+    return (
+        NEWS_CACHE_DIR
+        / f"{today}.json"
+    )
+
+
+def _load_news_cache():
+    """
+    当日のニュースキャッシュを読み込む。
+    """
+
+    cache_file = (
+        _get_news_cache_file()
+    )
+
+    if not cache_file.exists():
+        return {}
+
+    try:
+
+        with open(
+            cache_file,
+            "r",
+            encoding="utf-8",
+        ) as f:
+
+            data = json.load(f)
+
+        if isinstance(data, dict):
+            return data
+
+    except Exception as e:
+
+        print(
+            f"ニュースキャッシュ読込エラー: {e}"
+        )
+
+    return {}
+
+
+def _save_news_cache(cache):
+    """
+    当日のニュースキャッシュを保存する。
+    """
+
+    try:
+
+        NEWS_CACHE_DIR.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        cache_file = (
+            _get_news_cache_file()
+        )
+
+        with open(
+            cache_file,
+            "w",
+            encoding="utf-8",
+        ) as f:
+
+            json.dump(
+                cache,
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+    except Exception as e:
+
+        print(
+            f"ニュースキャッシュ保存エラー: {e}"
+        )
+
+
+def _merge_news(
+    old_news,
+    new_news,
+    limit=5,
+):
+    """
+    既存ニュースと今回取得ニュースを結合。
+
+    linkを優先して重複除外。
+    linkが空なら title を使用。
+    """
+
+    merged = {}
+
+    for item in (
+        list(old_news)
+        + list(new_news)
+    ):
+
+        if not isinstance(
+            item,
+            dict,
+        ):
+            continue
+
+        link = str(
+            item.get(
+                "link",
+                "",
+            )
+        ).strip()
+
+        title = str(
+            item.get(
+                "title",
+                "",
+            )
+        ).strip()
+
+        key = (
+            link
+            if link
+            else title
+        )
+
+        if not key:
+            continue
+
+        # 新しく取得した内容を優先
+        merged[key] = item
+
+    result = list(
+        merged.values()
+    )
+
+    result.sort(
+        key=lambda x: str(
+            x.get(
+                "published",
+                "",
+            )
+        ),
+        reverse=True,
+    )
+
+    return result[:limit]
 
 # ==========================
 # 急騰理由キーワード
@@ -418,8 +592,26 @@ def get_news(
     limit=5
 ):
     """
-    1銘柄のニュースを取得
+    1銘柄のニュースを取得。
+
+    同一日に取得済みのニュースは
+    後の再実行で消さない。
     """
+
+    code = str(code)
+
+    # ==========================
+    # 当日キャッシュ
+    # ==========================
+
+    cache = (
+        _load_news_cache()
+    )
+
+    cached_news = cache.get(
+        code,
+        []
+    )
 
     query = (
         f'"{name}" 株 '
@@ -455,8 +647,9 @@ def get_news(
             f"{code} {name}: {e}"
         )
 
-        return []
-
+        # 今回失敗しても、
+        # 当日すでに取得済みなら残す
+        return cached_news[:limit]
 
     # ==========================
     # 現在時刻
@@ -469,13 +662,12 @@ def get_news(
     now = datetime.now(jst)
 
     cutoff = (
-        now -
+        now
+        -
         timedelta(hours=hours)
     )
 
-
     results = []
-
 
     # ==========================
     # RSS解析
@@ -505,10 +697,8 @@ def get_news(
             ""
         )
 
-
         if not title:
             continue
-
 
         # ----------------------
         # 日付
@@ -530,7 +720,6 @@ def get_news(
 
                 published = None
 
-
         # ----------------------
         # 古いニュースを除外
         # ----------------------
@@ -541,10 +730,9 @@ def get_news(
         ):
             continue
 
-
         results.append(
             {
-                "code": str(code),
+                "code": code,
                 "name": name,
                 "title": title,
                 "published": (
@@ -559,15 +747,27 @@ def get_news(
             }
         )
 
-
         if len(results) >= limit:
             break
 
+    # ==========================
+    # 既存＋今回取得を合流
+    # ==========================
 
-    return results
+    merged_news = _merge_news(
+        cached_news,
+        results,
+        limit=limit,
+    )
 
-    
+    # 今回0件でもcached_newsが残る
+    cache[code] = merged_news
 
+    _save_news_cache(
+        cache
+    )
+
+    return merged_news
 
 # ==========================
 # TOP20ニュース取得

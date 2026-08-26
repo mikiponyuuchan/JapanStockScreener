@@ -824,7 +824,7 @@ def _build_buy_avoidance_map(
     Return:
         {
             code: {
-                "avoid": "\u56de\u907f" or "\uff0d",
+                "avoid": "回避" or "－",
                 "comment": "...",
             }
         }
@@ -1041,6 +1041,34 @@ def _build_buy_avoidance_map(
                 "\u4f4e\u30b9\u30b3\u30a2\u30fb\u4f4e\u51fa\u6765\u9ad8"
             )
 
+        # --------------------------------------------------
+        # P5条件
+        #
+        # 初動スコア 3～4
+        # AND 5日騰落率 > 0
+        # AND VolumeRatio20 > 1
+        # AND A / C / D / F なし
+        #
+        # H2はP5条件の除外には使わない
+        # --------------------------------------------------
+
+        danger4 = (
+            alert_a
+            or alert_c
+            or alert_d
+            or alert_f
+        )
+
+        p5_condition = (
+            pd.notna(score)
+            and pd.notna(chg5)
+            and pd.notna(vol20)
+            and 3 <= score <= 4
+            and chg5 > 0
+            and vol20 > 1
+            and not danger4
+        )
+
         result[code] = {
             "avoid": (
                 "\u56de\u907f"
@@ -1050,6 +1078,7 @@ def _build_buy_avoidance_map(
             "comment": (
                 " / ".join(comments)
             ),
+            "p5_condition": p5_condition,
         }
 
     return result
@@ -1057,12 +1086,12 @@ def _build_buy_avoidance_map(
 
 
 # ==========================================================
-# TOP20 Yahoo\u4fe1\u7528\u30c7\u30fc\u30bf\u66f4\u65b0
+# TOP20 Yahoo???? ??
 #
-# \u521d\u52d5\u30b9\u30b3\u30a2\u306b\u306f\u4f7f\u7528\u3057\u306a\u3044\u3002
-# TOP20\u9078\u51fa\u5f8c\u306b\u306e\u307f\u5b9f\u884c\u3059\u308b\u3002
-# \u4fdd\u5b58\u6e08\u307fCSV\u306e\u65e5\u4ed8\u3092\u78ba\u8a8d\u3057\u3001
-# \u53e4\u3044\u9298\u67c4\u30fb\u672a\u53d6\u5f97\u9298\u67c4\u3060\u3051Yahoo\u304b\u3089\u66f4\u65b0\u3059\u308b\u3002
+# ??????????
+# ?TOP20????
+# ??????CSV?Yahoo????????
+# ??? / ??????Yahoo???
 # ==========================================================
 
 YAHOO_CREDIT_DIR = Path(
@@ -1072,20 +1101,20 @@ YAHOO_CREDIT_DIR = Path(
 
 def _expected_yahoo_credit_date():
     """
-    Yahoo\u4fe1\u7528\u30c7\u30fc\u30bf\u306e\u671f\u5f85\u57fa\u6e96\u65e5\u3092\u8fd4\u3059\u3002
+    Yahoo??????????????
 
-    \u4fe1\u7528\u53d6\u5f15\u30c7\u30fc\u30bf\u306f\u9031\u6b21\u66f4\u65b0\u306e\u305f\u3081\u3001
-    \u57fa\u6e96\u65e5\u306f\u91d1\u66dc\u65e5\u3068\u3057\u3066\u6271\u3046\u3002
+    ?????????????
+    ?????????????????????
 
-    \u91d1\u66dc\u65e5\u5206\u306e\u30c7\u30fc\u30bf\u306f\u7fcc\u9031\u706b\u66dc\u65e518\u6642\u4ee5\u964d\u306b
-    \u5229\u7528\u53ef\u80fd\u306b\u306a\u308b\u60f3\u5b9a\u3068\u3059\u308b\u3002
+    ?????18?????
+    1????????????????
 
-    \u4f8b:
-        \u706b\u66dc\u65e518\u6642\u4ee5\u964d -> \u76f4\u524d\u306e\u91d1\u66dc\u65e5
-        \u305d\u308c\u4ee5\u524d       -> \u3055\u3089\u306b1\u9031\u9593\u524d\u306e\u91d1\u66dc\u65e5
+    ?:
+        ??18??? -> ?????
+        ??         -> ???1??????
 
-    Yahoo\u5074\u306e\u66f4\u65b0\u524d\u306b\u4e0d\u8981\u306a\u518d\u53d6\u5f97\u3092\u884c\u308f\u306a\u3044\u305f\u3081\u306e
-    \u5224\u5b9a\u306b\u4f7f\u7528\u3059\u308b\u3002
+    Yahoo?????????????????
+    ?????????????
     """
 
     now = pd.Timestamp.now()
@@ -1103,8 +1132,8 @@ def _expected_yahoo_credit_date():
         )
     )
 
-    # candidate\uff08\u91d1\u66dc\u65e5\uff09\u306e\u30c7\u30fc\u30bf\u516c\u958b\u4e88\u5b9a\u6642\u523b
-    # \u7fcc\u9031\u706b\u66dc\u65e518\u6642 = \u91d1\u66dc\u65e5 + 4\u65e5 + 18\u6642\u9593
+    # candidate(??)?????
+    # ????????? = ???18?
     publish_time = (
         candidate
         + pd.Timedelta(days=4)
@@ -1125,11 +1154,11 @@ def _get_credit_csv_latest_date(
     code,
 ):
     """
-    data/yahoo_credit/{code}.csv \u304b\u3089
-    \u6700\u65b0\u306e\u4fe1\u7528\u60c5\u5831\u65e5\u4ed8\u3092\u53d6\u5f97\u3059\u308b\u3002
+    data/yahoo_credit/{code}.csv ?
+    ?????????
 
-    CSV\u304c\u5b58\u5728\u3057\u306a\u3044\u5834\u5408\u3084\u3001
-    \u6709\u52b9\u306a\u65e5\u4ed8\u3092\u53d6\u5f97\u3067\u304d\u306a\u3044\u5834\u5408\u306fNone\u3092\u8fd4\u3059\u3002
+    ?????????????????
+    ?????????????2?????
     """
 
     path = (
@@ -1156,7 +1185,7 @@ def _get_credit_csv_latest_date(
         return None
 
     # ----------------------------------------------
-    # \u65e5\u4ed8\u5217\u3092\u63a2\u3059
+    # ??????
     # ----------------------------------------------
 
     date_col = None
@@ -1166,15 +1195,15 @@ def _get_credit_csv_latest_date(
         name = str(col)
 
         if (
-            "\u65e5\u4ed8" in name
+            "日付" in name
             or "date" in name.lower()
         ):
 
             date_col = col
             break
 
-    # Yahoo\u4fe1\u7528CSV\u306e\u5f62\u5f0f\u5dee\u306b\u5099\u3048\u308b
-    # \u65e5\u4ed8\u5217\u304c\u898b\u3064\u304b\u3089\u306a\u3051\u308c\u30702\u5217\u76ee\u3092\u4f7f\u7528\u3059\u308b
+    # Yahoo??CSV???
+    # 2?????
     if date_col is None:
 
         if len(df.columns) >= 2:
@@ -1185,6 +1214,7 @@ def _get_credit_csv_latest_date(
 
             return None
 
+
     dates = pd.to_datetime(
         df[date_col],
         errors="coerce",
@@ -1194,7 +1224,6 @@ def _get_credit_csv_latest_date(
         return None
 
     return dates.max().normalize()
-
 
 def _refresh_top20_credit(
     codes,
@@ -1771,6 +1800,7 @@ def create_top20_sheet(
         )
     )
 
+    p5_values = []
     avoid_values = []
     comment_values = []
 
@@ -1792,7 +1822,17 @@ def create_top20_sheet(
                 {
                     "avoid": "\uff0d",
                     "comment": "",
+                    "p5_condition": False,
                 }
+            )
+
+            p5_values.append(
+                "\u2605"
+                if info.get(
+                    "p5_condition",
+                    False,
+                )
+                else ""
             )
 
             avoid_values.append(
@@ -1812,16 +1852,22 @@ def create_top20_sheet(
 
         output.insert(
             score_position,
+            "P5",
+            p5_values,
+        )
+
+        output.insert(
+            score_position + 1,
             "\u8cb7\u3044\u56de\u907f",
             avoid_values,
         )
 
         output.insert(
-            score_position + 1,
+            score_position + 2,
             "\u56de\u907f\u30b3\u30e1\u30f3\u30c8",
             comment_values,
-        )
-
+        )        
+        
     # ======================================================
     # シート作成
     # ======================================================
@@ -1842,15 +1888,16 @@ def create_top20_sheet(
             "A": 6,     # code
             "B": 14,    # name
             "C": 8,     # close
-            "D": 6,     # initial score
-            "E": 6,     # buy avoidance
-            "F": 12,    # avoidance comment
-            "G": 7,     # credit ratio
-            "H": 7,     # short increase
-            "I": 13,    # reason
-            "J": 20,    # news
-            "K": 11,    # news date
-            "L": 25,    # chart
+            "D": 7,     # initial score
+            "E": 6,     # P5　condition
+            "F": 6,     # buy avoidance
+            "G": 12,    # avoidance comment
+            "H": 7,     # credit ratio
+            "I": 7,     # short increase
+            "J": 13,    # reason
+            "K": 20,    # news
+            "L": 11,    # news date
+            "M": 30,    # chart
         }
     )
 
