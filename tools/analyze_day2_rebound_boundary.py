@@ -116,7 +116,7 @@ def main():
         .drop_duplicates()
     )
 
-    e = keys.merge(
+    p5 = keys.merge(
         df,
         on=[
             "検出日",
@@ -133,28 +133,28 @@ def main():
 
     print(
         "panel結合件数 :",
-        len(e),
+        len(p5),
     )
 
     # Day1で下落した候補だけ
-    e = e[
-        e["Day1"] < 0
+    p5 = p5[
+        p5["Day1"] < 0
     ].copy()
 
     # Day1からDay2への反発幅
-    e["反発幅"] = (
-        e["Day2"]
-        - e["Day1"]
+    p5["反発幅"] = (
+        p5["Day2"]
+        - p5["Day1"]
     )
 
     # Day2終値で買った場合の
     # Day3～Day5の騰落率
     for day in [3, 4, 5]:
 
-        e[f"買い後Day{day}"] = (
+        p5[f"買い後Day{day}"] = (
             (
-                (1 + e[f"Day{day}"] / 100)
-                / (1 + e["Day2"] / 100)
+                (1 + p5[f"Day{day}"] / 100)
+                / (1 + p5["Day2"] / 100)
                 - 1
             )
             * 100
@@ -167,55 +167,55 @@ def main():
     ]
 
     complete = (
-        e[future_cols]
+        p5[future_cols]
         .notna()
         .all(axis=1)
     )
 
-    e["EntryMax3"] = pd.NA
-    e["EntryMin3"] = pd.NA
+    p5["EntryMax3"] = pd.NA
+    p5["EntryMin3"] = pd.NA
 
-    e.loc[
+    p5.loc[
         complete,
         "EntryMax3",
     ] = (
-        e.loc[
+        p5.loc[
             complete,
             future_cols,
         ]
         .max(axis=1)
     )
 
-    e.loc[
+    p5.loc[
         complete,
         "EntryMin3",
     ] = (
-        e.loc[
+        p5.loc[
             complete,
             future_cols,
         ]
         .min(axis=1)
     )
 
-    e["EntryMax3"] = pd.to_numeric(
-        e["EntryMax3"],
+    p5["EntryMax3"] = pd.to_numeric(
+        p5["EntryMax3"],
         errors="coerce",
     )
 
-    e["EntryMin3"] = pd.to_numeric(
-        e["EntryMin3"],
+    p5["EntryMin3"] = pd.to_numeric(
+        p5["EntryMin3"],
         errors="coerce",
     )
 
     print()
-    print("P5基本 Day1下落件数 :", len(e))
+    print("P5基本 Day1下落件数 :", len(p5))
 
     rows = []
 
     for threshold in THRESHOLDS:
 
-        x = e[
-            e["反発幅"] >= threshold
+        x = p5[
+            p5["反発幅"] >= threshold
         ].copy()
 
         confirmed = x[
@@ -294,9 +294,9 @@ def main():
     )
 
     # 1.5～4.0%の境界付近を実銘柄で確認
-    focus = e[
-        (e["反発幅"] >= 1.5)
-        & (e["反発幅"] < 4.0)
+    focus = p5[
+        (p5["反発幅"] >= 1.5)
+        & (p5["反発幅"] < 4.0)
     ].copy()
 
     columns = [
@@ -347,3 +347,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
