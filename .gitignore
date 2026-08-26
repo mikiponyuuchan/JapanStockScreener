@@ -19,3 +19,14 @@ data/yahoo_credit/
 
 # 一時バックアップ
 *.bak_*
+
+# 検証・バックテスト生成データ
+data/tracking/*analysis*.csv
+data/tracking/*summary*.csv
+data/tracking/*details*.csv
+data/tracking/*backtest*.csv
+data/tracking/*validation*.csv
+data/tracking/*precursor*.csv
+data/tracking/*events*.csv
+data/tracking/initial_move_tracking_rebuilt.csv
+data/tracking/*thresholds*.csv
