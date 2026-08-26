@@ -270,7 +270,7 @@ def summarize_entry(work):
 # P5条件
 # ============================================================
 
-def make_e_condition(df):
+def make_p5_condition(df):
     """
     これまで検証してきたP5条件。
 
@@ -516,7 +516,7 @@ def main():
     # 基本条件
     # --------------------------------------------------------
 
-    p5_condition = make_e_condition(df)
+    p5_condition = make_p5_condition(df)
 
     strong_condition = (
         make_strong_7x10_condition(
@@ -766,3 +766,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

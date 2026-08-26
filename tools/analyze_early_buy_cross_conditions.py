@@ -195,7 +195,7 @@ def add_danger_flag(df):
 # 危険回避なし
 # ============================================================
 
-def make_e_condition(df):
+def make_p5_condition(df):
 
     return (
         df["初動スコア"]
@@ -450,12 +450,12 @@ def summarize_condition(
 
 def analyze_cross_conditions(df):
 
-    e_mask = make_e_condition(
+    p5_mask = make_p5_condition(
         df
     )
 
     valid_e = (
-        e_mask
+        p5_mask
         &
         df["Max3"].notna()
     )
@@ -512,7 +512,7 @@ def analyze_cross_conditions(df):
         for chg5 in CHANGE5_THRESHOLDS:
 
             condition_mask = (
-                e_mask
+                p5_mask
                 &
                 (
                     df["前日比"]
@@ -631,12 +631,12 @@ def print_sub_7_candidates(
     df,
 ):
 
-    e_mask = make_e_condition(
+    p5_mask = make_p5_condition(
         df
     )
 
     work = df[
-        e_mask
+        p5_mask
         &
         df["Max3"].notna()
         &
@@ -711,12 +711,12 @@ def print_unique_success_waves(
     df,
 ):
 
-    e_mask = make_e_condition(
+    p5_mask = make_p5_condition(
         df
     )
 
     work = df[
-        e_mask
+        p5_mask
         &
         df["成功"]
     ].copy()
@@ -890,3 +890,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

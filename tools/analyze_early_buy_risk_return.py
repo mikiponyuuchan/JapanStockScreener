@@ -156,7 +156,7 @@ def add_min3(df):
 # P5条件
 # ============================================================
 
-def make_e_base(df):
+def make_p5_base(df):
 
     return (
         df["初動スコア"]
@@ -186,15 +186,15 @@ def make_e_base(df):
 
 def make_conditions(df):
 
-    e = make_e_base(df)
+    p5 = make_p5_base(df)
 
     return {
         "P5基本":
-            e,
+            p5,
 
         "広域_5x5":
             (
-                e
+                p5
                 &
                 (df["前日比"] >= 5)
                 &
@@ -203,7 +203,7 @@ def make_conditions(df):
 
         "強_7x10":
             (
-                e
+                p5
                 &
                 (df["前日比"] >= 7)
                 &
@@ -212,7 +212,7 @@ def make_conditions(df):
 
         "最強_10x10":
             (
-                e
+                p5
                 &
                 (df["前日比"] >= 10)
                 &
@@ -605,3 +605,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

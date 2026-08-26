@@ -260,7 +260,7 @@ def add_entry_returns(df):
 # P5基本条件
 # ============================================================
 
-def make_e_basic_mask(df):
+def make_p5_basic_mask(df):
     """
     P5基本
 
@@ -347,25 +347,25 @@ def main():
     # P5基本
     # --------------------------------------------------------
 
-    e_mask = make_e_basic_mask(df)
+    p5_mask = make_p5_basic_mask(df)
 
-    e = df.loc[e_mask].copy()
+    p5 = df.loc[p5_mask].copy()
 
     print()
     print_separator()
     print("P5基本")
     print_separator()
 
-    print("P5基本件数       :", len(e))
+    print("P5基本件数       :", len(p5))
 
     # --------------------------------------------------------
     # Day1 < 0
     # --------------------------------------------------------
 
-    base = e[
-        e["Day1"].notna()
-        & e["Day2"].notna()
-        & (e["Day1"] < 0)
+    base = p5[
+        p5["Day1"].notna()
+        & p5["Day2"].notna()
+        & (p5["Day1"] < 0)
     ].copy()
 
     base["反発幅"] = (
@@ -664,3 +664,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
