@@ -200,34 +200,6 @@ def run_screener(start=0, limit=None):
             )
 
     # ========================================================
-    # 初動スコア追跡 Ver2
-    # ========================================================
-
-    try:
-
-        tracking_df = load_tracking()
-
-        # 過去の追跡銘柄を更新
-        tracking_df = update_tracking_results(
-            tracking_df
-        )
-
-        # 本日の初動スコアTOP20を登録
-        tracking_df = record_initial_move(
-            result_df
-        )
-
-    except Exception as e:
-
-        print(
-            "初動追跡処理 ERROR :",
-            e
-        )
-
-        return result_df
-
-
-    # ========================================================
     # 初動スコアで並べ替え
     #
     # Ver4初動スコア
