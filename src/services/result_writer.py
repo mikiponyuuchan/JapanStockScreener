@@ -372,6 +372,93 @@ def make_initial_move_top20(df):
 
     return result
 
+# ==========================================================
+# P5早期候補抽出
+# ==========================================================
+
+def make_p5_candidates(df):
+    """
+    全銘柄から正式P5条件を満たす銘柄を抽出する。
+
+    P5条件そのものは _build_buy_avoidance_map() で判定し、
+    ここでは判定ロジックを重複して持たない。
+    """
+
+    if df is None:
+        return pd.DataFrame()
+
+    if df.empty:
+        return pd.DataFrame()
+
+    if "コード" not in df.columns:
+        return pd.DataFrame()
+
+    p5_map = _build_buy_avoidance_map(df)
+
+    p5_mask = []
+
+    for _, row in df.iterrows():
+
+        code = str(
+            row.get(
+                "コード",
+                "",
+            )
+        ).strip()
+
+        if code.endswith(".0"):
+            code = code[:-2]
+
+        info = p5_map.get(
+            code,
+            {},
+        )
+
+        p5_mask.append(
+            bool(
+                info.get(
+                    "p5_condition",
+                    False,
+                )
+            )
+        )
+
+    p5_candidates = df.loc[
+        p5_mask
+    ].copy()
+
+    if p5_candidates.empty:
+        return p5_candidates
+
+    # 初動スコア優先、
+    # 同点では5日騰落率が高い順
+    sort_columns = []
+    ascending = []
+
+    if "初動スコア" in p5_candidates.columns:
+        sort_columns.append(
+            "初動スコア"
+        )
+        ascending.append(False)
+
+    if "5日騰落率" in p5_candidates.columns:
+        sort_columns.append(
+            "5日騰落率"
+        )
+        ascending.append(False)
+
+    if sort_columns:
+        p5_candidates = (
+            p5_candidates
+            .sort_values(
+                sort_columns,
+                ascending=ascending,
+            )
+        )
+
+    return p5_candidates.reset_index(
+        drop=True
+    )
 
 # ==========================================================
 # ニュース理由から安全に値を取得
@@ -2540,6 +2627,92 @@ def save_top20_csv(
         encoding="utf-8-sig",
     )
 
+# ==========================================================
+# P5早期候補 Excel
+# ==========================================================
+
+def create_p5_candidates_sheet(
+    workbook,
+    p5_candidates,
+    sheet_name="P5早期候補",
+):
+    """
+    正式P5条件を満たした早期候補を一覧表示する。
+
+    P5の判定自体は make_p5_candidates() で完了しているため、
+    この関数では表示だけを行う。
+    """
+
+    columns = [
+        "コード",
+        "銘柄名",
+        "終値",
+        "初動スコア",
+        "前日比",
+        "5日騰落率",
+        "20日騰落率",
+        "RSI",
+        "VolumeRatio",
+        "VolumeRatio20",
+        "MA25Deviation",
+    ]
+
+    if p5_candidates is None:
+        output = pd.DataFrame(
+            columns=columns
+        )
+
+    elif p5_candidates.empty:
+        output = pd.DataFrame(
+            columns=columns
+        )
+
+    else:
+        available_columns = [
+            column
+            for column in columns
+            if column in p5_candidates.columns
+        ]
+
+        output = p5_candidates[
+            available_columns
+        ].copy()
+
+    sheet = dataframe_to_sheet(
+        workbook,
+        sheet_name,
+        output,
+    )
+
+    sheet.freeze_panes = "C2"
+
+    # 初動スコア色付け
+    apply_score_color(
+        sheet,
+        "初動スコア",
+    )
+
+    # 列幅
+    widths = {
+        "A": 6,    # コード
+        "B": 14,   # 銘柄名
+        "C": 8,    # 終値
+        "D": 7,    # 初動スコア
+        "E": 8,    # 前日比
+        "F": 8,    # 5日騰落率
+        "G": 8,    # 20日騰落率
+        "H": 8,    # RSI
+        "I": 8,    # VolumeRatio
+        "J": 8,    # VolumeRatio20
+        "K": 8,    # MA25Deviation
+    }
+
+    for column, width in widths.items():
+        sheet.column_dimensions[
+            column
+        ].width = width
+
+    return sheet
 
 # ==========================================================
 # メイン
@@ -2598,6 +2771,21 @@ def save_result(df):
         make_initial_move_top20(
             df
         )
+    )
+
+    # ======================================================
+    # P5早期候補
+    # ======================================================
+
+    p5_candidates = (
+        make_p5_candidates(
+            df
+        )
+    )
+
+    print(
+        "P5早期候補件数 :",
+        len(p5_candidates)
     )
 
     # ======================================================
@@ -2772,7 +2960,6 @@ def save_result(df):
 
         number += 1
 
-
     # ======================================================
     # TOP20
     # ======================================================
@@ -2784,6 +2971,22 @@ def save_result(df):
         reason_data_all,
         news_data,
         sheet_name=top20_sheet_name,
+    )
+
+    # ======================================================
+    # P5早期候補
+    # ======================================================
+
+    if "P5早期候補" in workbook.sheetnames:
+
+        workbook.remove(
+            workbook["P5早期候補"]
+        )
+
+    create_p5_candidates_sheet(
+        workbook,
+        p5_candidates,
+        sheet_name="P5早期候補",
     )
 
     # ======================================================
@@ -2915,6 +3118,7 @@ def save_result(df):
     # シート順
     #
     # 最新TOP20
+    # P5早期候補
     # 過去TOP20（新しい順）
     # 全銘柄
     # 初動追跡
@@ -2936,7 +3140,10 @@ def save_result(df):
     )
 
     desired_order = (
-        [top20_sheet_name]
+        [
+            top20_sheet_name,
+            "P5早期候補",
+        ]
         + past_top20_sheet_names
         + [
             "全銘柄",
