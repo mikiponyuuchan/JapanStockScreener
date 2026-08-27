@@ -2721,6 +2721,151 @@ def create_p5_candidates_sheet(
     return sheet
 
 # ==========================================================
+# P5追跡 Excel
+# ==========================================================
+
+def create_p5_tracking_sheet(
+    workbook,
+    p5_tracking_df,
+    sheet_name="P5追跡",
+):
+    """
+    P5候補のDay1 / Day2と最終買い判定を一覧表示する。
+    """
+
+    columns = [
+        "DetectionDate",
+        "Code",
+        "Name",
+        "BasePrice",
+        "InitialScore",
+        "Change5",
+        "VolumeRatio20",
+        "Day1Price",
+        "Day1",
+        "Day2Price",
+        "Day2",
+        "Drop",
+        "BuyDecision",
+        "BuyReason",
+    ]
+
+    if (
+        p5_tracking_df is None
+        or p5_tracking_df.empty
+    ):
+        output = pd.DataFrame(
+            columns=columns
+        )
+
+    else:
+        output = p5_tracking_df.copy()
+
+        for column in columns:
+            if column not in output.columns:
+                output[column] = pd.NA
+
+        output = output[
+            columns
+        ].copy()
+
+        # 新しい検出日を上へ
+        output["DetectionDate"] = (
+            pd.to_datetime(
+                output["DetectionDate"],
+                errors="coerce",
+            )
+        )
+
+        output = (
+            output
+            .sort_values(
+                [
+                    "DetectionDate",
+                    "InitialScore",
+                ],
+                ascending=[
+                    False,
+                    False,
+                ],
+                na_position="last",
+            )
+            .reset_index(
+                drop=True
+            )
+        )
+
+    sheet = dataframe_to_sheet(
+        workbook,
+        sheet_name,
+        output,
+    )
+
+    sheet.freeze_panes = "D2"
+
+    widths = {
+        "A": 13,   # DetectionDate
+        "B": 8,    # Code
+        "C": 24,   # Name
+        "D": 11,   # BasePrice
+        "E": 11,   # InitialScore
+        "F": 10,   # Change5
+        "G": 14,   # VolumeRatio20
+        "H": 11,   # Day1Price
+        "I": 9,    # Day1
+        "J": 11,   # Day2Price
+        "K": 9,    # Day2
+        "L": 9,    # Drop
+        "M": 12,   # BuyDecision
+        "N": 24,   # BuyReason
+    }
+
+    for column, width in widths.items():
+        sheet.column_dimensions[
+            column
+        ].width = width
+
+    # 日付表示
+    for row in range(
+        2,
+        sheet.max_row + 1,
+    ):
+        sheet.cell(
+            row,
+            1,
+        ).number_format = "yyyy/mm/dd"
+
+    # 買い / 見送りを見やすくする
+    for row in range(
+        2,
+        sheet.max_row + 1,
+    ):
+
+        decision_cell = sheet.cell(
+            row,
+            13,
+        )
+
+        decision = str(
+            decision_cell.value
+            or ""
+        ).strip()
+
+        if decision == "買い":
+
+            decision_cell.font = Font(
+                bold=True
+            )
+
+        elif decision == "見送り":
+
+            decision_cell.font = Font(
+                bold=True
+            )
+
+    return sheet
+
+# ==========================================================
 # メイン
 # ==========================================================
 
@@ -2797,6 +2942,8 @@ def save_result(df):
     # ======================================================
     # P5追跡
     # ======================================================
+
+    p5_tracking_df = load_p5_tracking()
 
     try:
 
@@ -3029,6 +3176,22 @@ def save_result(df):
     )
 
     # ======================================================
+    # P5追跡
+    # ======================================================
+
+    if "P5追跡" in workbook.sheetnames:
+
+        workbook.remove(
+            workbook["P5追跡"]
+        )
+
+    create_p5_tracking_sheet(
+        workbook,
+        p5_tracking_df,
+        sheet_name="P5追跡",
+    )
+
+    # ======================================================
     # 全銘柄
     # ======================================================
 
@@ -3158,6 +3321,7 @@ def save_result(df):
     #
     # 最新TOP20
     # P5早期候補
+    # P5追跡
     # 過去TOP20（新しい順）
     # 全銘柄
     # 初動追跡
@@ -3182,6 +3346,7 @@ def save_result(df):
         [
             top20_sheet_name,
             "P5早期候補",
+            "P5追跡",
         ]
         + past_top20_sheet_names
         + [
