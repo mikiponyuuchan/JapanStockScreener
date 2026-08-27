@@ -27,6 +27,12 @@ from services.tracking_service import (
     record_initial_move,
 )
 
+from services.p5_tracking_service import (
+    load_p5_tracking,
+    record_p5_candidates,
+    update_p5_tracking,
+)
+
 from services.yahoo_credit_service import (
     load_latest_credit_data,
     download_credit_batch,
@@ -2787,6 +2793,39 @@ def save_result(df):
         "P5早期候補件数 :",
         len(p5_candidates)
     )
+
+    # ======================================================
+    # P5追跡
+    # ======================================================
+
+    try:
+
+        # 本日の正式P5候補を追跡へ新規登録
+        p5_tracking_df = (
+            record_p5_candidates(
+                p5_candidates
+            )
+        )
+
+        # 過去に登録したP5候補の
+        # Day1 / Day2 / Drop / 買い判定を更新
+        p5_tracking_df = (
+            update_p5_tracking(
+                p5_tracking_df
+            )
+        )
+
+        print(
+            "P5追跡件数 :",
+            len(p5_tracking_df)
+        )
+
+    except Exception as e:
+
+        print(
+            "P5追跡ERROR :",
+            e
+        )
 
     # ======================================================
     # 初動追跡
