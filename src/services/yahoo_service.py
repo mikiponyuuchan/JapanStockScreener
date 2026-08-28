@@ -546,6 +546,32 @@ def get_history(
                         and not update_df.empty
                     ):
 
+                        # Yahoo取得データのDateを
+                        # CSVキャッシュと同じtimezoneなしに統一
+                        update_df = update_df.copy()
+
+                        update_df["Date"] = pd.to_datetime(
+                            update_df["Date"],
+                            errors="coerce"
+                        )
+
+                        if update_df["Date"].dt.tz is not None:
+                            update_df["Date"] = (
+                                update_df["Date"]
+                                .dt.tz_localize(None)
+                            )
+
+                        # 取引時間中の当日途中足を
+                        # 履歴キャッシュへ保存しない
+                        update_df = update_df.dropna(
+                            subset=["Date"]
+                        )
+
+                        update_df = update_df[
+                            update_df["Date"].dt.normalize()
+                            <= expected_date
+                        ].copy()
+
                         combined_df = pd.concat(
                             [
                                 cached_df,
