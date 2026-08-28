@@ -2807,17 +2807,17 @@ def create_p5_tracking_sheet(
         "A": 13,   # DetectionDate
         "B": 8,    # Code
         "C": 24,   # Name
-        "D": 11,   # BasePrice
-        "E": 11,   # InitialScore
-        "F": 10,   # Change5
-        "G": 14,   # VolumeRatio20
-        "H": 11,   # Day1Price
-        "I": 9,    # Day1
-        "J": 11,   # Day2Price
-        "K": 9,    # Day2
-        "L": 9,    # Drop
-        "M": 12,   # BuyDecision
-        "N": 24,   # BuyReason
+        "D": 10,   # BasePrice
+        "E": 8,    # InitialScore
+        "F": 8,    # Change5
+        "G": 8,    # VolumeRatio20
+        "H": 8,    # Day1Price
+        "I": 8,    # Day1
+        "J": 8,    # Day2Price
+        "K": 8,    # Day2
+        "L": 8,    # Drop
+        "M": 8,    # BuyDecision
+        "N": 20,   # BuyReason
     }
 
     for column, width in widths.items():
