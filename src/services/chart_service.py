@@ -1,5 +1,7 @@
 from pathlib import Path
+from datetime import datetime, time as dt_time
 
+import holidays
 import matplotlib
 matplotlib.use("Agg")
 
@@ -151,9 +153,24 @@ def save_chart(code):
     # 今日の未確定日足を追加
     # ==========================
 
-    today_df = get_today_intraday_daily(
-        code
+    now = datetime.now()
+
+    jp_holidays = holidays.Japan(
+        years=[now.year]
     )
+
+    is_market_hours = (
+        now.weekday() < 5
+        and now.date() not in jp_holidays
+        and dt_time(9, 0) <= now.time() < dt_time(15, 30)
+    )
+
+    today_df = None
+
+    if is_market_hours:
+        today_df = get_today_intraday_daily(
+            code
+        )
 
     if (
         today_df is not None
