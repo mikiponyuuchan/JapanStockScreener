@@ -45,6 +45,8 @@ from services.yahoo_credit_service import (
 RESULT_DIR = Path("results")
 CHART_DIR = RESULT_DIR / "charts"
 
+MORNING_SNAPSHOT_DIR = Path("data/tracking/morning_snapshots")
+
 
 # ==========================================================
 # 安全な値取得
@@ -2619,6 +2621,74 @@ def analyze_top20_news(
 # TOP20 CSV
 # ==========================================================
 
+
+def save_morning_top20_snapshot(initial_move_top20):
+    """
+    Save morning TOP20 without overwriting later runs.
+    Only saves on weekdays between 09:00 and 09:59.
+    """
+
+    if initial_move_top20 is None or initial_move_top20.empty:
+        return None
+
+    snapshot_time = datetime.now()
+
+    if snapshot_time.weekday() >= 5:
+        return None
+
+    if not (9 <= snapshot_time.hour < 10):
+        return None
+
+    MORNING_SNAPSHOT_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    snapshot = initial_move_top20.copy().reset_index(drop=True)
+
+    snapshot.insert(
+        0,
+        "SnapshotDate",
+        snapshot_time.strftime("%Y-%m-%d"),
+    )
+
+    snapshot.insert(
+        1,
+        "SnapshotTime",
+        snapshot_time.strftime("%H:%M:%S"),
+    )
+
+    date_text = snapshot_time.strftime("%Y-%m-%d")
+    time_text = snapshot_time.strftime("%H%M")
+
+    snapshot_file = (
+        MORNING_SNAPSHOT_DIR
+        / f"{date_text}_{time_text}_top20.csv"
+    )
+
+    number = 2
+
+    while snapshot_file.exists():
+        snapshot_file = (
+            MORNING_SNAPSHOT_DIR
+            / f"{date_text}_{time_text}_top20_{number}.csv"
+        )
+        number += 1
+
+    snapshot.to_csv(
+        snapshot_file,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    print(
+        "Morning TOP20 snapshot :",
+        snapshot_file,
+    )
+
+    return snapshot_file
+
+
 def save_top20_csv(
     initial_move_top20,
     top20_csv,
@@ -2923,6 +2993,16 @@ def save_result(df):
             df
         )
     )
+
+    try:
+        save_morning_top20_snapshot(
+            initial_move_top20
+        )
+    except Exception as e:
+        print(
+            "Morning TOP20 snapshot ERROR :",
+            e
+        )
 
     # ======================================================
     # P5早期候補
