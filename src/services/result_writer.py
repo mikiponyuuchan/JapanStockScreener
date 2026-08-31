@@ -1,4 +1,5 @@
 ﻿import pandas as pd
+from services.morning_snapshot_service import save_morning_intraday_snapshot
 from datetime import datetime
 from pathlib import Path
 
@@ -2994,15 +2995,34 @@ def save_result(df):
         )
     )
 
+    morning_snapshot_file = None
+
     try:
-        save_morning_top20_snapshot(
-            initial_move_top20
+        morning_snapshot_file = (
+            save_morning_top20_snapshot(
+                initial_move_top20
+            )
         )
     except Exception as e:
         print(
             "Morning TOP20 snapshot ERROR :",
             e
         )
+
+    if morning_snapshot_file is not None:
+
+        try:
+            save_morning_intraday_snapshot(
+                initial_move_top20,
+                candidate_snapshot_file=(
+                    morning_snapshot_file
+                ),
+            )
+        except Exception as e:
+            print(
+                "Morning intraday snapshot ERROR :",
+                e
+            )
 
     # ======================================================
     # P5早期候補
