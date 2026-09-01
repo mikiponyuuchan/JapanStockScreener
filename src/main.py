@@ -10,6 +10,7 @@ from screener.loader import load_stock_list
 from screener.analyzer import analyze_stock
 
 from services.yahoo_service import _download_history_batch
+from services.morning_baseline_service import save_morning_baseline
 from services.yahoo_credit_service import load_latest_credit_data
 from services.result_writer import save_result
 
@@ -106,6 +107,11 @@ def main():
     print(
         f"取得成功銘柄数 : "
         f"{len(history_map)}"
+    )
+
+    save_morning_baseline(
+        history_map,
+        stocks=stocks,
     )
 
     # ==================================================
