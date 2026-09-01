@@ -1,4 +1,5 @@
 import sys
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -191,9 +192,79 @@ def main():
             e,
         )
 
+    # ======================================================
+    # J1 detection
+    # ======================================================
+
+    print()
+    print("[J1 detection]")
+
+    j1_detect_ok = False
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "validate_j_type.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        j1_detect_ok = True
+
+        print(
+            "J1 detection : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "J1 detection ERROR :",
+            e,
+        )
+
+    # ======================================================
+    # J1 confirmed daily tracking
+    # ======================================================
+
+    print()
+    print("[J1 confirmed tracking]")
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_j_type_tracking.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "J1 confirmed tracking : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "J1 confirmed tracking ERROR :",
+            e,
+        )
+
     print()
     print("=" * 60)
-    print("Tracking update complete")
+    print("After-close update complete")
     print("=" * 60)
 
 
