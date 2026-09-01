@@ -16,6 +16,7 @@ sys.path.insert(
 )
 
 from services.chart_service import save_chart
+from services.news_service import get_news
 
 
 TRACKING_FILE = Path(
@@ -32,6 +33,8 @@ HEADER_NAME = "\u9298\u67c4\u540d"
 HEADER_CLOSE = "\u7d42\u5024"
 HEADER_CHANGE1 = "\u524d\u65e5\u6bd4(%)"
 HEADER_VOL5 = "\u51fa\u6765\u9ad8/\u76f4\u524d5\u65e5\u5e73\u5747"
+HEADER_NEWS = "\u30cb\u30e5\u30fc\u30b9"
+HEADER_NEWS_DATE = "\u30cb\u30e5\u30fc\u30b9\u65e5\u6642"
 HEADER_CHART = "\u65e5\u8db3\u30c1\u30e3\u30fc\u30c8"
 
 
@@ -45,6 +48,54 @@ def normalize_code(value):
         value = value[:-2]
 
     return value
+
+
+def get_latest_news(code, name):
+    try:
+        news_list = get_news(
+            code=code,
+            name=str(name),
+            hours=72,
+            limit=5,
+        )
+    except Exception as exc:
+        print(
+            f"News ERROR {code}: {exc}"
+        )
+        return {
+            "title": "",
+            "published": "",
+            "link": "",
+        }
+
+    if not news_list:
+        return {
+            "title": "",
+            "published": "",
+            "link": "",
+        }
+
+    valid = [
+        item
+        for item in news_list
+        if isinstance(item, dict)
+    ]
+
+    if not valid:
+        return {
+            "title": "",
+            "published": "",
+            "link": "",
+        }
+
+    valid.sort(
+        key=lambda item: str(
+            item.get("published", "")
+        ),
+        reverse=True,
+    )
+
+    return valid[0]
 
 
 def main():
@@ -143,6 +194,8 @@ def main():
         HEADER_CHANGE1,
         "VolumeRatio",
         HEADER_VOL5,
+        HEADER_NEWS,
+        HEADER_NEWS_DATE,
         HEADER_CHART,
     ]
 
@@ -172,10 +225,10 @@ def main():
 
     sheet.freeze_panes = "A2"
     sheet.auto_filter.ref = (
-        f"A1:G{len(today_df) + 1}"
+        f"A1:I{len(today_df) + 1}"
     )
 
-    chart_col = 7
+    chart_col = 9
 
     chart_success = 0
     chart_error = 0
@@ -205,6 +258,52 @@ def main():
                 column=col_index,
                 value=value,
             )
+
+        news = get_latest_news(
+            code,
+            row["Name"],
+        )
+
+        news_title = str(
+            news.get("title", "") or ""
+        )
+
+        news_published = str(
+            news.get("published", "") or ""
+        )
+
+        news_link = str(
+            news.get("link", "") or ""
+        )
+
+        news_cell = sheet.cell(
+            row=excel_row,
+            column=7,
+            value=news_title,
+        )
+
+        sheet.cell(
+            row=excel_row,
+            column=8,
+            value=news_published,
+        )
+
+        if news_link:
+            news_cell.hyperlink = news_link
+            news_cell.style = "Hyperlink"
+
+        news_cell.alignment = Alignment(
+            vertical="center",
+            horizontal="left",
+            wrap_text=True,
+        )
+
+        sheet.cell(
+            row=excel_row,
+            column=8,
+        ).alignment = Alignment(
+            vertical="center",
+        )
 
         sheet.cell(
             row=excel_row,
@@ -276,13 +375,15 @@ def main():
         )
 
     widths = {
-        1: 11,
-        2: 28,
-        3: 12,
-        4: 13,
-        5: 14,
-        6: 22,
-        7: 52,
+        1: 9,
+        2: 15,
+        3: 9,
+        4: 9,
+        5: 10,
+        6: 13,
+        7: 28,
+        8: 16,
+        9: 40,
     }
 
     for col_index, width in widths.items():
@@ -291,6 +392,35 @@ def main():
         ].width = width
 
     sheet.row_dimensions[1].height = 24
+
+    # ======================================
+    # Final cell alignment
+    # ======================================
+
+    for row_no in range(
+        2,
+        len(today_df) + 2,
+    ):
+        for col_no in range(
+            1,
+            10,
+        ):
+            cell = sheet.cell(
+                row=row_no,
+                column=col_no,
+            )
+
+            if col_no == 7:
+                cell.alignment = Alignment(
+                    vertical="top",
+                    horizontal="left",
+                    wrap_text=True,
+                )
+            else:
+                cell.alignment = Alignment(
+                    vertical="top",
+                )
+
 
     workbook.save(
         output_file
