@@ -203,7 +203,7 @@ def save_morning_intraday_snapshot(
     code_column = _find_column(
         initial_move_top20,
         [
-            "???",
+            "\u30b3\u30fc\u30c9",
             "Code",
             "code",
         ],
