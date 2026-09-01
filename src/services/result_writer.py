@@ -1521,7 +1521,9 @@ def create_top20_sheet(
 
     credit_map = {}
 
-    if top20_codes:
+    # Yahoo credit disabled in main screener.
+    # Remove 'False and' to restore it.
+    if False and top20_codes:
 
         try:
 
