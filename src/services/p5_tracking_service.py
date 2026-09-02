@@ -400,6 +400,110 @@ def _judge_p5_day2(
 # 最終P5買い判定を行う。
 # ============================================================
 
+
+def _find_exact_p5_price(
+    history,
+    target_date,
+):
+    """
+    Return Close only for the exact target date.
+
+    P5 Day1 / Day2 must never use:
+    - a later trading date
+    - today's partial daily bar
+    """
+
+    if history is None:
+        return None
+
+    if history.empty:
+        return None
+
+    df = history.copy()
+
+    if "Date" in df.columns:
+
+        df["Date"] = pd.to_datetime(
+            df["Date"],
+            errors="coerce",
+        )
+
+        df = df.dropna(
+            subset=["Date"]
+        )
+
+        if df.empty:
+            return None
+
+        df = df.set_index(
+            "Date"
+        )
+
+    else:
+
+        try:
+            df.index = pd.to_datetime(
+                df.index,
+                errors="coerce",
+            )
+        except Exception:
+            return None
+
+        df = df[
+            ~df.index.isna()
+        ]
+
+    if df.empty:
+        return None
+
+    if getattr(
+        df.index,
+        "tz",
+        None,
+    ) is not None:
+
+        try:
+            df.index = (
+                df.index
+                .tz_localize(None)
+            )
+        except Exception:
+            try:
+                df.index = (
+                    df.index
+                    .tz_convert(None)
+                )
+            except Exception:
+                return None
+
+    target_date = pd.Timestamp(
+        target_date
+    ).normalize()
+
+    exact = df[
+        df.index.normalize()
+        == target_date
+    ]
+
+    if exact.empty:
+        return None
+
+    exact = exact.sort_index()
+
+    if "Close" not in exact.columns:
+        return None
+
+    price = exact.iloc[-1]["Close"]
+
+    if pd.isna(price):
+        return None
+
+    try:
+        return float(price)
+    except Exception:
+        return None
+
+
 def update_p5_tracking(
     tracking_df=None,
     data_date=None,
@@ -477,13 +581,13 @@ def update_p5_tracking(
         )
 
         if (
-            market_date >= day1_date
+            market_date > day1_date
             and pd.isna(day1_price)
         ):
             target_codes.add(code)
 
         if (
-            market_date >= day2_date
+            market_date > day2_date
             and pd.isna(day2_price)
         ):
             target_codes.add(code)
@@ -587,24 +691,14 @@ def update_p5_tracking(
         )
 
         if (
-            market_date >= day1_date
+            market_date > day1_date
             and pd.isna(day1_price)
         ):
 
-            price = _find_price(
+            price = _find_exact_p5_price(
                 history,
                 day1_date,
             )
-
-            if price is None:
-
-                try:
-                    price = get_price_on_or_after(
-                        code,
-                        day1_date,
-                    )
-                except Exception:
-                    price = None
 
             if price is not None:
 
@@ -646,24 +740,14 @@ def update_p5_tracking(
         )
 
         if (
-            market_date >= day2_date
+            market_date > day2_date
             and pd.isna(day2_price)
         ):
 
-            price = _find_price(
+            price = _find_exact_p5_price(
                 history,
                 day2_date,
             )
-
-            if price is None:
-
-                try:
-                    price = get_price_on_or_after(
-                        code,
-                        day2_date,
-                    )
-                except Exception:
-                    price = None
 
             if price is not None:
 
