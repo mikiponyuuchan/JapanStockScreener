@@ -9,7 +9,10 @@ from concurrent.futures import (
 from screener.loader import load_stock_list
 from screener.analyzer import analyze_stock
 
-from services.yahoo_service import _download_history_batch
+from services.yahoo_service import (
+    _download_history_batch,
+    get_expected_market_date,
+)
 from services.morning_baseline_service import save_morning_baseline
 from services.yahoo_credit_service import load_latest_credit_data
 from services.result_writer import save_result
@@ -108,6 +111,133 @@ def main():
         f"取得成功銘柄数 : "
         f"{len(history_map)}"
     )
+
+    # ==================================================
+    # Yahoo daily-data freshness monitor
+    # ==================================================
+
+    expected_date = get_expected_market_date()
+
+    latest_date_counts = {}
+    valid_history_count = 0
+    fresh_history_count = 0
+
+    for history_df in history_map.values():
+
+        if (
+            history_df is None
+            or history_df.empty
+            or "Date" not in history_df.columns
+        ):
+            continue
+
+        latest_date = pd.to_datetime(
+            history_df["Date"],
+            errors="coerce"
+        ).max()
+
+        if pd.isna(latest_date):
+            continue
+
+        latest_date_normalized = (
+            latest_date.normalize()
+        )
+
+        valid_history_count += 1
+
+        if (
+            latest_date_normalized
+            >= expected_date
+        ):
+            fresh_history_count += 1
+
+        latest_date_str = (
+            latest_date_normalized
+            .strftime("%Y-%m-%d")
+        )
+
+        latest_date_counts[latest_date_str] = (
+            latest_date_counts.get(
+                latest_date_str,
+                0
+            )
+            + 1
+        )
+
+    if latest_date_counts:
+
+        yahoo_data_date = max(
+            latest_date_counts,
+            key=latest_date_counts.get
+        )
+
+        yahoo_data_count = (
+            latest_date_counts[
+                yahoo_data_date
+            ]
+        )
+
+        print(
+            f"Yahoo data date : "
+            f"{yahoo_data_date} "
+            f"({yahoo_data_count} stocks)"
+        )
+
+        if len(latest_date_counts) > 1:
+
+            date_summary = ", ".join(
+                f"{date}={count}"
+                for date, count
+                in sorted(
+                    latest_date_counts.items(),
+                    reverse=True
+                )
+            )
+
+            print(
+                f"Yahoo date distribution : "
+                f"{date_summary}"
+            )
+
+    fresh_ratio = (
+        fresh_history_count
+        / valid_history_count
+        if valid_history_count
+        else 0.0
+    )
+
+    print(
+        f"Expected Yahoo date : "
+        f"{expected_date.strftime('%Y-%m-%d')}"
+    )
+
+    print(
+        f"Yahoo fresh data : "
+        f"{fresh_history_count} / "
+        f"{valid_history_count} "
+        f"({fresh_ratio:.2%})"
+    )
+
+    if fresh_ratio < 0.90:
+
+        print()
+        print(
+            "WARNING : Yahoo daily data is stale."
+        )
+        print(
+            f"Expected date : "
+            f"{expected_date.strftime('%Y-%m-%d')}"
+        )
+        print(
+            f"Fresh ratio   : "
+            f"{fresh_ratio:.2%}"
+        )
+        print(
+            "Screener stopped before analysis."
+        )
+        print()
+
+        return
 
     save_morning_baseline(
         history_map,
