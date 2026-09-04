@@ -10,6 +10,7 @@ sys.path.insert(
 )
 
 from services.yahoo_service import _download_history_batch
+from indicators.technical import add_indicators
 
 
 RESULT_DIR = Path("results")
@@ -179,70 +180,51 @@ def main():
         )
         return
 
-    work = pd.DataFrame()
+    # ======================================================
+    # Confirmed-close J1 calculation
+    #
+    # stock_result.csv is used only for Code / Name.
+    # All J1 condition values are rebuilt from Yahoo
+    # confirmed daily history after the market close.
+    # ======================================================
 
-    work["Code"] = (
+    universe = pd.DataFrame()
+
+    universe["Code"] = (
         df[COL_CODE]
         .astype(str)
         .str.strip()
+        .str.replace(
+            r"\\.0$",
+            "",
+            regex=True,
+        )
     )
 
-    work["Name"] = df[COL_NAME]
+    universe["Name"] = df[COL_NAME]
 
-    work["BasePrice"] = pd.to_numeric(
-        df[COL_CLOSE],
-        errors="coerce",
+    universe = (
+        universe
+        .dropna(subset=["Code"])
+        .drop_duplicates(
+            subset=["Code"],
+            keep="first",
+        )
+        .reset_index(drop=True)
     )
-
-    work["Change1"] = pd.to_numeric(
-        df[COL_CHANGE1],
-        errors="coerce",
-    )
-
-    work["VolumeRatio"] = pd.to_numeric(
-        df["VolumeRatio"],
-        errors="coerce",
-    )
-
-    work["BreakoutSignal"] = (
-        df["BreakoutSignal"]
-        .apply(to_bool)
-    )
-
-    work["New30High"] = (
-        df["New30High"]
-        .apply(to_bool)
-    )
-
-    # First apply all J1 conditions that are already available.
-    prefilter = (
-        (work["Change1"] >= 5.0)
-        & (work["VolumeRatio"] < 3.0)
-        & (~work["BreakoutSignal"])
-        & (~work["New30High"])
-    )
-
-    candidates = work[
-        prefilter
-    ].copy()
-
-    print("=" * 72)
-    print("J1 PROSPECTIVE VALIDATION")
-    print("=" * 72)
-    print("Date              :", detection_date)
-    print("Prefilter count   :", len(candidates))
-
-    if candidates.empty:
-        print("J1 candidates     : 0")
-        return
 
     codes = sorted(
-        candidates["Code"]
+        universe["Code"]
         .dropna()
         .unique()
         .tolist()
     )
 
+    print("=" * 72)
+    print("J1 PROSPECTIVE VALIDATION")
+    print("=" * 72)
+    print("Date              :", detection_date)
+    print("Confirmed input   :", len(codes))
     print("Yahoo history     : downloading")
 
     history_map = _download_history_batch(
@@ -251,29 +233,188 @@ def main():
         batch_size=100,
     )
 
-    volume_values = []
-
-    for code in candidates["Code"]:
-        ratio = calc_volume_vs_pre5(
-            history_map.get(code),
-            detection_date,
+    name_map = dict(
+        zip(
+            universe["Code"],
+            universe["Name"],
         )
-
-        volume_values.append(ratio)
-
-    candidates[
-        "DetectionVolumeVsPre5"
-    ] = volume_values
-
-    final_mask = (
-        candidates[
-            "DetectionVolumeVsPre5"
-        ] >= 1.0
     )
 
-    j = candidates[
+    confirmed_rows = []
+
+    target_date = pd.Timestamp(
+        detection_date
+    ).normalize()
+
+    for code in codes:
+
+        history = history_map.get(
+            code
+        )
+
+        x = normalize_history(
+            history
+        )
+
+        if x is None or x.empty:
+            continue
+
+        # Detection-date confirmed daily row must exist.
+        today_mask = (
+            x.index.normalize()
+            == target_date
+        )
+
+        if not today_mask.any():
+            continue
+
+        # add_indicators() expects ordinary OHLCV columns.
+        indicator_df = (
+            x
+            .reset_index()
+            .rename(
+                columns={
+                    "index": "Date",
+                }
+            )
+        )
+
+        try:
+            indicator_df = add_indicators(
+                indicator_df
+            )
+        except Exception:
+            continue
+
+        if (
+            indicator_df is None
+            or indicator_df.empty
+        ):
+            continue
+
+        indicator_df["Date"] = pd.to_datetime(
+            indicator_df["Date"],
+            errors="coerce",
+        )
+
+        confirmed_today = indicator_df[
+            indicator_df["Date"].dt.normalize()
+            == target_date
+        ]
+
+        if confirmed_today.empty:
+            continue
+
+        latest = confirmed_today.iloc[-1]
+
+        base_price = pd.to_numeric(
+            latest.get(
+                "Close",
+                pd.NA,
+            ),
+            errors="coerce",
+        )
+
+        change1 = pd.to_numeric(
+            latest.get(
+                "ChangePercent",
+                pd.NA,
+            ),
+            errors="coerce",
+        )
+
+        volume_ratio = pd.to_numeric(
+            latest.get(
+                "VolumeRatio",
+                pd.NA,
+            ),
+            errors="coerce",
+        )
+
+        breakout_signal = to_bool(
+            latest.get(
+                "BreakoutSignal",
+                False,
+            )
+        )
+
+        new30_high = to_bool(
+            latest.get(
+                "New30High",
+                False,
+            )
+        )
+
+        detection_volume_vs_pre5 = (
+            calc_volume_vs_pre5(
+                history,
+                detection_date,
+            )
+        )
+
+        if (
+            pd.isna(base_price)
+            or pd.isna(change1)
+            or pd.isna(volume_ratio)
+            or detection_volume_vs_pre5 is None
+        ):
+            continue
+
+        confirmed_rows.append(
+            {
+                "Code": code,
+                "Name": name_map.get(
+                    code,
+                    "",
+                ),
+                "BasePrice": float(
+                    base_price
+                ),
+                "Change1": float(
+                    change1
+                ),
+                "VolumeRatio": float(
+                    volume_ratio
+                ),
+                "BreakoutSignal":
+                    bool(breakout_signal),
+                "New30High":
+                    bool(new30_high),
+                "DetectionVolumeVsPre5":
+                    float(
+                        detection_volume_vs_pre5
+                    ),
+            }
+        )
+
+    work = pd.DataFrame(
+        confirmed_rows
+    )
+
+    if work.empty:
+        print("J1 candidates     : 0")
+        print("No confirmed Yahoo rows.")
+        return
+
+    final_mask = (
+        (work["Change1"] >= 5.0)
+        & (work["VolumeRatio"] < 3.0)
+        & (~work["BreakoutSignal"])
+        & (~work["New30High"])
+        & (
+            work["DetectionVolumeVsPre5"]
+            >= 1.0
+        )
+    )
+
+    j = work[
         final_mask
     ].copy()
+
+    print(
+        "Confirmed rows    :",
+        len(work),
+    )
 
     j.insert(
         0,
@@ -326,6 +467,28 @@ def main():
             low_memory=False,
         )
 
+        # Re-running today's confirmed-close validation must
+        # replace today's J1 rows, not preserve stale intraday rows.
+        if (
+            "JVersion" in old.columns
+            and "DetectionDate" in old.columns
+        ):
+            old = old[
+                ~(
+                    (
+                        old["JVersion"]
+                        .astype(str)
+                        == J_VERSION
+                    )
+                    &
+                    (
+                        old["DetectionDate"]
+                        .astype(str)
+                        == detection_date
+                    )
+                )
+            ].copy()
+
         combined = pd.concat(
             [old, j],
             ignore_index=True,
@@ -340,7 +503,7 @@ def main():
             "DetectionDate",
             "Code",
         ],
-        keep="first",
+        keep="last",
     )
 
     combined.to_csv(
