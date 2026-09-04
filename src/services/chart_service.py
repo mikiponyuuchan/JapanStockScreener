@@ -14,16 +14,111 @@ from services.yahoo_service import get_history
 
 def get_today_intraday_daily(code):
     """
-    Yahooの1分足から、
-    今日の未確定日足 OHLCV を作成する。
+    Build today's OHLCV for TOP20 chart display.
 
-    TOP20チャート表示専用。
-    スクリーナー本体のスコア計算には使用しない。
+    During market hours:
+        Use Yahoo 1-minute data.
+
+    After 15:30:
+        Prefer Yahoo daily data for today's confirmed close.
+        If today's daily row is not available yet,
+        fall back to 1-minute data.
     """
 
     try:
 
         ticker = f"{code}.T"
+
+        now = datetime.now()
+
+        # ==================================================
+        # After market close:
+        # Prefer today's official Yahoo daily candle.
+        # ==================================================
+
+        if now.time() >= dt_time(15, 30):
+
+            try:
+
+                daily_df = yf.Ticker(
+                    ticker
+                ).history(
+                    period="5d",
+                    interval="1d",
+                    auto_adjust=False
+                )
+
+                if (
+                    daily_df is not None
+                    and not daily_df.empty
+                ):
+
+                    daily_df = daily_df.copy()
+
+                    idx = pd.to_datetime(
+                        daily_df.index
+                    )
+
+                    try:
+                        if idx.tz is not None:
+                            idx = (
+                                idx
+                                .tz_convert("Asia/Tokyo")
+                                .tz_localize(None)
+                            )
+                    except Exception:
+                        try:
+                            idx = idx.tz_localize(None)
+                        except Exception:
+                            pass
+
+                    daily_df.index = idx
+
+                    today = pd.Timestamp(
+                        now.date()
+                    ).normalize()
+
+                    today_daily = daily_df[
+                        daily_df.index.normalize()
+                        == today
+                    ]
+
+                    if not today_daily.empty:
+
+                        row = today_daily.iloc[-1]
+
+                        required = [
+                            "Open",
+                            "High",
+                            "Low",
+                            "Close",
+                            "Volume",
+                        ]
+
+                        if all(
+                            col in today_daily.columns
+                            for col in required
+                        ):
+
+                            return pd.DataFrame(
+                                [
+                                    {
+                                        "Date": today,
+                                        "Open": float(row["Open"]),
+                                        "High": float(row["High"]),
+                                        "Low": float(row["Low"]),
+                                        "Close": float(row["Close"]),
+                                        "Volume": float(row["Volume"]),
+                                    }
+                                ]
+                            )
+
+            except Exception:
+                pass
+
+        # ==================================================
+        # Intraday fallback
+        # ==================================================
 
         df = yf.Ticker(
             ticker
@@ -36,7 +131,6 @@ def get_today_intraday_daily(code):
         if df is None or df.empty:
             return None
 
-        # 必要列の確認
         required_columns = [
             "Open",
             "High",
@@ -50,7 +144,6 @@ def get_today_intraday_daily(code):
             if column not in df.columns:
                 return None
 
-        # 欠損行を除外
         df = df.dropna(
             subset=[
                 "Open",
@@ -63,15 +156,27 @@ def get_today_intraday_daily(code):
         if df.empty:
             return None
 
-        # 今日の1分足を日足1本へ集計
+        index_date = pd.Timestamp(
+            df.index[-1]
+        )
+
+        try:
+            if index_date.tzinfo is not None:
+                index_date = (
+                    index_date
+                    .tz_convert("Asia/Tokyo")
+                    .tz_localize(None)
+                )
+        except Exception:
+            try:
+                index_date = index_date.tz_localize(None)
+            except Exception:
+                pass
+
         today_row = pd.DataFrame(
             [
                 {
-                    "Date": (
-                        df.index[-1]
-                        .tz_localize(None)
-                        .normalize()
-                    ),
+                    "Date": index_date.normalize(),
                     "Open": float(
                         df["Open"].iloc[0]
                     ),
@@ -96,7 +201,7 @@ def get_today_intraday_daily(code):
     except Exception as e:
 
         print(
-            f"当日チャートデータ取得ERROR "
+            f"Today chart data ERROR "
             f"{code} : {e}"
         )
 
@@ -159,15 +264,20 @@ def save_chart(code):
         years=[now.year]
     )
 
-    is_market_hours = (
+    is_trading_day = (
         now.weekday() < 5
         and now.date() not in jp_holidays
-        and dt_time(9, 0) <= now.time() < dt_time(15, 30)
     )
 
     today_df = None
 
-    if is_market_hours:
+    # Use today's intraday OHLCV as a fallback even after 15:30.
+    # Yahoo daily history may not contain today's confirmed row
+    # immediately after the market close.
+    if (
+        is_trading_day
+        and now.time() >= dt_time(9, 0)
+    ):
         today_df = get_today_intraday_daily(
             code
         )
