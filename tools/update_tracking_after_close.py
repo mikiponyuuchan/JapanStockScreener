@@ -262,6 +262,72 @@ def main():
             e,
         )
 
+    # ======================================================
+    # Intraday Strategy H1 result update
+    # ======================================================
+
+    print()
+    print("[Intraday Strategy H1]")
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_intraday_strategy_h1.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "Intraday Strategy H1 : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "Intraday Strategy H1 ERROR :",
+            e,
+        )
+
+    # ======================================================
+    # Intraday Strategy H1-Early20
+    # ======================================================
+
+    print()
+    print("[Intraday Strategy H1-Early20]")
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_intraday_strategy_h1_early20.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "Intraday Strategy H1-Early20 : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "Intraday Strategy H1-Early20 ERROR :",
+            e,
+        )
+
     print()
     print("=" * 60)
     print("After-close update complete")
