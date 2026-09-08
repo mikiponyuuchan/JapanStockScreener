@@ -193,6 +193,39 @@ def main():
         )
 
     # ======================================================
+    # J1 Trade Ver1 result update
+    # ======================================================
+
+    print()
+    print("[J1 Trade Ver1 result update]")
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_j1_trade_ver1.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "J1 Trade Ver1 result update : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "J1 Trade Ver1 result update ERROR :",
+            e,
+        )
+
+    # ======================================================
     # J1 detection
     # ======================================================
 
@@ -260,6 +293,48 @@ def main():
         print(
             "J1 confirmed tracking ERROR :",
             e,
+        )
+
+    # ======================================================
+    # J1 Trade Ver1 plan creation
+    # ======================================================
+
+    print()
+    print("[J1 Trade Ver1 plan]")
+
+    if j1_detect_ok:
+
+        try:
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(
+                        ROOT
+                        / "tools"
+                        / "create_j1_trade_plan.py"
+                    ),
+                ],
+                cwd=ROOT,
+                check=True,
+            )
+
+            print(
+                "J1 Trade Ver1 plan : complete"
+            )
+
+        except Exception as e:
+
+            print(
+                "J1 Trade Ver1 plan ERROR :",
+                e,
+            )
+
+    else:
+
+        print(
+            "J1 Trade Ver1 plan : skipped "
+            "(J1 detection failed)"
         )
 
     # ======================================================
