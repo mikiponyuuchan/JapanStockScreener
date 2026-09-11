@@ -6,7 +6,7 @@ import yfinance as yf
 
 
 TRACKING_PATH = Path(
-    "data/tracking/intraday_strategy_h1_early20.csv"
+    "data/tracking/intraday_strategy_h1.csv"
 )
 
 MARKET_CLOSE_HOUR = 15
@@ -57,14 +57,18 @@ def evaluation_start(date_text, time_text):
         second=t.second,
     )
 
-    # Early20:
-    # Start from the next 1-minute bar after detection.
+    # Always start from the NEXT 5-minute bar.
+    minute_floor = (
+        current.minute // 5
+    ) * 5
+
     bar = current.replace(
+        minute=minute_floor,
         second=0,
         microsecond=0,
     )
 
-    bar += timedelta(minutes=1)
+    bar += timedelta(minutes=5)
 
     return bar
 
@@ -97,7 +101,7 @@ def can_finalize(date_text):
     return now >= close_time
 
 
-def download_1m(code, date_text):
+def download_5m(code, date_text):
     ticker = f"{code}.T"
 
     start = datetime.strptime(
@@ -112,7 +116,7 @@ def download_1m(code, date_text):
             ticker,
             start=start.strftime("%Y-%m-%d"),
             end=end.strftime("%Y-%m-%d"),
-            interval="1m",
+            interval="5m",
             progress=False,
             auto_adjust=False,
             threads=False,
@@ -420,7 +424,7 @@ def main():
         )
 
         if key not in cache:
-            cache[key] = download_1m(
+            cache[key] = download_5m(
                 code,
                 date_text,
             )
@@ -471,7 +475,7 @@ def main():
 
     print()
     print("=" * 60)
-    print("H1-Early20 RESULT UPDATE")
+    print("H1 RESULT UPDATE")
     print("=" * 60)
     print(f"Updated : {updated}")
     print(f"Skipped : {skipped}")
