@@ -338,6 +338,36 @@ def main():
         )
 
     # ======================================================
+    # JPX short-sale trigger download
+    # ======================================================
+
+    print()
+    print("[JPX short-sale trigger download]")
+
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "download_short_sale_trigger_jpx.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "JPX short-sale trigger download : complete"
+        )
+
+    except Exception as exc:
+        print(
+            "JPX short-sale trigger download ERROR :",
+            exc,
+        )
+
     # Short-Sale Trigger Rebound Ver1
     # ======================================================
 
