@@ -338,6 +338,52 @@ def main():
         )
 
     # ======================================================
+    # Short-Sale Trigger Rebound Ver1
+    # ======================================================
+
+    print()
+    print("[Short-Sale Trigger Rebound Ver1]")
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "create_short_sale_trigger_rebound_ver1.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_short_sale_trigger_rebound_ver1.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "Short-Sale Trigger Rebound Ver1 : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "Short-Sale Trigger Rebound Ver1 ERROR :",
+            e,
+        )
+
+    # ======================================================
     # Intraday Strategy H1 result update
     # ======================================================
 
