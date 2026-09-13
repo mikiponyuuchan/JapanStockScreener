@@ -22,9 +22,12 @@ from screener.loader import load_stock_list
 
 
 RESULTS_DIR = ROOT / "results"
+API_LIMIT = 1000
+
 API_URL = (
     "https://webapi.yanoshin.jp/"
     "webapi/tdnet/list/{date}.json"
+    f"?limit={API_LIMIT}"
 )
 
 TIMEOUT = 30
@@ -605,10 +608,31 @@ def main():
         [],
     )
 
+    total_count = data.get(
+        "total_count",
+        None,
+    )
+
     print(
         f"TDnet disclosures : "
         f"{len(items)}"
     )
+
+    print(
+        f"TDnet total_count : "
+        f"{total_count}"
+    )
+
+    if (
+        (
+            total_count is not None
+            and total_count > len(items)
+        )
+        or len(items) >= API_LIMIT
+    ):
+        print(
+            "WARNING: API may be truncated"
+        )
 
     df = create_dataframe(
         items,
