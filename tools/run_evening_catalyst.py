@@ -109,7 +109,7 @@ def main():
     )
 
     run_step(
-        "1/4 GENERAL CATALYST",
+        "1/5 GENERAL CATALYST",
         [
             sys.executable,
             str(
@@ -134,7 +134,7 @@ def main():
     )
 
     run_step(
-        "2/4 EARNINGS PDF ANALYSIS",
+        "2/5 EARNINGS PDF ANALYSIS",
         [
             sys.executable,
             str(
@@ -159,7 +159,7 @@ def main():
     )
 
     run_step(
-        "3/4 EARNINGS CATALYST VER1",
+        "3/5 EARNINGS CATALYST VER1",
         [
             sys.executable,
             str(
@@ -180,12 +180,28 @@ def main():
     # 4. Daily TOP3
     # --------------------------------------------------
     run_step(
-        "4/4 EARNINGS TOP3",
+        "4/5 EARNINGS TOP3",
         [
             sys.executable,
             str(
                 TOOLS
                 / "show_earnings_catalyst_top3.py"
+            ),
+            "--date",
+            target_date,
+        ],
+    )
+
+    # --------------------------------------------------
+    # 5. General catalyst focus view
+    # --------------------------------------------------
+    run_step(
+        "5/5 GENERAL CATALYST FOCUS",
+        [
+            sys.executable,
+            str(
+                TOOLS
+                / "show_morning_catalyst_focus.py"
             ),
             "--date",
             target_date,
