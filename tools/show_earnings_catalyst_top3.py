@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 
 import pandas as pd
 
@@ -44,17 +45,39 @@ def format_value(value, digits=1, suffix=""):
 
 
 def main():
-    files = sorted(
-        INPUT_DIR.glob(FILE_PATTERN)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--date",
+        default=None,
+        help="YYYY-MM-DD",
     )
 
-    if not files:
-        print(
-            "Daily earnings catalyst CSV not found."
-        )
-        return
+    args = parser.parse_args()
 
-    input_csv = files[-1]
+    if args.date:
+        input_csv = (
+            INPUT_DIR
+            / f"{args.date}_earnings_catalyst_ver1.csv"
+        )
+
+        if not input_csv.exists():
+            raise SystemExit(
+                f"Daily earnings catalyst CSV not found: {input_csv}"
+            )
+
+    else:
+        files = sorted(
+            INPUT_DIR.glob(FILE_PATTERN)
+        )
+
+        if not files:
+            print(
+                "Daily earnings catalyst CSV not found."
+            )
+            return
+
+        input_csv = files[-1]
 
     print(
         "Source :",
