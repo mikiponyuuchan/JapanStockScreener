@@ -461,6 +461,10 @@ def main():
         low_memory=False,
     )
 
+    # Tracking rows contain a mixture of numbers and blank/string values.
+    # Use object dtype during updates so pandas does not reject "" assignments.
+    df = df.astype(object)
+
     if df.empty:
         print(
             "SSR-Ver1 tracking is empty."
