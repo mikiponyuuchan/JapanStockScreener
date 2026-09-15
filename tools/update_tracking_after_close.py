@@ -479,6 +479,39 @@ def main():
             e,
         )
 
+    # ======================================================
+    # Morning baseline for next trading day
+    # ======================================================
+
+    print()
+    print("[Morning Baseline]")
+
+    try:
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_morning_baseline_after_close.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print(
+            "Morning Baseline : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "Morning Baseline ERROR :",
+            e,
+        )
+
     print()
     print("=" * 60)
     print("After-close update complete")
