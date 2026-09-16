@@ -1,0 +1,5 @@
+﻿TriggerTimeBucket,N,LowToCloseMean,NextHighMean,NextHighMedian,NextHigh5Rate,NextCloseMean
+09:00-09:59,391,4.51,4.5,3.42,36.4,-0.43
+10:00-12:59,217,3.43,3.75,2.55,25.6,-1.07
+13:00-14:29,91,3.36,3.59,2.14,26.4,-1.03
+14:30-15:30,82,2.44,5.75,3.85,37.0,0.54

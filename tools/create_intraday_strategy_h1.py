@@ -308,6 +308,8 @@ def build_top3(snapshot_date, snapshot_time, df):
         & work["ChangeX"].notna()
         & work["VolumeX"].notna()
         & work["CxV"].notna()
+        & work["LimitUpRoomPctX"].notna()
+        & (work["LimitUpRoomPctX"] > 0)
     ].copy()
 
     top3 = valid.sort_values(

@@ -1,0 +1,4 @@
+﻿StrategyVersion,DetectionDate,Code,Name,BasePrice,Change1,VolumeRatio,DetectionVolumeVsPre5,EntryRule,TakeProfitPct,StopLossPct,FallbackExit
+J1-Trade-Ver1,2026-09-15,6721,ウインテスト,77.0,5.48,2.69,4.385851396527553,NEXT_OPEN,3.0,-5.0,CLOSE
+J1-Trade-Ver1,2026-09-15,1491,中外鉱業,737.0,5.44,2.05,2.9323308270676693,NEXT_OPEN,3.0,-5.0,CLOSE
+J1-Trade-Ver1,2026-09-15,4493,サイバーセキュリティクラウド,1924.0,5.25,2.89,5.886524822695035,NEXT_OPEN,3.0,-5.0,CLOSE

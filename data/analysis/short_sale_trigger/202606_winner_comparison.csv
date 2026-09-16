@@ -1,0 +1,5 @@
+﻿Target,Group,N,DayChangeMean,DayChangeMedian,LowPctMean,LowPctMedian,LowToCloseMean,LowToCloseMedian,NextOpenMean,NextOpenMedian,NextOpenGD0Rate,NextOpenGD3Rate,NextOpenGD5Rate,NextHighFromOpenMean,NextLowFromOpenMean,NextCloseFromOpenMean
++3,WINNER,358,-9.86,-9.82,-13.42,-12.32,4.09,3.03,-0.69,0.0,46.9,24.6,15.6,8.46,-3.42,3.17
++3,NON_WINNER,411,-9.68,-9.56,-12.85,-11.75,3.64,2.6,0.28,0.22,32.6,10.9,4.9,1.08,-5.95,-3.48
++5,WINNER,236,-9.81,-9.89,-13.57,-12.5,4.34,3.26,-0.96,-0.03,50.0,29.2,19.5,10.8,-3.22,4.93
++5,NON_WINNER,533,-9.74,-9.57,-12.92,-11.87,3.64,2.64,0.18,0.17,34.5,12.0,5.6,1.73,-5.46,-2.74

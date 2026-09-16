@@ -305,6 +305,8 @@ def build_top3(
         & work["ChangeX"].notna()
         & work["VolumeX"].notna()
         & work["CxV"].notna()
+        & work["LimitUpRoomPctX"].notna()
+        & (work["LimitUpRoomPctX"] > 0)
     ].copy()
 
     top3 = (
