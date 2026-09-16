@@ -348,8 +348,20 @@ def ssr_worker(
         ):
             break
 
+        # Do not sleep past the 09:30 SSR-Ver2
+        # evaluation boundary.
+        remaining = (
+            cutoff - datetime.now()
+        ).total_seconds()
+
+        if remaining <= 0:
+            break
+
         stop_event.wait(
-            SSR_INTERVAL
+            min(
+                SSR_INTERVAL,
+                remaining,
+            )
         )
 
     # ==================================================
