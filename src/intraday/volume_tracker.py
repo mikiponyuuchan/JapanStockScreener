@@ -79,7 +79,7 @@ def save_snapshot(df, now, test_mode=False):
     """
     スナップショットを日別CSVへ保存する。
 
-    同一 Timestamp + Code は重複保存しない。
+    同一 TimeSlot + Code は重複保存しない。
     """
 
     output_dir = TEST_DIR if test_mode else BASE_DIR
@@ -101,7 +101,7 @@ def save_snapshot(df, now, test_mode=False):
         )
 
         combined = combined.drop_duplicates(
-            subset=["Timestamp", "Code"],
+            subset=["TimeSlot", "Code"],
             keep="last",
         )
 
