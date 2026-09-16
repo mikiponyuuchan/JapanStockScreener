@@ -13,6 +13,9 @@ from show_short_sale_trigger_gd_kabu import (
 )
 from watch_short_sale_trigger_gd_kabu import (
     scan_code,
+    evaluate_ssr_ver2,
+    save_ssr_ver2_rows,
+    print_ssr_ver2_candidate,
 )
 
 
@@ -198,6 +201,16 @@ def ssr_worker(
         )
 
         watch[code] = {
+            "TriggerDate":
+                row.get(
+                    "TriggerDate",
+                    "",
+                ),
+            "TriggerTime":
+                row.get(
+                    "TriggerTime",
+                    "",
+                ),
             "Code": code,
             "Name": row["Name"],
         }
@@ -209,6 +222,11 @@ def ssr_worker(
     completed = {}
 
     ssr_codes = set()
+
+    # SSR-Ver1 stocks remain under observation
+    # until 09:30 for independent SSR-Ver2
+    # forward validation.
+    ver2_watch = set()
 
     cutoff = today_at(
         SSR_END[0],
@@ -230,7 +248,10 @@ def ssr_worker(
     while (
         not stop_event.is_set()
         and datetime.now() < cutoff
-        and unresolved
+        and (
+            unresolved
+            or ver2_watch
+        )
     ):
         api_errors = 0
 
@@ -295,6 +316,10 @@ def ssr_worker(
                     code
                 )
 
+                ver2_watch.add(
+                    code
+                )
+
                 print_ssr_candidate(
                     row
                 )
@@ -311,14 +336,101 @@ def ssr_worker(
             api_errors,
         )
 
+        if datetime.now() >= cutoff:
+            break
+
+        # Even when all opening prices are resolved,
+        # SSR-Ver1 candidates must remain alive until
+        # 09:30 for SSR-Ver2 evaluation.
         if (
             not unresolved
-            or datetime.now() >= cutoff
+            and not ver2_watch
         ):
             break
 
         stop_event.wait(
             SSR_INTERVAL
+        )
+
+    # ==================================================
+    # SSR-Ver2 09:30 forward evaluation
+    # ==================================================
+
+    ver2_rows = []
+
+    if ver2_watch:
+        print()
+        print("=" * 72)
+        print(
+            " SSR-Ver2 09:30 EVALUATION"
+        )
+        print("=" * 72)
+
+        for code in sorted(
+            ver2_watch
+        ):
+            item = watch[
+                code
+            ]
+
+            try:
+                ver2_row = evaluate_ssr_ver2(
+                    token,
+                    item,
+                    item.get(
+                        "TriggerTime",
+                        "",
+                    ),
+                )
+
+                time.sleep(
+                    SSR_REQUEST_WAIT
+                )
+
+            except Exception as exc:
+                print(
+                    f"SSR-Ver2 API ERROR "
+                    f"{code}: {exc}"
+                )
+                continue
+
+            if ver2_row is None:
+                print(
+                    f"SSR-Ver2 NO DATA : "
+                    f"{code}"
+                )
+                continue
+
+            ver2_rows.append(
+                ver2_row
+            )
+
+            if ver2_row[
+                "Ver2Candidate"
+            ]:
+                print_ssr_ver2_candidate(
+                    ver2_row
+                )
+
+            else:
+                print(
+                    f'SSR-Ver2 FILTERED : '
+                    f'{code} '
+                    f'Rebound='
+                    f'{ver2_row["ReboundLowTo0930Pct"]:+.2f}% '
+                    f'LowAge='
+                    f'{ver2_row["MinutesSinceLow"]:.1f}m'
+                )
+
+        save_ssr_ver2_rows(
+            ver2_rows
+        )
+
+    else:
+        print()
+        print(
+            "SSR-Ver2 : "
+            "No SSR-Ver1 stocks to evaluate."
         )
 
     print()
@@ -459,7 +571,11 @@ def check_mode():
     )
 
     print(
-        "SSR cutoff   : 09:30"
+        "SSR-Ver1     : until 09:30"
+    )
+
+    print(
+        "SSR-Ver2     : 09:30 evaluation"
     )
 
     print("=" * 72)
@@ -510,7 +626,11 @@ def main():
     )
 
     print(
-        "SSR        : until 09:30"
+        "SSR-Ver1   : until 09:30"
+    )
+
+    print(
+        "SSR-Ver2   : 09:30"
     )
 
     print(
@@ -625,11 +745,10 @@ def main():
             "- started too late."
         )
 
-    stop_event.set()
-
-    ssr_thread.join(
-        timeout=15
-    )
+    # SSR worker finishes its own 09:30 processing,
+    # including SSR-Ver2 evaluation and CSV save.
+    # Wait for it before completing the runner.
+    ssr_thread.join()
 
     print()
     print("=" * 72)
