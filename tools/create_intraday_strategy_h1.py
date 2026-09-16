@@ -438,6 +438,39 @@ def main():
         columns=OUTPUT_COLUMNS,
     )
 
+    # Recalculated snapshots must replace the old TOP3.
+    #
+    # If ranking conditions change, keeping old rows would leave
+    # obsolete candidates in the tracking CSV.
+    snapshot_keys = (
+        incoming[
+            [
+                "DetectionDate",
+                "SnapshotTime",
+            ]
+        ]
+        .drop_duplicates()
+    )
+
+    if not existing.empty:
+        existing = existing.merge(
+            snapshot_keys.assign(
+                _replace_snapshot=True
+            ),
+            on=[
+                "DetectionDate",
+                "SnapshotTime",
+            ],
+            how="left",
+        )
+
+        existing = existing[
+            existing["_replace_snapshot"]
+            .isna()
+        ].drop(
+            columns=["_replace_snapshot"]
+        )
+
     combined = pd.concat(
         [existing, incoming],
         ignore_index=True,

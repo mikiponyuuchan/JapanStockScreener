@@ -11,6 +11,7 @@ OUTPUT_PATH = Path(
 )
 
 START_DATE = "2026-09-07"
+FORWARD_START = "2026-09-04"
 
 # 09:20～09:25の最も早い取得データを使用
 TARGET_START_MIN = 9 * 60 + 20
@@ -327,12 +328,18 @@ def build_top3(
         top3.iterrows(),
         start=1,
     ):
+        data_type = (
+            "FORWARD"
+            if snapshot_date >= FORWARD_START
+            else "DEVELOPMENT"
+        )
+
         rows.append(
             {
                 "StrategyVersion":
                     "H1-Early20",
                 "DataType":
-                    "VALIDATION",
+                    data_type,
                 "DetectionDate":
                     snapshot_date,
                 "SnapshotTime":
@@ -452,6 +459,39 @@ def main():
         new_rows,
         columns=OUTPUT_COLUMNS,
     )
+
+    # Recalculated snapshots must replace the old TOP3.
+    #
+    # If ranking conditions change, keeping old rows would leave
+    # obsolete candidates in the tracking CSV.
+    snapshot_keys = (
+        incoming[
+            [
+                "DetectionDate",
+                "SnapshotTime",
+            ]
+        ]
+        .drop_duplicates()
+    )
+
+    if not existing.empty:
+        existing = existing.merge(
+            snapshot_keys.assign(
+                _replace_snapshot=True
+            ),
+            on=[
+                "DetectionDate",
+                "SnapshotTime",
+            ],
+            how="left",
+        )
+
+        existing = existing[
+            existing["_replace_snapshot"]
+            .isna()
+        ].drop(
+            columns=["_replace_snapshot"]
+        )
 
     combined = pd.concat(
         [existing, incoming],
