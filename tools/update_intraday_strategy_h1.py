@@ -57,18 +57,15 @@ def evaluation_start(date_text, time_text):
         second=t.second,
     )
 
-    # Always start from the NEXT 5-minute bar.
-    minute_floor = (
-        current.minute // 5
-    ) * 5
-
+    # Start from the next 1-minute bar after detection.
+    # Example:
+    # SnapshotTime 09:31 -> evaluation starts at 09:32.
     bar = current.replace(
-        minute=minute_floor,
         second=0,
         microsecond=0,
     )
 
-    bar += timedelta(minutes=5)
+    bar += timedelta(minutes=1)
 
     return bar
 
@@ -101,7 +98,7 @@ def can_finalize(date_text):
     return now >= close_time
 
 
-def download_5m(code, date_text):
+def download_1m(code, date_text):
     ticker = f"{code}.T"
 
     start = datetime.strptime(
@@ -116,7 +113,7 @@ def download_5m(code, date_text):
             ticker,
             start=start.strftime("%Y-%m-%d"),
             end=end.strftime("%Y-%m-%d"),
-            interval="5m",
+            interval="1m",
             progress=False,
             auto_adjust=False,
             threads=False,
@@ -424,7 +421,7 @@ def main():
         )
 
         if key not in cache:
-            cache[key] = download_5m(
+            cache[key] = download_1m(
                 code,
                 date_text,
             )
