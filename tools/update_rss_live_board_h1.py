@@ -17,7 +17,7 @@ sys.path.insert(
 )
 
 from rss_live_board import (
-    set_candidates,
+    add_candidate,
     print_board,
 )
 
@@ -192,9 +192,11 @@ def main():
 
     # 09:30時点で09:20の20銘柄をクリアし、
     # H1 TOP3だけをセットする。
-    set_candidates(
-        candidates
-    )
+    for code, label in candidates:
+        add_candidate(
+            code,
+            label,
+        )
 
     print_board()
 

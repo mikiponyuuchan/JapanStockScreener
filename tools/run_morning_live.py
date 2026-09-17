@@ -18,6 +18,10 @@ from watch_short_sale_trigger_gd_kabu import (
     print_ssr_ver2_candidate,
 )
 
+from rss_live_board import (
+    add_candidate,
+)
+
 
 SSR_INTERVAL = 30
 SSR_REQUEST_WAIT = 0.25
@@ -324,6 +328,11 @@ def ssr_worker(
                     row
                 )
 
+                add_candidate(
+                    code,
+                    "SSR-Ver1",
+                )
+
         print(
             datetime.now().strftime(
                 "%H:%M:%S"
@@ -422,6 +431,11 @@ def ssr_worker(
             ]:
                 print_ssr_ver2_candidate(
                     ver2_row
+                )
+
+                add_candidate(
+                    code,
+                    "SSR-Ver2",
                 )
 
             else:
