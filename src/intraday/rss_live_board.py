@@ -226,7 +226,15 @@ def set_candidates(candidates):
 
 
 def print_board():
-    rows = read_board()
+    try:
+        rows = read_board()
+    except Exception as exc:
+        print()
+        print(
+            "RSS live board display skipped : "
+            f"{exc}"
+        )
+        return
 
     print()
     print("=" * 60)
