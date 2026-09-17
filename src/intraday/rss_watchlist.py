@@ -216,22 +216,22 @@ def get_rss_sheet():
 
     try:
         book = excel.Workbooks(
-            "rakuten_rss_h1.xlsx"
+            "rakuten_rss_live_board.xlsx"
         )
     except Exception as exc:
         raise RuntimeError(
-            "楽天RSS専用Excelが開いていません : "
-            "rakuten_rss_h1.xlsx"
+            "楽天RSSライブボードが開いていません : "
+            "rakuten_rss_live_board.xlsx"
         ) from exc
 
     try:
         sheet = book.Worksheets(
-            "楽天RSS_H1"
+            "H1ライブボード"
         )
     except Exception as exc:
         raise RuntimeError(
             "楽天RSSシートが見つかりません : "
-            "楽天RSS_H1"
+            "H1ライブボード"
         ) from exc
 
     return sheet
@@ -242,90 +242,14 @@ def get_rss_sheet():
 # ================================================
 
 def write_excel(watchlist):
+    """
+    H1ライブボードのA2:A21だけを更新する。
+
+    B～G列はライブボード側の既存数式・
+    条件付き書式を維持する。
+    """
 
     sheet = get_rss_sheet()
-
-    # 見出し
-    headers = [
-        "コード",
-        "銘柄名",
-        "現在値",
-        "前日比率",
-        "出来高",
-        "出来高倍率",
-        "C×V",
-    ]
-
-    for col, value in enumerate(
-        headers,
-        start=1,
-    ):
-        sheet.Cells(
-            1,
-            col,
-        ).Value = value
-
-    # 古い監視銘柄を消す
-    sheet.Range(
-        "A2:G21"
-    ).ClearContents()
-
-    # 新しい20銘柄を設定
-    for excel_row, (_, row) in enumerate(
-        watchlist.iterrows(),
-        start=2,
-    ):
-
-        code = row["CodeX"]
-
-        # A列はコードそのもの
-        sheet.Cells(
-            excel_row,
-            1,
-        ).Value = code
-
-        # 楽天RSS関数
-        ticker = f"{code}.T"
-
-        sheet.Cells(
-            excel_row,
-            2,
-        ).Formula = (
-            f'=RssMarket('
-            f'"{ticker}",'
-            f'"銘柄名称")'
-        )
-
-        sheet.Cells(
-            excel_row,
-            3,
-        ).Formula = (
-            f'=RssMarket('
-            f'"{ticker}",'
-            f'"現在値")'
-        )
-
-        sheet.Cells(
-            excel_row,
-            4,
-        ).Formula = (
-            f'=RssMarket('
-            f'"{ticker}",'
-            f'"前日比率")'
-        )
-
-        sheet.Cells(
-            excel_row,
-            5,
-        ).Formula = (
-            f'=RssMarket('
-            f'"{ticker}",'
-            f'"出来高")'
-        )
-
-    # ------------------------------------------------
-    # 書き込み後検証
-    # ------------------------------------------------
 
     expected_codes = [
         str(code)
@@ -333,6 +257,27 @@ def write_excel(watchlist):
             "CodeX"
         ].tolist()
     ]
+
+    # 20行分を一括作成
+    values = [
+        (code,)
+        for code in expected_codes
+    ]
+
+    while len(values) < WATCH_N:
+        values.append(("",))
+
+    # A列だけ更新
+    sheet.Range(
+        "A2:A21"
+    ).Value = tuple(values)
+
+    # Excel再計算
+    sheet.Application.Calculate()
+
+    # ------------------------------------------------
+    # 書き込み後検証
+    # ------------------------------------------------
 
     actual_values = sheet.Range(
         "A2:A21"
@@ -344,7 +289,7 @@ def write_excel(watchlist):
 
         value = item[0]
 
-        if value is None:
+        if value is None or value == "":
             continue
 
         try:
@@ -358,19 +303,25 @@ def write_excel(watchlist):
 
     if actual_codes != expected_codes:
         raise RuntimeError(
-            "楽天RSS Excelへの銘柄設定検証に失敗しました。\n"
+            "楽天RSSライブボードへの"
+            "銘柄設定検証に失敗しました。\n"
             f"expected={expected_codes}\n"
             f"actual={actual_codes}"
         )
 
     print(
         "RSS Excel target : "
-        "rakuten_rss_h1.xlsx / 楽天RSS_H1"
+        "rakuten_rss_live_board.xlsx / "
+        "H1ライブボード"
     )
 
     print(
         "RSS watchlist verify : OK "
         f"({len(actual_codes)} stocks)"
+    )
+
+    print(
+        "更新範囲 : A2:A21 only"
     )
 
     return sheet
