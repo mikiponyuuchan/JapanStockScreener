@@ -159,11 +159,8 @@ def wait_for_panel():
         if now > panel_deadline:
             return None
 
-        print(
-            f"{now:%H:%M:%S} "
-            "09:20 morning_panel 待機中..."
-        )
-
+        # 5秒ごとの待機ログは表示しない。
+        # panelの存在確認自体は従来どおり5秒ごとに行う。
         time.sleep(
             PANEL_CHECK_INTERVAL
         )
