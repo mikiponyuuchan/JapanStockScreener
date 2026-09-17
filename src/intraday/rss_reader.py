@@ -18,6 +18,52 @@ def get_excel_app():
         ) from e
 
 
+def get_rss_sheet():
+    """
+    楽天RSS専用ブック・シートを名前で取得する。
+
+    ActiveWorkbook / ActiveSheet は使用しない。
+    """
+
+    excel = get_excel_app()
+
+    try:
+        book = excel.Workbooks(
+            "rakuten_rss_h1.xlsx"
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "楽天RSS専用Excelが開いていません : "
+            "rakuten_rss_h1.xlsx"
+        ) from exc
+
+    try:
+        sheet = book.Worksheets(
+            "楽天RSS_H1"
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "楽天RSSシートが見つかりません : "
+            "楽天RSS_H1"
+        ) from exc
+
+    return sheet
+
+
+def is_excel_error_value(value):
+    """
+    Excel COMのエラー値を検出する。
+
+    -2146826259 などの負の巨大整数は
+    RSSデータとして扱わない。
+    """
+
+    if isinstance(value, (int, float)):
+        return value <= -2000000000
+
+    return False
+
+
 def read_rss_rows(start_row=2, end_row=21):
     """
     楽天RSSライブボードの A:E を読み取る。
@@ -31,8 +77,7 @@ def read_rss_rows(start_row=2, end_row=21):
     空行は除外する。
     """
 
-    excel = get_excel_app()
-    sheet = excel.ActiveSheet
+    sheet = get_rss_sheet()
 
     values = sheet.Range(
         f"A{start_row}:E{end_row}"
@@ -46,6 +91,24 @@ def read_rss_rows(start_row=2, end_row=21):
 
         # コードが空なら未使用行
         if code is None:
+            continue
+
+        # RSS式がExcelエラーの場合は
+        # 正常データとして返さない。
+        if (
+            is_excel_error_value(name)
+            or is_excel_error_value(price)
+            or is_excel_error_value(change_pct)
+            or is_excel_error_value(volume)
+        ):
+            print(
+                f"RSS ERROR VALUE : "
+                f"{code} "
+                f"name={name} "
+                f"price={price} "
+                f"change={change_pct} "
+                f"volume={volume}"
+            )
             continue
 
         # Excel COMではコードがfloatになる場合がある

@@ -205,14 +205,45 @@ def get_excel():
         ) from exc
 
 
+def get_rss_sheet():
+    """
+    楽天RSS専用ブック・シートを名前で取得する。
+
+    ActiveWorkbook / ActiveSheet は使用しない。
+    """
+
+    excel = get_excel()
+
+    try:
+        book = excel.Workbooks(
+            "rakuten_rss_h1.xlsx"
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "楽天RSS専用Excelが開いていません : "
+            "rakuten_rss_h1.xlsx"
+        ) from exc
+
+    try:
+        sheet = book.Worksheets(
+            "楽天RSS_H1"
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "楽天RSSシートが見つかりません : "
+            "楽天RSS_H1"
+        ) from exc
+
+    return sheet
+
+
 # ================================================
 # Excelへ楽天RSS式を設定
 # ================================================
 
 def write_excel(watchlist):
 
-    excel = get_excel()
-    sheet = excel.ActiveSheet
+    sheet = get_rss_sheet()
 
     # 見出し
     headers = [
@@ -291,6 +322,56 @@ def write_excel(watchlist):
             f'"{ticker}",'
             f'"出来高")'
         )
+
+    # ------------------------------------------------
+    # 書き込み後検証
+    # ------------------------------------------------
+
+    expected_codes = [
+        str(code)
+        for code in watchlist[
+            "CodeX"
+        ].tolist()
+    ]
+
+    actual_values = sheet.Range(
+        "A2:A21"
+    ).Value
+
+    actual_codes = []
+
+    for item in actual_values:
+
+        value = item[0]
+
+        if value is None:
+            continue
+
+        try:
+            value = str(int(value))
+        except (TypeError, ValueError):
+            value = str(value).strip()
+
+        actual_codes.append(
+            value
+        )
+
+    if actual_codes != expected_codes:
+        raise RuntimeError(
+            "楽天RSS Excelへの銘柄設定検証に失敗しました。\n"
+            f"expected={expected_codes}\n"
+            f"actual={actual_codes}"
+        )
+
+    print(
+        "RSS Excel target : "
+        "rakuten_rss_h1.xlsx / 楽天RSS_H1"
+    )
+
+    print(
+        "RSS watchlist verify : OK "
+        f"({len(actual_codes)} stocks)"
+    )
 
     return sheet
 
