@@ -1,4 +1,4 @@
-﻿# ================================================
+# ================================================
 # 楽天 MarketSpeed II RSS
 # 朝ライブ 一発起動ランナー
 #
@@ -392,8 +392,12 @@ def main():
 
         return
 
-    setup_watchlist(
-        panel_path
+    # 09:20 watchlist is used for validation only.
+    # Do not overwrite the compact RSS live board.
+    print()
+    print(
+        "09:20 watchlist : "
+        "Excel update skipped"
     )
 
     run_capture()
