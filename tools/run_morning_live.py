@@ -546,8 +546,28 @@ def run_h1():
         )
         return
 
-    run_script(
+    rc = run_script(
         "create_intraday_strategy_h1.py"
+    )
+
+    if rc != 0:
+        print(
+            "H1 : strategy creation failed."
+        )
+        return
+
+    rc = run_script(
+        "update_rss_live_board_h1.py"
+    )
+
+    if rc != 0:
+        print(
+            "H1 : live board update failed."
+        )
+        return
+
+    print(
+        "H1 : live board update OK"
     )
 
 
