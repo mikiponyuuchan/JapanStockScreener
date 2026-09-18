@@ -2,6 +2,8 @@
 # 楽天RSS 共通ライブボード管理
 # ================================================
 
+import time
+
 import win32com.client as win32
 
 
@@ -33,35 +35,50 @@ def normalize_code(value):
 
 
 def get_live_board():
-    try:
-        excel = win32.GetActiveObject(
-            "Excel.Application"
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            "起動中のExcelを取得できません。"
-        ) from exc
+    """
+    Get the active Rakuten RSS live board.
 
-    try:
-        book = excel.Workbooks(
-            WORKBOOK_NAME
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            f"{WORKBOOK_NAME} が開いていません。"
-        ) from exc
+    Excel may temporarily reject COM calls while RSS is
+    updating or Excel is busy, so retry a few times before
+    treating the connection as failed.
+    """
 
-    try:
-        sheet = book.Worksheets(
-            SHEET_NAME
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            f"{SHEET_NAME} がありません。"
-        ) from exc
+    retry_count = 5
+    retry_wait = 0.5
+    last_error = None
 
-    return excel, book, sheet
+    for attempt in range(
+        1,
+        retry_count + 1,
+    ):
+        try:
+            excel = win32.GetActiveObject(
+                "Excel.Application"
+            )
 
+            book = excel.Workbooks(
+                WORKBOOK_NAME
+            )
+
+            sheet = book.Worksheets(
+                SHEET_NAME
+            )
+
+            return excel, book, sheet
+
+        except Exception as exc:
+            last_error = exc
+
+            if attempt < retry_count:
+                time.sleep(
+                    retry_wait
+                )
+
+    raise RuntimeError(
+        "RSS live board COM connection failed "
+        f"after {retry_count} attempts: "
+        f"{last_error}"
+    ) from last_error
 
 def read_board():
     _, _, sheet = get_live_board()
@@ -118,6 +135,68 @@ def clear_board():
     excel.Calculate()
     book.Save()
 
+
+
+def clear_h1_labels():
+    """
+    H列から古いH1順位ラベルだけを削除する。
+
+    A列の銘柄コードは削除しない。
+    SSR-Ver1 / SSR-Ver2など他のラベルは保持する。
+    I列以降の手入力メモには触れない。
+    """
+    excel, book, sheet = get_live_board()
+
+    h1_labels = {
+        "H1 #1",
+        "H1 #2",
+        "H1 #3",
+    }
+
+    changed = 0
+
+    for row_number in range(
+        START_ROW,
+        END_ROW + 1,
+    ):
+        value = sheet.Cells(
+            row_number,
+            8,
+        ).Value
+
+        if not value:
+            continue
+
+        labels = [
+            item.strip()
+            for item in str(value).split("/")
+            if item.strip()
+        ]
+
+        new_labels = [
+            item
+            for item in labels
+            if item not in h1_labels
+        ]
+
+        if new_labels == labels:
+            continue
+
+        sheet.Cells(
+            row_number,
+            8,
+        ).Value = " / ".join(new_labels)
+
+        changed += 1
+
+    excel.Calculate()
+    book.Save()
+
+    print(
+        f"Old H1 labels cleared : {changed}"
+    )
+
+    return changed
 
 def add_candidate(code, label):
     """

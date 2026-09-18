@@ -5,6 +5,10 @@ import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src" / "intraday"))
 
 from show_short_sale_trigger_gd_kabu import (
     find_latest_trigger_file,
@@ -328,10 +332,16 @@ def ssr_worker(
                     row
                 )
 
-                add_candidate(
-                    code,
-                    "SSR-Ver1",
-                )
+                try:
+                    add_candidate(
+                        code,
+                        "SSR-Ver1",
+                    )
+                except Exception as exc:
+                    print(
+                        "SSR-Ver1 RSS board update skipped : "
+                        f"{exc}"
+                    )
 
         print(
             datetime.now().strftime(
@@ -433,10 +443,16 @@ def ssr_worker(
                     ver2_row
                 )
 
-                add_candidate(
-                    code,
-                    "SSR-Ver2",
-                )
+                try:
+                    add_candidate(
+                        code,
+                        "SSR-Ver2",
+                    )
+                except Exception as exc:
+                    print(
+                        "SSR-Ver2 RSS board update skipped : "
+                        f"{exc}"
+                    )
 
             else:
                 print(

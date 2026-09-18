@@ -18,6 +18,7 @@ sys.path.insert(
 
 from rss_live_board import (
     add_candidate,
+    clear_h1_labels,
     print_board,
 )
 
@@ -192,6 +193,10 @@ def main():
 
     # 09:30時点で09:20の20銘柄をクリアし、
     # H1 TOP3だけをセットする。
+    # Remove yesterday's H1 rank labels only.
+    # Stock codes, SSR labels and manual memo column I are preserved.
+    clear_h1_labels()
+
     for code, label in candidates:
         add_candidate(
             code,
