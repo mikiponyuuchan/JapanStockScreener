@@ -3,6 +3,7 @@
 # ================================================
 
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,7 @@ sys.path.insert(
 from rss_live_board import (
     add_candidate,
     clear_h1_labels,
+    get_current_price,
     print_board,
 )
 
@@ -29,6 +31,21 @@ TRACKING_FILE = (
     / "tracking"
     / "intraday_strategy_h1.csv"
 )
+
+
+FILTER_LOG_FILE = (
+    ROOT
+    / "data"
+    / "tracking"
+    / "intraday_strategy_h1_0931_live.csv"
+)
+
+FILTER_HOUR = 9
+FILTER_MINUTE = 32
+FILTER_SECOND = 2
+
+LOWER_LIMIT = -3.0
+UPPER_LIMIT = 1.0
 
 
 def normalize_code(value):
@@ -67,6 +84,7 @@ def main():
         "SnapshotTime",
         "Code",
         "Rank",
+        "SnapshotPrice",
     ]
 
     missing = [
@@ -172,10 +190,16 @@ def main():
             row["RankX"]
         )
 
+        snapshot_price = pd.to_numeric(
+            row["SnapshotPrice"],
+            errors="coerce",
+        )
+
         candidates.append(
             (
                 code,
                 f"H1 #{rank}",
+                snapshot_price,
             )
         )
 
@@ -186,24 +210,273 @@ def main():
         ),
     )
 
-    for code, label in candidates:
-        print(
-            f"{label} : {code}"
-        )
+    # ============================================
+    # H1 TOP3?????RSS?????????
+    # ============================================
 
-    # 09:30時点で09:20の20銘柄をクリアし、
-    # H1 TOP3だけをセットする。
-    # Remove yesterday's H1 rank labels only.
-    # Stock codes, SSR labels and manual memo column I are preserved.
     clear_h1_labels()
 
-    for code, label in candidates:
+    # First register only the H1 rank labels.
+    # PASS / SKIP is not known until the 09:32 filter runs.
+    for code, label, snapshot_price in candidates:
         add_candidate(
             code,
             label,
         )
 
+    # ============================================
+    # 09:32:02????
+    # ============================================
+
+    now = datetime.now()
+
+    filter_target = now.replace(
+        hour=FILTER_HOUR,
+        minute=FILTER_MINUTE,
+        second=FILTER_SECOND,
+        microsecond=0,
+    )
+
+    if now < filter_target:
+        wait_seconds = (
+            filter_target - now
+        ).total_seconds()
+
+        print()
+        print(
+            "Waiting for H1 filter :",
+            filter_target.strftime(
+                "%H:%M:%S"
+            ),
+        )
+
+        time.sleep(
+            max(
+                0,
+                wait_seconds,
+            )
+        )
+
+        timing_status = "ON_TIME"
+
+    else:
+        timing_status = "LATE_TEST"
+
+        print()
+        print(
+            "09:32 filter time already passed."
+        )
+        print(
+            "Running as LATE_TEST."
+        )
+
+    # Excel/RSS?????????
+    time.sleep(0.3)
+
+    # ============================================
+    # H1 09:31?????
+    # ============================================
+
+    print()
+    print("=" * 60)
+    print(" H1 09:31 FILTER CHECK")
+    print("=" * 60)
+
+    filter_rows = []
+
+    for code, label, snapshot_price in candidates:
+
+        current_price = get_current_price(
+            code
+        )
+
+        filter_now = datetime.now()
+
+        if (
+            pd.isna(snapshot_price)
+            or snapshot_price <= 0
+            or current_price is None
+        ):
+            move_pct = None
+            result = "NO DATA"
+
+        else:
+            move_pct = (
+                current_price
+                / float(snapshot_price)
+                - 1
+            ) * 100
+
+            result = (
+                "PASS"
+                if (
+                    LOWER_LIMIT
+                    <= move_pct
+                    < UPPER_LIMIT
+                )
+                else "SKIP"
+            )
+
+        rank = int(
+            label.replace(
+                "H1 #",
+                "",
+            )
+        )
+
+        print()
+        print(
+            f"{label} : {code}"
+        )
+        print(
+            f"  H1 price    : {snapshot_price}"
+        )
+        print(
+            f"  Filter price: {current_price}"
+        )
+
+        if move_pct is None:
+            print(
+                "  H1 move     : N/A"
+            )
+        else:
+            print(
+                f"  H1 move     : {move_pct:+.2f}%"
+            )
+
+        print(
+            f"  Filter      : {result}"
+        )
+
+        # 09:31 filter result ?????????
+        for i, item in enumerate(candidates):
+            if item[0] == code:
+                candidates[i] = (
+                    item[0],
+                    item[1],
+                    item[2],
+                    result,
+                )
+                break
+        print(
+            f"  Timing      : {timing_status}"
+        )
+
+        filter_rows.append(
+            {
+                "DetectionDate":
+                    today,
+                "SnapshotTime":
+                    target_time.strftime(
+                        "%H:%M:%S"
+                    ),
+                "Code":
+                    code,
+                "Rank":
+                    rank,
+                "SnapshotPrice":
+                    snapshot_price,
+                "FilterTime":
+                    filter_now.strftime(
+                        "%H:%M:%S.%f"
+                    )[:-3],
+                "FilterPrice":
+                    current_price,
+                "H1MovePct":
+                    move_pct,
+                "LowerLimit":
+                    LOWER_LIMIT,
+                "UpperLimit":
+                    UPPER_LIMIT,
+                "FilterResult":
+                    result,
+                "TimingStatus":
+                    timing_status,
+            }
+        )
+
+    # ============================================
+    # Reflect final PASS / SKIP result to Excel
+    # ============================================
+
+    clear_h1_labels()
+
+    for item in candidates:
+        code = item[0]
+        label = item[1]
+
+        result = (
+            item[3]
+            if len(item) >= 4
+            else "NO DATA"
+        )
+
+        final_label = (
+            f"{label} {result}"
+        )
+
+        add_candidate(
+            code,
+            final_label,
+        )
+
     print_board()
+
+    # ============================================
+    # ????????CSV??
+    # ============================================
+
+    if filter_rows:
+
+        log_df = pd.DataFrame(
+            filter_rows
+        )
+
+        FILTER_LOG_FILE.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        if FILTER_LOG_FILE.exists():
+
+            old_df = pd.read_csv(
+                FILTER_LOG_FILE,
+                dtype={
+                    "Code": str,
+                },
+                low_memory=False,
+            )
+
+            log_df = pd.concat(
+                [
+                    old_df,
+                    log_df,
+                ],
+                ignore_index=True,
+            )
+
+            log_df = (
+                log_df
+                .drop_duplicates(
+                    subset=[
+                        "DetectionDate",
+                        "SnapshotTime",
+                        "Code",
+                    ],
+                    keep="last",
+                )
+            )
+
+        log_df.to_csv(
+            FILTER_LOG_FILE,
+            index=False,
+            encoding="utf-8-sig",
+        )
+
+        print()
+        print(
+            f"H1 filter log : {FILTER_LOG_FILE}"
+        )
 
     print()
     print(

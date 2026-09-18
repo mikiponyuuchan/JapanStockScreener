@@ -80,6 +80,51 @@ def get_live_board():
         f"{last_error}"
     ) from last_error
 
+
+def get_current_price(code):
+    """
+    ??????????????????????
+
+    A? : ?????
+    C? : ???
+    """
+    code = normalize_code(code)
+
+    if not code:
+        return None
+
+    _, _, sheet = get_live_board()
+
+    for row_number in range(
+        START_ROW,
+        END_ROW + 1,
+    ):
+        current_code = normalize_code(
+            sheet.Cells(
+                row_number,
+                1,
+            ).Value
+        )
+
+        if current_code != code:
+            continue
+
+        value = sheet.Cells(
+            row_number,
+            3,
+        ).Value
+
+        if value is None:
+            return None
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    return None
+
+
 def read_board():
     _, _, sheet = get_live_board()
 
@@ -176,7 +221,12 @@ def clear_h1_labels():
         new_labels = [
             item
             for item in labels
-            if item not in h1_labels
+            if (
+                item not in h1_labels
+                and not item.startswith("H1 #1 ")
+                and not item.startswith("H1 #2 ")
+                and not item.startswith("H1 #3 ")
+            )
         ]
 
         if new_labels == labels:
@@ -197,6 +247,65 @@ def clear_h1_labels():
     )
 
     return changed
+
+def color_h1_result(sheet, row_number):
+    """
+    H?? H1 ?????????????
+
+    PASS : ?
+    SKIP : ?
+
+    H1???SSR???????????????
+    """
+
+    cell = sheet.Cells(
+        row_number,
+        8,
+    )
+
+    value = cell.Value
+
+    if not value:
+        return
+
+    text = str(value)
+
+    # ???????????????
+    # PASS / SKIP ?????????
+    try:
+        cell.Font.Color = 0
+    except Exception:
+        pass
+
+    for word, color in (
+        ("PASS", 16711680),  # blue
+        ("SKIP", 255),       # red
+    ):
+        start = 0
+
+        while True:
+            index = text.find(
+                word,
+                start,
+            )
+
+            if index < 0:
+                break
+
+            # Excel Characters ?1???
+            chars = cell.GetCharacters(
+                index + 1,
+                len(word),
+            )
+
+            chars.Font.Color = color
+
+            start = (
+                index
+                + len(word)
+            )
+
+
 
 def add_candidate(code, label):
     """
@@ -259,6 +368,11 @@ def add_candidate(code, label):
             8,
         ).Value = " / ".join(labels)
 
+        color_h1_result(
+            sheet,
+            row_number,
+        )
+
         excel.Calculate()
         book.Save()
 
@@ -278,6 +392,11 @@ def add_candidate(code, label):
         empty_row,
         8,
     ).Value = label
+
+    color_h1_result(
+        sheet,
+        empty_row,
+    )
 
     excel.Calculate()
     book.Save()
