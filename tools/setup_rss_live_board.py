@@ -238,6 +238,67 @@ def main():
             f'*F{row_number},"")'
         )
 
+        # J列：本日の通常ストップ高
+        # 楽天RSSから前日終値を取得し、
+        # 東証の通常値幅制限から計算する。
+        r = row_number
+
+        prev_close = (
+            f'RssMarket(A{r}&".T","前日終値")'
+        )
+
+        sheet.Cells(
+            r,
+            10,
+        ).Formula = (
+            f'=IFERROR(LET('
+            f'p,{prev_close},'
+            f'IFS('
+            f'p<100,p+30,'
+            f'p<200,p+50,'
+            f'p<500,p+80,'
+            f'p<700,p+100,'
+            f'p<1000,p+150,'
+            f'p<1500,p+300,'
+            f'p<2000,p+400,'
+            f'p<3000,p+500,'
+            f'p<5000,p+700,'
+            f'p<7000,p+1000,'
+            f'p<10000,p+1500,'
+            f'p<15000,p+3000,'
+            f'p<20000,p+4000,'
+            f'p<30000,p+5000,'
+            f'p<50000,p+7000,'
+            f'p<70000,p+10000,'
+            f'p<100000,p+15000,'
+            f'p<150000,p+30000,'
+            f'p<200000,p+40000,'
+            f'p<300000,p+50000,'
+            f'p<500000,p+70000,'
+            f'p<700000,p+100000,'
+            f'p<1000000,p+150000,'
+            f'p<1500000,p+300000,'
+            f'p<2000000,p+400000,'
+            f'p<3000000,p+500000,'
+            f'p<5000000,p+700000,'
+            f'p<7000000,p+1000000,'
+            f'p<10000000,p+1500000,'
+            f'p<15000000,p+3000000,'
+            f'p<20000000,p+4000000,'
+            f'p<30000000,p+5000000,'
+            f'p<50000000,p+7000000,'
+            f'TRUE,p+10000000'
+            f')),"")'
+        )
+
+        # K列：現在値からストップ高までの余地
+        sheet.Cells(
+            r,
+            11,
+        ).Formula = (
+            f'=IFERROR(J{r}/C{r}-1,"")'
+        )
+
     success = END_ROW - START_ROW + 1
     missing = []
 
@@ -245,6 +306,18 @@ def main():
     sheet.Range(
         f"F{START_ROW}:G{END_ROW}"
     ).NumberFormat = "0.00"
+
+    # J/K列：ストップ高情報
+    sheet.Cells(1, 10).Value = "S高"
+    sheet.Cells(1, 11).Value = "S高余地%"
+
+    sheet.Range(
+        f"J{START_ROW}:J{END_ROW}"
+    ).NumberFormat = "0"
+
+    sheet.Range(
+        f"K{START_ROW}:K{END_ROW}"
+    ).NumberFormat = "0.00%"
 
     # 基準出来高とマスター表は裏側へ隠す
     sheet.Columns("Z:AB").Hidden = True
