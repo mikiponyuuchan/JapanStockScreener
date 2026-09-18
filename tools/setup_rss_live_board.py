@@ -319,6 +319,128 @@ def main():
         f"K{START_ROW}:K{END_ROW}"
     ).NumberFormat = "0.00%"
 
+    # ============================================
+    # ライブボード 条件付き書式
+    # ============================================
+
+    # 過去の条件付き書式を一度完全に削除する。
+    # このあと必要な5ルールだけ正式に再作成する。
+    board_range = sheet.Range(
+        f"A{START_ROW}:K{END_ROW}"
+    )
+
+    board_range.FormatConditions.Delete()
+
+    # --------------------------------------------
+    # A:C
+    # 現在値 = S高なら薄い赤
+    # --------------------------------------------
+    limit_range = sheet.Range(
+        f"A{START_ROW}:C{END_ROW}"
+    )
+
+    limit_condition = (
+        f'=AND($A{START_ROW}<>"",'
+        f'$C{START_ROW}=$J{START_ROW},'
+        f'$J{START_ROW}<>"")'
+    )
+
+    limit_format = (
+        limit_range.FormatConditions.Add(
+            2,
+            None,
+            limit_condition,
+        )
+    )
+
+    # RGB(255, 220, 220)
+    limit_format.Interior.Color = (
+        255
+        + 220 * 256
+        + 220 * 65536
+    )
+
+    # --------------------------------------------
+    # D列
+    # 前日比率
+    # --------------------------------------------
+    change_range = sheet.Range(
+        f"D{START_ROW}:D{END_ROW}"
+    )
+
+    # D < 0 : 赤文字
+    negative_format = (
+        change_range.FormatConditions.Add(
+            2,
+            None,
+            f'=AND($A{START_ROW}<>"",'
+            f'$D{START_ROW}<0)',
+        )
+    )
+
+    # RGB(255, 0, 0)
+    negative_format.Font.Color = 255
+
+    # 5 <= D < 10 : 薄い青
+    blue1_format = (
+        change_range.FormatConditions.Add(
+            2,
+            None,
+            f'=AND($A{START_ROW}<>"",'
+            f'$D{START_ROW}>=5,'
+            f'$D{START_ROW}<10)',
+        )
+    )
+
+    # RGB(221, 235, 247)
+    blue1_format.Interior.Color = (
+        189
+        + 215 * 256
+        + 238 * 65536
+    )
+
+    # 10 <= D < 20 : 中間の青
+    blue2_format = (
+        change_range.FormatConditions.Add(
+            2,
+            None,
+            f'=AND($A{START_ROW}<>"",'
+            f'$D{START_ROW}>=10,'
+            f'$D{START_ROW}<20)',
+        )
+    )
+
+    # RGB(91, 155, 213)
+    blue2_format.Interior.Color = (
+        91
+        + 155 * 256
+        + 213 * 65536
+    )
+
+    # D >= 20 : 濃い青 + 白文字
+    blue3_format = (
+        change_range.FormatConditions.Add(
+            2,
+            None,
+            f'=AND($A{START_ROW}<>"",'
+            f'$D{START_ROW}>=20)',
+        )
+    )
+
+    # RGB(31, 78, 121)
+    blue3_format.Interior.Color = (
+        0
+        + 112 * 256
+        + 192 * 65536
+    )
+
+    # RGB(255, 255, 255)
+    blue3_format.Font.Color = (
+        255
+        + 255 * 256
+        + 255 * 65536
+    )
+
     # 基準出来高とマスター表は裏側へ隠す
     sheet.Columns("Z:AB").Hidden = True
 
