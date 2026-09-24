@@ -1,0 +1,760 @@
+# ================================================
+# Rakuten MarketSpeed II RSS
+# Full universe batch snapshot test
+#
+# 400 stocks x batches -> all normal stocks
+# ================================================
+
+import sys
+import time
+from pathlib import Path
+
+import pandas as pd
+import win32com.client as win32
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from screener.loader import load_stock_list
+
+
+WORKBOOK_NAME = "rakuten_rss_snapshot_test.xlsx"
+
+BATCH_SIZE = 400
+
+START_ROW = 2
+
+POLL_INTERVAL = 0.25
+BATCH_TIMEOUT_SECONDS = 8.0
+
+# Batch early-exit settings.
+# Always allow RSS enough startup time first.
+MIN_BATCH_WAIT_SECONDS = 5.0
+
+# After the minimum wait, move to the next batch
+# once this percentage of stocks has been obtained.
+EARLY_EXIT_SUCCESS_RATE = 0.98
+
+# First pass????Pending????????????????
+RETRY_TIMEOUT_SECONDS = 20.0
+
+
+def is_excel_error_value(value):
+    if isinstance(value, (int, float)):
+        return value <= -2000000000
+
+    return False
+
+
+def is_numeric_rss_value(value):
+    if value is None:
+        return False
+
+    if is_excel_error_value(value):
+        return False
+
+    if isinstance(value, bool):
+        return False
+
+    return isinstance(
+        value,
+        (int, float),
+    )
+
+
+def is_overlimit_value(value):
+    if not isinstance(value, str):
+        return False
+
+    return (
+        "\u8868\u793a\u9298\u67c4\u6570\u8d85\u904e"
+        in value
+    )
+
+
+def normalize_code(value):
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+
+    if text.endswith(".0"):
+        text = text[:-2]
+
+    return text
+
+
+def get_excel():
+    try:
+        return win32.GetActiveObject(
+            "Excel.Application"
+        )
+
+    except Exception as exc:
+        raise RuntimeError(
+            "Running Excel was not found."
+        ) from exc
+
+
+def get_test_sheet():
+    excel = get_excel()
+
+    try:
+        book = excel.Workbooks.Item(
+            WORKBOOK_NAME
+        )
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"{WORKBOOK_NAME} is not open."
+        ) from exc
+
+    sheet = book.Worksheets.Item(1)
+
+    return excel, book, sheet
+
+
+def load_stocks():
+    stocks = load_stock_list()
+
+    if stocks is None or stocks.empty:
+        raise RuntimeError(
+            "Stock list is empty."
+        )
+
+    code_col = "\u30b3\u30fc\u30c9"
+    name_col = "\u9298\u67c4\u540d"
+
+    missing = [
+        col
+        for col in (
+            code_col,
+            name_col,
+        )
+        if col not in stocks.columns
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "Stock columns missing: "
+            + ", ".join(missing)
+        )
+
+    work = stocks[
+        [
+            code_col,
+            name_col,
+        ]
+    ].copy()
+
+    work = work.rename(
+        columns={
+            code_col: "Code",
+            name_col: "MasterName",
+        }
+    )
+
+    work["Code"] = (
+        work["Code"]
+        .map(normalize_code)
+    )
+
+    return work.reset_index(drop=True)
+
+
+def clear_board(sheet):
+    # Only 400 rows are used at any one time.
+    last_row = START_ROW + BATCH_SIZE - 1
+
+    sheet.Range(
+        f"A1:D{last_row}"
+    ).ClearContents()
+
+
+def setup_batch(
+    sheet,
+    batch,
+):
+    end_row = (
+        START_ROW
+        + len(batch)
+        - 1
+    )
+
+    clear_board(sheet)
+
+    sheet.Range(
+        "A1:D1"
+    ).Value = (
+        (
+            "Code",
+            "Price",
+            "ChangePercent",
+            "Volume",
+        ),
+    )
+
+    rss_price = "\u73fe\u5728\u5024"
+    rss_change = "\u524d\u65e5\u6bd4\u7387"
+    rss_volume = "\u51fa\u6765\u9ad8"
+
+    values = []
+
+    for row in batch.itertuples(
+        index=False
+    ):
+        code = row.Code
+
+        values.append(
+            (
+                code,
+                f'=RssMarket("{code}.T","{rss_price}")',
+                f'=RssMarket("{code}.T","{rss_change}")',
+                f'=RssMarket("{code}.T","{rss_volume}")',
+            )
+        )
+
+    sheet.Range(
+        f"A{START_ROW}:D{end_row}"
+    ).Formula = tuple(values)
+
+    return end_row
+
+
+def inspect_batch(
+    sheet,
+    end_row,
+):
+    # Excel / ??RSS????????
+    # COM????????????????????
+    # ??????????????????
+    max_retries = 20
+    retry_wait = 0.25
+
+    last_error = None
+
+    for attempt in range(
+        1,
+        max_retries + 1,
+    ):
+        try:
+            values = sheet.Range(
+                f"A{START_ROW}:D{end_row}"
+            ).Value
+
+            last_error = None
+            break
+
+        except Exception as exc:
+            last_error = exc
+
+            if attempt >= max_retries:
+                break
+
+            if attempt == 1:
+                print(
+                    "  Excel COM busy - retrying..."
+                )
+
+            time.sleep(
+                retry_wait
+            )
+
+    if last_error is not None:
+        raise RuntimeError(
+            "Excel COM read failed after "
+            f"{max_retries} retries : "
+            f"{last_error}"
+        ) from last_error
+
+    rows = []
+    pending = []
+    overlimit = []
+    excel_errors = []
+
+    for row in values:
+        (
+            code,
+            price,
+            change,
+            volume,
+        ) = row
+
+        code = normalize_code(code)
+
+        data = (
+            code,
+            price,
+            change,
+            volume,
+        )
+
+        if any(
+            is_overlimit_value(x)
+            for x in (
+                price,
+                change,
+                volume,
+            )
+        ):
+            overlimit.append(data)
+            continue
+
+        if any(
+            is_excel_error_value(x)
+            for x in (
+                price,
+                change,
+                volume,
+            )
+        ):
+            excel_errors.append(data)
+            continue
+
+        if (
+            is_numeric_rss_value(price)
+            and is_numeric_rss_value(change)
+            and is_numeric_rss_value(volume)
+        ):
+            rows.append(
+                {
+                    "Code": code,
+                    "Price": price,
+                    "ChangePercent": change,
+                    "Volume": volume,
+                }
+            )
+            continue
+
+        pending.append(data)
+
+    return {
+        "rows": rows,
+        "pending": pending,
+        "overlimit": overlimit,
+        "excel_errors": excel_errors,
+    }
+
+
+def fetch_batch(
+    excel,
+    sheet,
+    batch,
+    batch_no,
+    batch_total,
+    timeout_seconds=None,
+):
+    if timeout_seconds is None:
+        timeout_seconds = BATCH_TIMEOUT_SECONDS
+    started = time.perf_counter()
+
+    end_row = setup_batch(
+        sheet,
+        batch,
+    )
+
+    excel.Calculate()
+
+    setup_seconds = (
+        time.perf_counter()
+        - started
+    )
+
+    wait_started = time.perf_counter()
+
+    result = None
+
+    previous_state = None
+
+    while True:
+        result = inspect_batch(
+            sheet,
+            end_row,
+        )
+
+        ok = len(result["rows"])
+        pending = len(result["pending"])
+        overlimit = len(
+            result["overlimit"]
+        )
+        errors = len(
+            result["excel_errors"]
+        )
+
+        state = (
+            ok,
+            pending,
+            overlimit,
+            errors,
+        )
+
+        if state != previous_state:
+            elapsed = (
+                time.perf_counter()
+                - wait_started
+            )
+
+            print(
+                f"Batch {batch_no:02d}/{batch_total:02d} | "
+                f"{elapsed:5.2f}s | "
+                f"OK {ok:3d}/{len(batch):3d} | "
+                f"Pending {pending:3d} | "
+                f"OverLimit {overlimit:3d} | "
+                f"Error {errors:3d}"
+            )
+
+            previous_state = state
+
+        # Completed normally.
+        if ok >= len(batch):
+            break
+
+        # OverLimit or Excel errors are final states.
+        if overlimit > 0 or errors > 0:
+            break
+
+        elapsed = (
+            time.perf_counter()
+            - wait_started
+        )
+
+        # ----------------------------------------------------
+        # Early exit
+        #
+        # Do not judge too early because Rakuten RSS may need
+        # several seconds before values arrive in bulk.
+        #
+        # After the minimum wait, 98% success is enough for
+        # this full-universe snapshot test.
+        # ----------------------------------------------------
+        required_ok = max(
+            1,
+            int(
+                len(batch)
+                * EARLY_EXIT_SUCCESS_RATE
+                + 0.999999
+            ),
+        )
+
+        if (
+            elapsed >= MIN_BATCH_WAIT_SECONDS
+            and ok >= required_ok
+        ):
+            print(
+                f"  Early exit : "
+                f"{ok}/{len(batch)} "
+                f"({ok / len(batch) * 100:.2f}%) "
+                f"after {elapsed:.2f}s"
+            )
+            break
+
+        if elapsed >= timeout_seconds:
+            break
+
+        time.sleep(
+            POLL_INTERVAL
+        )
+
+    wait_seconds = (
+        time.perf_counter()
+        - wait_started
+    )
+
+    total_seconds = (
+        time.perf_counter()
+        - started
+    )
+
+    return (
+        result,
+        setup_seconds,
+        wait_seconds,
+        total_seconds,
+    )
+
+
+def main():
+    print("=" * 78)
+    print(" RAKUTEN RSS FULL UNIVERSE BATCH TEST")
+    print("=" * 78)
+    print(
+        "Batch size :",
+        BATCH_SIZE,
+    )
+    print(
+        "Timeout    :",
+        f"{BATCH_TIMEOUT_SECONDS:.0f} sec / batch",
+    )
+    print()
+
+    stocks = load_stocks()
+
+    total = len(stocks)
+
+    batch_total = (
+        total
+        + BATCH_SIZE
+        - 1
+    ) // BATCH_SIZE
+
+    print(
+        "Stock universe :",
+        total,
+    )
+    print(
+        "Batches        :",
+        batch_total,
+    )
+    print()
+
+    excel, book, sheet = (
+        get_test_sheet()
+    )
+
+    print(
+        "Workbook :",
+        book.Name,
+    )
+    print(
+        "Sheet    :",
+        sheet.Name,
+    )
+    print()
+
+    all_rows = []
+    failed_rows = []
+    timings = []
+
+    # First pass?????????Pending?
+    # ?????????????
+    retry_codes = set()
+
+    overall_started = (
+        time.perf_counter()
+    )
+
+    for batch_index in range(
+        batch_total
+    ):
+        start = (
+            batch_index
+            * BATCH_SIZE
+        )
+
+        end = min(
+            start + BATCH_SIZE,
+            total,
+        )
+
+        batch = (
+            stocks
+            .iloc[start:end]
+            .copy()
+        )
+
+        (
+            result,
+            setup_seconds,
+            wait_seconds,
+            total_seconds,
+        ) = fetch_batch(
+            excel,
+            sheet,
+            batch,
+            batch_index + 1,
+            batch_total,
+        )
+
+        all_rows.extend(
+            result["rows"]
+        )
+
+        # Pending?First pass????????Retry???
+        for row in result["pending"]:
+            code = normalize_code(row[0])
+
+            if code:
+                retry_codes.add(code)
+
+        # OverLimit / Excel error?Retry??
+        # ??????????????
+        for status_name in (
+            "overlimit",
+            "excel_errors",
+        ):
+            for row in result[
+                status_name
+            ]:
+                failed_rows.append(
+                    (
+                        status_name,
+                        *row,
+                    )
+                )
+
+        timings.append(
+            {
+                "Batch": batch_index + 1,
+                "Requested": len(batch),
+                "Success": len(
+                    result["rows"]
+                ),
+                "Pending": len(
+                    result["pending"]
+                ),
+                "OverLimit": len(
+                    result["overlimit"]
+                ),
+                "ExcelErrors": len(
+                    result["excel_errors"]
+                ),
+                "SetupSeconds": setup_seconds,
+                "WaitSeconds": wait_seconds,
+                "TotalSeconds": total_seconds,
+            }
+        )
+
+        # Remove current RSS subscriptions before
+        # loading the next 400 stocks.
+        clear_board(sheet)
+
+        excel.Calculate()
+
+        # Short release interval for RSS/Excel.
+        time.sleep(0.25)
+
+    # ============================================
+    # Pending retry disabled for 3-field speed test
+    # ============================================
+
+    retry_requested = len(retry_codes)
+    retry_recovered = 0
+
+    # First-pass Pending rows are final failures
+    # in this comparison test.
+    for code in sorted(retry_codes):
+        failed_rows.append(
+            (
+                "pending",
+                code,
+                "",
+                "",
+                "",
+            )
+        )
+
+    # Restore stock name from the local JPX stock master.
+    name_map = dict(
+        zip(
+            stocks["Code"],
+            stocks["MasterName"],
+        )
+    )
+
+    for item in all_rows:
+        item["Name"] = name_map.get(
+            item["Code"],
+            "",
+        )
+
+    overall_seconds = (
+        time.perf_counter()
+        - overall_started
+    )
+
+    print()
+    print("=" * 78)
+    print(" FINAL RESULT")
+    print("=" * 78)
+    print(
+        "Requested :",
+        total,
+    )
+    print(
+        "Success   :",
+        len(all_rows),
+    )
+    print(
+        "Failed    :",
+        len(failed_rows),
+    )
+    print(
+        "Retry req :",
+        retry_requested,
+    )
+    print(
+        "Recovered :",
+        retry_recovered,
+    )
+    print(
+        "Total time:",
+        f"{overall_seconds:.3f} sec",
+    )
+
+    print()
+    print("Batch timings")
+    print("-" * 78)
+
+    for item in timings:
+        print(
+            f"{item['Batch']:02d} "
+            f"req={item['Requested']:3d} "
+            f"ok={item['Success']:3d} "
+            f"pending={item['Pending']:3d} "
+            f"over={item['OverLimit']:3d} "
+            f"error={item['ExcelErrors']:3d} "
+            f"time={item['TotalSeconds']:.3f}s"
+        )
+
+    if failed_rows:
+        print()
+        print(
+            "First 20 failed rows"
+        )
+        print("-" * 78)
+
+        for row in failed_rows[:20]:
+            print(row)
+
+    # Save successful snapshot for later inspection.
+    output_dir = (
+        ROOT
+        / "data"
+        / "analysis"
+    )
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_file = (
+        output_dir
+        / "rakuten_rss_full_batch_test.csv"
+    )
+
+    pd.DataFrame(
+        all_rows
+    ).to_csv(
+        output_file,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    clear_board(sheet)
+    excel.Calculate()
+
+    print()
+    print(
+        "Saved :",
+        output_file,
+    )
+    print("=" * 78)
+
+
+if __name__ == "__main__":
+    main()
