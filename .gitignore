@@ -36,3 +36,11 @@ archive/
 
 # 完了した分析データのローカル保管
 data/analysis/archive/
+
+# 日次・場中の自動生成データ
+data/analysis/earnings_pdf/
+data/analysis/morning/
+data/intraday/
+
+# JPX日次取得データ
+data/jpx_short_sale_trigger/
