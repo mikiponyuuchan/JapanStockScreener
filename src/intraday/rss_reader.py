@@ -2,6 +2,8 @@
 # 楽天 MarketSpeed II RSS 読み取り
 # ================================================
 
+import time
+
 import win32com.client as win32
 
 
@@ -9,13 +11,31 @@ def get_excel_app():
     """
     起動中の Excel を取得する。
     """
-    try:
-        return win32.GetActiveObject("Excel.Application")
-    except Exception as e:
-        raise RuntimeError(
-            "起動中の Excel を取得できません。"
-            "Excel と MarketSpeed II RSS が起動しているか確認してください。"
-        ) from e
+    retry_count = 5
+    retry_wait = 0.5
+    last_error = None
+
+    for attempt in range(
+        1,
+        retry_count + 1,
+    ):
+        try:
+            return win32.GetActiveObject(
+                "Excel.Application"
+            )
+
+        except Exception as exc:
+            last_error = exc
+
+            if attempt < retry_count:
+                time.sleep(retry_wait)
+
+    raise RuntimeError(
+        "???? Excel ?????????"
+        "Excel ? MarketSpeed II RSS ?"
+        "????????????????"
+        f" ?????: {last_error}"
+    ) from last_error
 
 
 def get_rss_sheet():
@@ -24,30 +44,43 @@ def get_rss_sheet():
 
     ActiveWorkbook / ActiveSheet は使用しない。
     """
+    retry_count = 5
+    retry_wait = 0.5
+    last_error = None
 
-    excel = get_excel_app()
+    for attempt in range(
+        1,
+        retry_count + 1,
+    ):
+        try:
+            excel = get_excel_app()
 
-    try:
-        book = excel.Workbooks(
-            "rakuten_rss_h1.xlsx"
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            "楽天RSS専用Excelが開いていません : "
-            "rakuten_rss_h1.xlsx"
-        ) from exc
+            book = excel.Workbooks.Item(
+                "rakuten_rss_h1.xlsx"
+            )
 
-    try:
-        sheet = book.Worksheets(
-            "楽天RSS_H1"
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            "楽天RSSシートが見つかりません : "
-            "楽天RSS_H1"
-        ) from exc
+            # ???????????????????
+            # 1???????????????
+            sheet = book.Worksheets.Item(1)
 
-    return sheet
+            return sheet
+
+        except Exception as exc:
+            last_error = exc
+
+            if attempt < retry_count:
+                print(
+                    "RSS Excel COM retry "
+                    f"{attempt}/{retry_count}"
+                )
+                time.sleep(retry_wait)
+
+    raise RuntimeError(
+        "??RSS??Excel???????"
+        "??????? : "
+        "rakuten_rss_h1.xlsx / 1?????? "
+        f"(5???) : {last_error}"
+    ) from last_error
 
 
 def is_excel_error_value(value):
