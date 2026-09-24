@@ -30,3 +30,9 @@ data/tracking/*precursor*.csv
 data/tracking/*events*.csv
 data/tracking/initial_move_tracking_rebuilt.csv
 data/tracking/*thresholds*.csv
+
+# 開発途中バックアップ・適用済みパッチの退避
+archive/
+
+# 完了した分析データのローカル保管
+data/analysis/archive/
