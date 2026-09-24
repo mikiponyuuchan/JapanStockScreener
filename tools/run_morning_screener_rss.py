@@ -261,7 +261,7 @@ def _download_morning(
     return pd.DataFrame(rows)
 
 
-def main():
+def build_morning_panel():
     print("=" * 60)
     print("Morning Screener - Rakuten RSS")
     print("=" * 60)
@@ -598,6 +598,12 @@ def main():
         "Saved : "
         f"{output_file}"
     )
+
+    return output_file
+
+
+def main():
+    build_morning_panel()
 
 
 if __name__ == "__main__":
