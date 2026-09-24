@@ -530,12 +530,54 @@ def main():
 
         return
 
-    # 09:20 watchlist is used for validation only.
-    # Do not overwrite the compact RSS live board.
+    # ============================================
+    # Build CxV TOP20 from the full-market panel.
+    # ============================================
+
+    panel_df = read_panel(
+        panel_path
+    )
+
+    watchlist = build_watchlist(
+        panel_df
+    )
+
+    if watchlist.empty:
+        print(
+            "CxV TOP20 watchlist is empty."
+        )
+        return
+
+    print()
+    print("=" * 60)
+    print(" CxV TOP20")
+    print("=" * 60)
+
+    for rank, (_, row) in enumerate(
+        watchlist.iterrows(),
+        start=1,
+    ):
+        print(
+            f"{rank:2d} "
+            f"{row['CodeX']} "
+            f"{row['NameX']} "
+            f"Change={row['ChangeX']:.2f}% "
+            f"VolumeRatio={row['VolumeX']:.2f} "
+            f"CxV={row['CxV']:.2f}"
+        )
+
     print()
     print(
-        "09:20 watchlist : "
-        "Excel update skipped"
+        "Loading CxV TOP20 into "
+        "Rakuten RSS H1 workbook..."
+    )
+
+    write_excel(
+        watchlist
+    )
+
+    print(
+        "CxV TOP20 Excel update : OK"
     )
 
     run_capture()
