@@ -486,6 +486,20 @@ def main():
         rows
     )
 
+    # Ensure common columns exist even when every parsed row
+    # came from an error / non-OK parsing route.
+    required_result_columns = [
+        "MinGrowth4",
+        "MinProgressExcess",
+        "MinForecastGrowth4",
+        "Revision",
+        "WarningFlag",
+    ]
+
+    for col in required_result_columns:
+        if col not in result.columns:
+            result[col] = pd.NA
+
     if result.empty:
         print()
         print("No parsed candidates.")
