@@ -9,9 +9,17 @@
 # 3. 09:30～09:35を毎分05秒に保存
 # ================================================
 
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+TOOLS = ROOT / "tools"
+
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
 
 from rss_watchlist import (
     read_panel,
@@ -24,6 +32,7 @@ from volume_tracker import (
 )
 from rss_reader import read_rss_rows
 from rss_live_board import get_live_board
+from run_morning_screener_rss import build_morning_panel
 
 
 MORNING_DIR = Path(
@@ -468,12 +477,49 @@ def main():
 
     check_rss_startup()
 
+    # ============================================
+    # Wait until 09:30 for the full-market scan
+    # ============================================
+
+    scan_start = today_at(
+        9,
+        30,
+        0,
+    )
+
+    now = datetime.now()
+
+    if now < scan_start:
+
+        wait_seconds = (
+            scan_start - now
+        ).total_seconds()
+
+        print()
+        print(
+            "Rakuten RSS full-market scan "
+            "starts at 09:30:00"
+        )
+        print(
+            f"Waiting : {wait_seconds:.1f} sec"
+        )
+
+        time.sleep(
+            wait_seconds
+        )
+
+
     print()
     print(
         "09:20 morning_panelを待機します。"
     )
 
-    panel_path = wait_for_panel()
+    print()
+    print("=" * 60)
+    print(" RAKUTEN RSS MORNING PANEL BUILD")
+    print("=" * 60)
+
+    panel_path = build_morning_panel()
 
     if panel_path is None:
 
