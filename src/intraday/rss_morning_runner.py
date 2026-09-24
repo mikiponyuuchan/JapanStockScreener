@@ -22,6 +22,8 @@ from volume_tracker import (
     build_snapshot,
     save_snapshot,
 )
+from rss_reader import read_rss_rows
+from rss_live_board import get_live_board
 
 
 MORNING_DIR = Path(
@@ -344,6 +346,94 @@ def run_capture():
 # メイン
 # ================================================
 
+def check_rss_startup():
+    """
+    Check both Rakuten RSS workbooks before
+    entering the morning wait.
+    """
+
+    print()
+    print("=" * 60)
+    print(" RSS STARTUP CHECK")
+    print("=" * 60)
+
+    # ----------------------------------------
+    # H1 RSS workbook + actual RSS data
+    # ----------------------------------------
+    try:
+        rows = read_rss_rows()
+
+    except Exception as exc:
+        print(
+            "rakuten_rss_h1.xlsx         : NG"
+        )
+        print(
+            "rakuten_rss_live_board.xlsx : NOT CHECKED"
+        )
+        print()
+        print(
+            "H1 RSS check failed:"
+        )
+        print(exc)
+
+        raise RuntimeError(
+            "RSS startup check failed."
+        ) from exc
+
+    row_count = len(rows)
+
+    print(
+        "rakuten_rss_h1.xlsx         : OK"
+    )
+    print(
+        f"RSS data rows               : {row_count}"
+    )
+
+    if row_count == 0:
+        raise RuntimeError(
+            "RSS startup check failed: "
+            "RSS data rows = 0"
+        )
+
+    # ----------------------------------------
+    # Live board workbook
+    # ----------------------------------------
+    try:
+        _, book, sheet = get_live_board()
+
+        # Force a real COM read.
+        book_name = book.Name
+        sheet_name = sheet.Name
+
+    except Exception as exc:
+        print(
+            "rakuten_rss_live_board.xlsx : NG"
+        )
+        print()
+        print(
+            "Live board check failed:"
+        )
+        print(exc)
+
+        raise RuntimeError(
+            "RSS live board startup check failed."
+        ) from exc
+
+    print(
+        "rakuten_rss_live_board.xlsx : OK"
+    )
+    print(
+        f"Live board sheet            : {sheet_name}"
+    )
+
+    print(
+        "Startup check               : OK"
+    )
+    print("=" * 60)
+
+    return row_count
+
+
 def main():
 
     now = datetime.now()
@@ -375,6 +465,8 @@ def main():
         )
 
         return
+
+    check_rss_startup()
 
     print()
     print(
