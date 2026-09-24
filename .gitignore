@@ -44,3 +44,7 @@ data/intraday/
 
 # JPX日次取得データ
 data/jpx_short_sale_trigger/
+
+# 日次決算分析生成データ
+data/analysis/20??-??-??_earnings_catalyst_ver1*.csv
+data/analysis/20??-??-??_earnings_strength_ranking.csv
