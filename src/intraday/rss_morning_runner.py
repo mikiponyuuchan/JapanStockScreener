@@ -514,6 +514,21 @@ def main():
     )
 
     # ============================================
+    # H1 workbook : CxV TOP20
+    #
+    # rakuten_rss_h1.xlsx の A2:E21 を
+    # TOP20 + RSS式で更新する。
+    # ============================================
+
+    write_excel(
+        watchlist
+    )
+
+    print(
+        "H1 TOP20 workbook update : OK"
+    )
+
+    # ============================================
     # Live board : H1 TOP3 only
     #
     # Do NOT overwrite A2:A21.
