@@ -63,6 +63,7 @@ def build_snapshot(now):
                 "TimeSlot": now.strftime("%H:%M"),
                 "Code": row["Code"],
                 "Name": row["Name"],
+                "Price": row["Price"],
                 "ChangePercent": row["ChangePercent"],
                 "Volume": row["Volume"],
             }
