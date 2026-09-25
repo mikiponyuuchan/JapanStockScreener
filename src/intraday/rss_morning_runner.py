@@ -287,9 +287,20 @@ def run_capture():
                 wait_seconds
             )
 
-        capture_slot(
-            target_time
-        )
+        try:
+            capture_slot(
+                target_time
+            )
+
+        except Exception as exc:
+            print(
+                f"[{target_time:%H:%M}] "
+                f"取得失敗 : {exc}"
+            )
+
+            print(
+                "次の取得時刻へ継続します。"
+            )
 
 
 # ================================================
