@@ -1,4 +1,4 @@
-# ================================================
+﻿# ================================================
 # 楽天 MarketSpeed II RSS
 # 朝ライブ 一発起動ランナー
 #
@@ -24,14 +24,17 @@ if str(TOOLS) not in sys.path:
 from rss_watchlist import (
     read_panel,
     build_watchlist,
-    write_excel,
 )
 from volume_tracker import (
     build_snapshot,
     save_snapshot,
 )
 from rss_reader import read_rss_rows
-from rss_live_board import get_live_board
+from rss_live_board import (
+    get_live_board,
+    clear_h1_labels,
+    add_candidate,
+)
 from run_morning_screener_rss import build_morning_panel
 
 
@@ -175,68 +178,6 @@ def wait_for_panel():
         time.sleep(
             PANEL_CHECK_INTERVAL
         )
-
-
-# ================================================
-# Excel監視20銘柄セット
-# ================================================
-
-def setup_watchlist(
-    panel_path,
-):
-
-    print()
-    print("=" * 60)
-    print(" RSS WATCHLIST SETUP")
-    print("=" * 60)
-
-    print(
-        "Panel :",
-        panel_path,
-    )
-
-    df = read_panel(
-        panel_path
-    )
-
-    if df is None:
-        raise RuntimeError(
-            "morning_panelを読み込めません。"
-        )
-
-    watchlist = build_watchlist(
-        df
-    )
-
-    if watchlist.empty:
-        raise RuntimeError(
-            "RSS監視候補がありません。"
-        )
-
-    write_excel(
-        watchlist
-    )
-
-    print(
-        f"Excel設定銘柄数 : "
-        f"{len(watchlist)}"
-    )
-
-    print()
-
-    for rank, (_, row) in enumerate(
-        watchlist.iterrows(),
-        start=1,
-    ):
-
-        print(
-            f"{rank:2d} "
-            f"{row['CodeX']} "
-            f"{row['NameX']} "
-            f"CxV={row['CxV']:.2f}"
-        )
-
-    return watchlist
 
 
 # ================================================
@@ -511,12 +452,12 @@ def main():
 
     print()
     print(
-        "09:20 morning_panelを待機します。"
+        "Rakuten RSS full-market scan starting..."
     )
 
     print()
     print("=" * 60)
-    print(" RAKUTEN RSS MORNING PANEL BUILD")
+    print(" RAKUTEN RSS FULL MARKET SCAN")
     print("=" * 60)
 
     panel_path = build_morning_panel()
@@ -524,7 +465,7 @@ def main():
     if panel_path is None:
 
         print(
-            "09:20～09:25 morning_panelが"
+            "Rakuten RSS morning_panelが"
             "見つかりませんでした。"
         )
 
@@ -572,12 +513,32 @@ def main():
         "Rakuten RSS H1 workbook..."
     )
 
-    write_excel(
+    # ============================================
+    # Live board : H1 TOP3 only
+    #
+    # Do NOT overwrite A2:A21.
+    # Existing SSR/manual stocks must be preserved.
+    # ============================================
+
+    h1_top3 = (
         watchlist
+        .head(3)
+        .copy()
     )
 
+    clear_h1_labels()
+
+    for rank, (_, row) in enumerate(
+        h1_top3.iterrows(),
+        start=1,
+    ):
+        add_candidate(
+            row["CodeX"],
+            f"H1 #{rank}",
+        )
+
     print(
-        "CxV TOP20 Excel update : OK"
+        "H1 TOP3 live board update : OK"
     )
 
     run_capture()
@@ -592,3 +553,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
