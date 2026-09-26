@@ -36,6 +36,7 @@ from rss_live_board import (
     add_candidate,
 )
 from run_morning_screener_rss import build_morning_panel
+from analyze_h1_true_pullback_entry import floor_to_tick
 
 
 MORNING_DIR = Path(
@@ -51,6 +52,26 @@ CAPTURE_END = (9, 35)
 CAPTURE_SECOND = 5
 
 PANEL_CHECK_INTERVAL = 5
+
+
+# ================================================
+# H1 HYBRID WAIT
+#
+# VolumeRatioGrowthPct < 100%
+#     -> BUY at 09:30
+#
+# VolumeRatioGrowthPct >= 100%
+#     -> WAIT at -0.50% pullback
+#
+# The decision is fixed at the first 09:30 capture.
+# ================================================
+
+H1_WAIT_GROWTH_THRESHOLD = 100.0
+H1_WAIT_PULLBACK_LEVEL = -0.50
+
+H1_EARLY_VOLUME = {}
+H1_TOP3_RANK = {}
+H1_HYBRID_DECISION_DONE = False
 
 
 # ================================================
@@ -184,6 +205,276 @@ def wait_for_panel():
 # 1スロット取得
 # ================================================
 
+def _safe_float(value):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if result != result:
+        return None
+
+    return result
+
+
+def prepare_h1_hybrid_wait(
+    panel_df,
+    h1_top3,
+):
+    """
+    Store the 09:20-side volume for the H1 TOP3.
+
+    The 09:30 decision later compares the Rakuten RSS
+    cumulative volume with this early volume.
+    """
+
+    global H1_EARLY_VOLUME
+    global H1_TOP3_RANK
+    global H1_HYBRID_DECISION_DONE
+
+    H1_EARLY_VOLUME = {}
+    H1_TOP3_RANK = {}
+    H1_HYBRID_DECISION_DONE = False
+
+    if panel_df is None or panel_df.empty:
+        print(
+            "H1 hybrid WAIT prepare skipped: "
+            "panel is empty."
+        )
+        return
+
+    for rank, (_, top_row) in enumerate(
+        h1_top3.iterrows(),
+        start=1,
+    ):
+        code = str(
+            top_row["CodeX"]
+        ).strip().replace(
+            ".0",
+            "",
+        )
+
+        H1_TOP3_RANK[code] = rank
+
+        matched = panel_df[
+            panel_df["Code"].astype(str)
+            .str.strip()
+            .str.replace(
+                r"\.0$",
+                "",
+                regex=True,
+            )
+            == code
+        ]
+
+        if matched.empty:
+            print(
+                f"H1 #{rank} {code} "
+                "09:20 volume : NOT FOUND"
+            )
+            continue
+
+        early_volume = _safe_float(
+            matched.iloc[0].get(
+                "MorningVolume"
+            )
+        )
+
+        if (
+            early_volume is None
+            or early_volume <= 0
+        ):
+            print(
+                f"H1 #{rank} {code} "
+                "09:20 volume : INVALID"
+            )
+            continue
+
+        H1_EARLY_VOLUME[
+            code
+        ] = early_volume
+
+        print(
+            f"H1 #{rank} {code} "
+            f"09:20 volume={early_volume:.0f}"
+        )
+
+
+def update_h1_hybrid_wait_live(
+    snapshot_df,
+):
+    """
+    Fix BUY / WAIT at the first 09:30 capture.
+
+    Growth:
+        (Volume0930 / VolumeEarly - 1) * 100
+
+    BUY:
+        growth < 100%
+
+    WAIT:
+        growth >= 100%
+        limit = floor_to_tick(
+            Price0930 * 0.995
+        )
+    """
+
+    global H1_HYBRID_DECISION_DONE
+
+    if H1_HYBRID_DECISION_DONE:
+        return
+
+    if snapshot_df is None or snapshot_df.empty:
+        return
+
+    print()
+    print("=" * 60)
+    print(" H1 HYBRID WAIT LIVE")
+    print("=" * 60)
+
+    for code, rank in sorted(
+        H1_TOP3_RANK.items(),
+        key=lambda item: item[1],
+    ):
+        early_volume = H1_EARLY_VOLUME.get(
+            code
+        )
+
+        if (
+            early_volume is None
+            or early_volume <= 0
+        ):
+            print(
+                f"H1 #{rank} {code} "
+                "SKIP : early volume unavailable"
+            )
+            continue
+
+        normalized_codes = (
+            snapshot_df["Code"]
+            .astype(str)
+            .str.strip()
+            .str.replace(
+                r"\.0$",
+                "",
+                regex=True,
+            )
+        )
+
+        matched = snapshot_df[
+            normalized_codes == code
+        ]
+
+        if matched.empty:
+            print(
+                f"H1 #{rank} {code} "
+                "SKIP : 09:30 RSS row unavailable"
+            )
+            continue
+
+        row = matched.iloc[0]
+
+        volume_0930 = _safe_float(
+            row.get("Volume")
+        )
+
+        price_0930 = _safe_float(
+            row.get("Price")
+        )
+
+        if (
+            volume_0930 is None
+            or volume_0930 <= 0
+            or price_0930 is None
+            or price_0930 <= 0
+        ):
+            print(
+                f"H1 #{rank} {code} "
+                "SKIP : invalid 09:30 price/volume"
+            )
+            continue
+
+        growth = (
+            volume_0930
+            / early_volume
+            - 1.0
+        ) * 100.0
+
+        if growth >= H1_WAIT_GROWTH_THRESHOLD:
+
+            raw_limit = (
+                price_0930
+                * (
+                    1.0
+                    + H1_WAIT_PULLBACK_LEVEL
+                    / 100.0
+                )
+            )
+
+            limit_price = floor_to_tick(
+                raw_limit
+            )
+
+            if (
+                limit_price is None
+                or limit_price != limit_price
+            ):
+                label = (
+                    f"H1 #{rank} WAIT"
+                )
+
+                price_text = "N/A"
+
+            else:
+                if float(
+                    limit_price
+                ).is_integer():
+                    price_text = str(
+                        int(limit_price)
+                    )
+                else:
+                    price_text = (
+                        f"{limit_price:g}"
+                    )
+
+                label = (
+                    f"H1 #{rank} "
+                    f"WAIT {price_text}"
+                )
+
+            decision = "WAIT"
+
+        else:
+            label = (
+                f"H1 #{rank} BUY"
+            )
+
+            decision = "BUY"
+            price_text = "-"
+
+        add_candidate(
+            code,
+            label,
+        )
+
+        print(
+            f"H1 #{rank} "
+            f"{code} "
+            f"Growth={growth:+.2f}% "
+            f"Price={price_0930:g} "
+            f"=> {decision}"
+            + (
+                f" {price_text}"
+                if decision == "WAIT"
+                else ""
+            )
+        )
+
+    H1_HYBRID_DECISION_DONE = True
+
+    print("=" * 60)
+
+
 def capture_slot(
     target_time,
 ):
@@ -202,6 +493,20 @@ def capture_slot(
         )
 
         return
+
+    # --------------------------------------------------------
+    # H1 hybrid WAIT decision
+    #
+    # Fix the decision at the first 09:30:05 snapshot only.
+    # --------------------------------------------------------
+
+    if (
+        target_time.hour == 9
+        and target_time.minute == 30
+    ):
+        update_h1_hybrid_wait_live(
+            df
+        )
 
     # 実際の取得秒が多少ずれても
     # 比較用スロットは予定時刻に固定
@@ -550,6 +855,13 @@ def main():
         watchlist
         .head(3)
         .copy()
+    )
+
+    # Store the 09:20-side volume before entering
+    # the 09:30 capture loop.
+    prepare_h1_hybrid_wait(
+        panel_df,
+        h1_top3,
     )
 
     clear_h1_labels()

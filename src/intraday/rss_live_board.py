@@ -360,8 +360,34 @@ def add_candidate(code, label):
                 if item.strip()
             )
 
-        if label and label not in labels:
-            labels.append(label)
+        if label:
+            # H1 decision labels replace the old label
+            # for the same H1 rank.
+            #
+            # Example:
+            #   H1 #1
+            #       -> H1 #1 WAIT 1234
+            #
+            # Other labels such as SSR-Ver1 are preserved.
+            if label.startswith("H1 #"):
+                parts = label.split()
+
+                if len(parts) >= 2:
+                    h1_prefix = " ".join(parts[:2])
+
+                    labels = [
+                        item
+                        for item in labels
+                        if not (
+                            item == h1_prefix
+                            or item.startswith(
+                                h1_prefix + " "
+                            )
+                        )
+                    ]
+
+            if label not in labels:
+                labels.append(label)
 
         sheet.Cells(
             row_number,
