@@ -69,9 +69,34 @@ PANEL_CHECK_INTERVAL = 5
 H1_WAIT_GROWTH_THRESHOLD = 100.0
 H1_WAIT_PULLBACK_LEVEL = -0.50
 
+# 09:32 refill filter.
+#
+# PASS:
+#     -3.00% <= move from 09:30 <= +1.00%
+#
+# Final stocks are selected in the original
+# 09:30 CxV ranking order.
+H1_FILTER_HOUR = 9
+H1_FILTER_MINUTE = 32
+H1_FILTER_SECOND = 2
+
+H1_FILTER_LOWER = -3.0
+H1_FILTER_UPPER = 1.0
+
+H1_MAX_SELECTED = 3
+
 H1_EARLY_VOLUME = {}
 H1_TOP3_RANK = {}
 H1_HYBRID_DECISION_DONE = False
+
+# 09:30 full-market CxV TOP10 candidate pool.
+H1_CANDIDATES = []
+
+# Preserve the 09:30 RSS price/volume for the
+# candidates.  BUY / WAIT is decided later, after
+# the 09:32 PASS / SKIP refill selection, but it
+# must still use the original 09:20 -> 09:30 growth.
+H1_0930_SNAPSHOT = {}
 
 
 # ================================================
@@ -219,13 +244,18 @@ def _safe_float(value):
 
 def prepare_h1_hybrid_wait(
     panel_df,
-    h1_top3,
+    h1_top3=None,
 ):
     """
-    Store the 09:20-side volume for the H1 TOP3.
+    Store the 09:20-side volume for the full market.
 
-    The 09:30 decision later compares the Rakuten RSS
-    cumulative volume with this early volume.
+    Candidate selection is NOT fixed at 09:20.
+    The H1 candidates will be selected from the
+    fresh 09:30 full-market CxV ranking.
+
+    H1_TOP3_RANK is intentionally left empty here.
+    It will be populated after the 09:30 candidates
+    and refill selection are determined.
     """
 
     global H1_EARLY_VOLUME
@@ -243,39 +273,39 @@ def prepare_h1_hybrid_wait(
         )
         return
 
-    for rank, (_, top_row) in enumerate(
-        h1_top3.iterrows(),
-        start=1,
-    ):
-        code = str(
-            top_row["CodeX"]
-        ).strip().replace(
-            ".0",
-            "",
+    required = [
+        "Code",
+        "MorningVolume",
+    ]
+
+    missing = [
+        col
+        for col in required
+        if col not in panel_df.columns
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "H1 early-volume columns missing : "
+            + ", ".join(missing)
         )
 
-        H1_TOP3_RANK[code] = rank
+    valid_count = 0
 
-        matched = panel_df[
-            panel_df["Code"].astype(str)
-            .str.strip()
-            .str.replace(
-                r"\.0$",
-                "",
-                regex=True,
-            )
-            == code
-        ]
+    for _, row in panel_df.iterrows():
 
-        if matched.empty:
-            print(
-                f"H1 #{rank} {code} "
-                "09:20 volume : NOT FOUND"
-            )
+        code = str(
+            row["Code"]
+        ).strip()
+
+        if code.endswith(".0"):
+            code = code[:-2]
+
+        if not code:
             continue
 
         early_volume = _safe_float(
-            matched.iloc[0].get(
+            row.get(
                 "MorningVolume"
             )
         )
@@ -284,30 +314,39 @@ def prepare_h1_hybrid_wait(
             early_volume is None
             or early_volume <= 0
         ):
-            print(
-                f"H1 #{rank} {code} "
-                "09:20 volume : INVALID"
-            )
             continue
 
         H1_EARLY_VOLUME[
             code
         ] = early_volume
 
-        print(
-            f"H1 #{rank} {code} "
-            f"09:20 volume={early_volume:.0f}"
-        )
+        valid_count += 1
+
+    print()
+    print("=" * 60)
+    print(" H1 EARLY FULL-MARKET VOLUME")
+    print("=" * 60)
+    print(
+        "09:20 valid volumes : "
+        f"{valid_count}"
+    )
+    print(
+        "Candidate selection : "
+        "NOT FIXED AT 09:20"
+    )
 
 
-def update_h1_hybrid_wait_live(
-    snapshot_df,
-):
+def update_h1_hybrid_wait_live():
     """
-    Fix BUY / WAIT at the first 09:30 capture.
+    Decide BUY / WAIT for the final refill-selected stocks.
 
-    Growth:
-        (Volume0930 / VolumeEarly - 1) * 100
+    IMPORTANT:
+    PASS / SKIP has already been decided separately.
+
+    BUY / WAIT uses:
+        09:20 early volume
+        versus
+        stored 09:30 volume
 
     BUY:
         growth < 100%
@@ -324,13 +363,18 @@ def update_h1_hybrid_wait_live(
     if H1_HYBRID_DECISION_DONE:
         return
 
-    if snapshot_df is None or snapshot_df.empty:
-        return
-
     print()
     print("=" * 60)
-    print(" H1 HYBRID WAIT LIVE")
+    print(" H1 HYBRID BUY / WAIT")
     print("=" * 60)
+
+    if not H1_TOP3_RANK:
+        print(
+            "No final H1 stocks."
+        )
+        H1_HYBRID_DECISION_DONE = True
+        print("=" * 60)
+        return
 
     for code, rank in sorted(
         H1_TOP3_RANK.items(),
@@ -340,46 +384,45 @@ def update_h1_hybrid_wait_live(
             code
         )
 
+        saved = H1_0930_SNAPSHOT.get(
+            code
+        )
+
         if (
             early_volume is None
             or early_volume <= 0
         ):
             print(
                 f"H1 #{rank} {code} "
-                "SKIP : early volume unavailable"
+                "BUY/WAIT NO DATA : "
+                "early volume unavailable"
+            )
+
+            add_candidate(
+                code,
+                f"H1 #{rank} NO DATA",
             )
             continue
 
-        normalized_codes = (
-            snapshot_df["Code"]
-            .astype(str)
-            .str.strip()
-            .str.replace(
-                r"\.0$",
-                "",
-                regex=True,
-            )
-        )
-
-        matched = snapshot_df[
-            normalized_codes == code
-        ]
-
-        if matched.empty:
+        if not saved:
             print(
                 f"H1 #{rank} {code} "
-                "SKIP : 09:30 RSS row unavailable"
+                "BUY/WAIT NO DATA : "
+                "09:30 snapshot unavailable"
+            )
+
+            add_candidate(
+                code,
+                f"H1 #{rank} NO DATA",
             )
             continue
 
-        row = matched.iloc[0]
-
         volume_0930 = _safe_float(
-            row.get("Volume")
+            saved.get("Volume")
         )
 
         price_0930 = _safe_float(
-            row.get("Price")
+            saved.get("Price")
         )
 
         if (
@@ -390,7 +433,13 @@ def update_h1_hybrid_wait_live(
         ):
             print(
                 f"H1 #{rank} {code} "
-                "SKIP : invalid 09:30 price/volume"
+                "BUY/WAIT NO DATA : "
+                "invalid 09:30 price/volume"
+            )
+
+            add_candidate(
+                code,
+                f"H1 #{rank} NO DATA",
             )
             continue
 
@@ -422,7 +471,6 @@ def update_h1_hybrid_wait_live(
                 label = (
                     f"H1 #{rank} WAIT"
                 )
-
                 price_text = "N/A"
 
             else:
@@ -448,7 +496,6 @@ def update_h1_hybrid_wait_live(
             label = (
                 f"H1 #{rank} BUY"
             )
-
             decision = "BUY"
             price_text = "-"
 
@@ -461,7 +508,7 @@ def update_h1_hybrid_wait_live(
             f"H1 #{rank} "
             f"{code} "
             f"Growth={growth:+.2f}% "
-            f"Price={price_0930:g} "
+            f"Price0930={price_0930:g} "
             f"=> {decision}"
             + (
                 f" {price_text}"
@@ -473,6 +520,164 @@ def update_h1_hybrid_wait_live(
     H1_HYBRID_DECISION_DONE = True
 
     print("=" * 60)
+
+
+def run_h1_0932_refill_filter():
+    """
+    At 09:32:02:
+
+    1. Read current Rakuten RSS values for TOP20.
+    2. Check the 09:30 CxV TOP10 candidates.
+    3. PASS when move from stored 09:30 price is
+       between -3.00% and +1.00%, inclusive.
+    4. Keep PASS stocks in original CxV rank order.
+    5. Select at most three stocks.
+    6. Run the separate BUY / WAIT decision using
+       stored 09:20 -> 09:30 volume growth.
+    """
+
+    global H1_TOP3_RANK
+
+    print()
+    print("=" * 60)
+    print(" H1 09:32 REFILL FILTER")
+    print("=" * 60)
+
+    rows = read_rss_rows()
+
+    rss_map = {}
+
+    for row in rows:
+        code = str(
+            row.get("Code", "")
+        ).strip()
+
+        if code.endswith(".0"):
+            code = code[:-2]
+
+        if code:
+            rss_map[code] = row
+
+    pass_codes = []
+
+    for cxv_rank, code in enumerate(
+        H1_CANDIDATES,
+        start=1,
+    ):
+        saved = H1_0930_SNAPSHOT.get(
+            code
+        )
+
+        current = rss_map.get(
+            code
+        )
+
+        base_price = (
+            _safe_float(
+                saved.get("Price")
+            )
+            if saved
+            else None
+        )
+
+        current_price = (
+            _safe_float(
+                current.get("Price")
+            )
+            if current
+            else None
+        )
+
+        if (
+            base_price is None
+            or base_price <= 0
+            or current_price is None
+            or current_price <= 0
+        ):
+            result = "NO DATA"
+            move_pct = None
+
+        else:
+            move_pct = (
+                current_price
+                / base_price
+                - 1.0
+            ) * 100.0
+
+            passed = (
+                H1_FILTER_LOWER
+                <= move_pct
+                <= H1_FILTER_UPPER
+            )
+
+            result = (
+                "PASS"
+                if passed
+                else "SKIP"
+            )
+
+        if result == "PASS":
+            pass_codes.append(
+                code
+            )
+
+        move_text = (
+            "N/A"
+            if move_pct is None
+            else f"{move_pct:+.2f}%"
+        )
+
+        print(
+            f"CxV #{cxv_rank:2d} "
+            f"{code} "
+            f"09:30={base_price} "
+            f"09:32={current_price} "
+            f"Move={move_text} "
+            f"=> {result}"
+        )
+
+    selected = (
+        pass_codes[
+            :H1_MAX_SELECTED
+        ]
+    )
+
+    H1_TOP3_RANK = {
+        code: rank
+        for rank, code in enumerate(
+            selected,
+            start=1,
+        )
+    }
+
+    print()
+    print("Refill selected:")
+
+    if not selected:
+        print("  NONE")
+
+    for rank, code in enumerate(
+        selected,
+        start=1,
+    ):
+        original_rank = (
+            H1_CANDIDATES.index(code)
+            + 1
+        )
+
+        print(
+            f"  H1 #{rank} "
+            f"{code} "
+            f"(CxV #{original_rank})"
+        )
+
+    # Remove temporary candidate labels.
+    # Only final selected stocks receive H1 labels.
+    clear_h1_labels()
+
+    # PASS/SKIP selection is complete.
+    # BUY/WAIT is a separate decision.
+    update_h1_hybrid_wait_live()
 
 
 def capture_slot(
@@ -495,17 +700,56 @@ def capture_slot(
         return
 
     # --------------------------------------------------------
-    # H1 hybrid WAIT decision
+    # Preserve the 09:30 RSS values.
     #
-    # Fix the decision at the first 09:30:05 snapshot only.
+    # Do NOT decide BUY / WAIT here.
+    # Final H1 stocks are selected by the 09:32
+    # PASS / SKIP refill filter first.
     # --------------------------------------------------------
 
     if (
         target_time.hour == 9
         and target_time.minute == 30
     ):
-        update_h1_hybrid_wait_live(
-            df
+        global H1_0930_SNAPSHOT
+
+        H1_0930_SNAPSHOT = {}
+
+        normalized_codes = (
+            df["Code"]
+            .astype(str)
+            .str.strip()
+            .str.replace(
+                r"\.0$",
+                "",
+                regex=True,
+            )
+        )
+
+        for i, row in df.iterrows():
+            code = normalized_codes.loc[i]
+
+            if code not in H1_CANDIDATES:
+                continue
+
+            price = _safe_float(
+                row.get("Price")
+            )
+
+            volume = _safe_float(
+                row.get("Volume")
+            )
+
+            H1_0930_SNAPSHOT[code] = {
+                "Price": price,
+                "Volume": volume,
+            }
+
+        print()
+        print(
+            "H1 09:30 candidate snapshot : "
+            f"{len(H1_0930_SNAPSHOT)} / "
+            f"{len(H1_CANDIDATES)}"
         )
 
     # 実際の取得秒が多少ずれても
@@ -565,7 +809,51 @@ def run_capture():
         "09:30:05 ～ 09:35:05"
     )
 
+    filter_done = False
+
+    filter_target = today_at(
+        H1_FILTER_HOUR,
+        H1_FILTER_MINUTE,
+        H1_FILTER_SECOND,
+    )
+
     for target_time in capture_times:
+
+        now = datetime.now()
+
+        # Run the refill filter before the first
+        # capture scheduled after 09:32:02.
+        if (
+            not filter_done
+            and target_time >= filter_target
+        ):
+            now = datetime.now()
+
+            if now < filter_target:
+                wait_seconds = (
+                    filter_target - now
+                ).total_seconds()
+
+                print(
+                    "[09:32 FILTER] "
+                    f"待機 {wait_seconds:.1f} 秒"
+                )
+
+                if wait_seconds > 0:
+                    time.sleep(
+                        wait_seconds
+                    )
+
+            try:
+                run_h1_0932_refill_filter()
+
+            except Exception as exc:
+                print(
+                    "H1 09:32 refill filter "
+                    f"failed : {exc}"
+                )
+
+            filter_done = True
 
         now = datetime.now()
 
@@ -735,6 +1023,47 @@ def main():
     check_rss_startup()
 
     # ============================================
+    # Load the 09:20-side full-market panel.
+    #
+    # Candidate selection is NOT performed here.
+    # We only preserve the early cumulative volume
+    # for every valid stock so that stocks which
+    # newly rise into the H1 ranking at 09:30 can
+    # still receive the BUY / WAIT judgment.
+    # ============================================
+
+    print()
+    print("=" * 60)
+    print(" H1 EARLY PANEL")
+    print("=" * 60)
+
+    early_panel_path = wait_for_panel()
+
+    if early_panel_path is None:
+        print(
+            "09:20-09:25 morning_panel "
+            "was not found."
+        )
+        print(
+            "H1 BUY / WAIT cannot be "
+            "calculated safely."
+        )
+        return
+
+    print(
+        "Early panel :",
+        early_panel_path,
+    )
+
+    early_panel_df = read_panel(
+        early_panel_path
+    )
+
+    prepare_h1_hybrid_wait(
+        early_panel_df
+    )
+
+    # ============================================
     # Wait until 09:30 for the full-market scan
     # ============================================
 
@@ -845,38 +1174,55 @@ def main():
     )
 
     # ============================================
-    # Live board : H1 TOP3 only
+    # H1 09:30 candidate pool
     #
-    # Do NOT overwrite A2:A21.
-    # Existing SSR/manual stocks must be preserved.
+    # Do not fix the final TOP3 yet.
+    # Keep the CxV TOP10 so that skipped stocks
+    # can be replaced by the next ranked stock.
     # ============================================
 
-    h1_top3 = (
+    h1_candidates = (
         watchlist
-        .head(3)
+        .head(10)
         .copy()
     )
 
-    # Store the 09:20-side volume before entering
-    # the 09:30 capture loop.
-    prepare_h1_hybrid_wait(
-        panel_df,
-        h1_top3,
-    )
+    global H1_CANDIDATES
+
+    H1_CANDIDATES = [
+        str(code).strip().replace(
+            ".0",
+            "",
+        )
+        for code
+        in h1_candidates["CodeX"].tolist()
+    ]
+
+    print()
+    print("=" * 60)
+    print(" H1 09:30 CANDIDATES TOP10")
+    print("=" * 60)
 
     clear_h1_labels()
 
     for rank, (_, row) in enumerate(
-        h1_top3.iterrows(),
+        h1_candidates.iterrows(),
         start=1,
     ):
         add_candidate(
             row["CodeX"],
-            f"H1 #{rank}",
+            f"H1 CAND #{rank}",
+        )
+
+        print(
+            f"{rank:2d} "
+            f"{row['CodeX']} "
+            f"{row['NameX']} "
+            f"CxV={row['CxV']:.2f}"
         )
 
     print(
-        "H1 TOP3 live board update : OK"
+        "H1 TOP10 candidate live board update : OK"
     )
 
     run_capture()
