@@ -782,30 +782,22 @@ def main():
             "- started too late."
         )
 
-    if datetime.now() < today_at(
-        H1_START[0],
-        H1_START[1],
-    ):
-        wait_until(
-            H1_START[0],
-            H1_START[1],
-        )
+    # ==================================================
+    # Legacy H1 is disabled here.
+    #
+    # H1 is now handled independently by:
+    #
+    #     python src/intraday/rss_morning_runner.py
+    #
+    # Keep run_h1() above temporarily for rollback only.
+    # SSR-Ver1 / SSR-Ver2 / Early20 remain active.
+    # ==================================================
 
-        run_h1()
-
-    elif in_window(
-        H1_START[0],
-        H1_START[1],
-        H1_END[0],
-        H1_END[1],
-    ):
-        run_h1()
-
-    else:
-        print(
-            "H1 : SKIPPED "
-            "- started too late."
-        )
+    print()
+    print(
+        "Legacy H1 : DISABLED "
+        "- handled by rss_morning_runner.py"
+    )
 
     # SSR worker finishes its own 09:30 processing,
     # including SSR-Ver2 evaluation and CSV save.
