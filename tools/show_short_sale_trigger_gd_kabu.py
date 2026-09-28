@@ -89,7 +89,95 @@ def read_trigger_file(path):
             }
         )
 
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+
+    # ============================================
+    # Keep the SSR universe identical to the
+    # main screener:
+    #
+    #   Prime    domestic stocks
+    #   Standard domestic stocks
+    #   Growth   domestic stocks
+    #
+    # ETFs / ETNs / REITs / foreign stocks /
+    # securities and other products are excluded.
+    # ============================================
+
+    stocks_path = (
+        ROOT
+        / "data"
+        / "stocks.csv"
+    )
+
+    if not stocks_path.exists():
+        raise RuntimeError(
+            f"stocks.csv not found: {stocks_path}"
+        )
+
+    stocks = pd.read_csv(
+        stocks_path,
+        dtype=str,
+        low_memory=False,
+    )
+
+    # stocks.csv fixed layout:
+    #   column 0 = stock code
+    #   column 2 = market/product category
+    #
+    # Use Unicode escapes here so this source file
+    # remains safe even when patched from PowerShell.
+    normal_markets = [
+        "\u30d7\u30e9\u30a4\u30e0\uff08\u5185\u56fd\u682a\u5f0f\uff09",
+        "\u30b9\u30bf\u30f3\u30c0\u30fc\u30c9\uff08\u5185\u56fd\u682a\u5f0f\uff09",
+        "\u30b0\u30ed\u30fc\u30b9\uff08\u5185\u56fd\u682a\u5f0f\uff09",
+    ]
+
+    code_col = stocks.columns[0]
+    market_col = stocks.columns[2]
+
+    stocks = stocks[
+        stocks[market_col].isin(
+            normal_markets
+        )
+    ].copy()
+
+    domestic_codes = set(
+        stocks[code_col]
+        .astype(str)
+        .str.strip()
+        .str.replace(
+            r"\.0$",
+            "",
+            regex=True,
+        )
+    )
+
+    original_count = len(result)
+
+    result = result[
+        result["Code"].astype(str).isin(
+            domestic_codes
+        )
+    ].copy()
+
+    result = result.reset_index(
+        drop=True
+    )
+
+    print(
+        "SSR trigger original :",
+        original_count,
+    )
+    print(
+        "SSR domestic common  :",
+        len(result),
+    )
+    print(
+        "SSR excluded         :",
+        original_count - len(result),
+    )
+
+    return result
 
 
 def find_latest_trigger_file():
