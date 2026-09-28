@@ -24,6 +24,7 @@ if str(TOOLS) not in sys.path:
 from rss_watchlist import (
     read_panel,
     build_watchlist,
+    write_excel,
 )
 from volume_tracker import (
     build_snapshot,
