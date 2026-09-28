@@ -53,6 +53,54 @@ def main():
         batch_size=BATCH_SIZE,
     )
 
+    # ==================================================
+    # Retry stocks missed by the first Yahoo batch.
+    #
+    # A temporary Yahoo batch failure must not remove an
+    # otherwise valid domestic common stock from the next
+    # morning baseline.
+    # ==================================================
+
+    retry_codes = []
+
+    for code in codes:
+        history_df = history_map.get(code)
+
+        if (
+            history_df is None
+            or history_df.empty
+        ):
+            retry_codes.append(code)
+
+    print(
+        f"Yahoo retry   : {len(retry_codes)} stocks"
+    )
+
+    retry_recovered = 0
+
+    if retry_codes:
+        retry_map = _download_history_batch(
+            retry_codes,
+            period="6mo",
+            batch_size=BATCH_SIZE,
+        )
+
+        for code in retry_codes:
+            retry_df = retry_map.get(code)
+
+            if (
+                retry_df is None
+                or retry_df.empty
+            ):
+                continue
+
+            history_map[code] = retry_df
+            retry_recovered += 1
+
+    print(
+        f"Retry recovered: {retry_recovered}"
+    )
+
     elapsed = time.time() - started
 
     expected_date = get_expected_market_date()
