@@ -3,9 +3,20 @@
 # ================================================
 
 import time
+from pathlib import Path
 
+import pandas as pd
 import win32com.client as win32
 
+
+ROOT = Path(__file__).resolve().parents[2]
+
+BASELINE_FILE = (
+    ROOT
+    / "data"
+    / "cache"
+    / "morning_baseline.csv"
+)
 
 WORKBOOK_NAME = "rakuten_rss_live_board.xlsx"
 SHEET_NAME = "H1ライブボード"
@@ -79,6 +90,134 @@ def get_live_board():
         f"after {retry_count} attempts: "
         f"{last_error}"
     ) from last_error
+
+
+
+def refresh_volume_master():
+    """
+    Refresh only the AA:AB volume master from the latest
+    morning_baseline.csv.
+
+    AA : CodeMaster
+    AB : Prev5AvgVolumeMaster
+
+    Existing live-board rows, RSS formulas and labels are
+    not changed.
+    """
+
+    if not BASELINE_FILE.exists():
+        raise RuntimeError(
+            "morning_baseline.csv not found."
+        )
+
+    df = pd.read_csv(
+        BASELINE_FILE,
+        dtype={"Code": str},
+        low_memory=False,
+    )
+
+    required = [
+        "Code",
+        "Prev5AvgVolume",
+    ]
+
+    missing = [
+        col
+        for col in required
+        if col not in df.columns
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "Baseline columns missing: "
+            + ", ".join(missing)
+        )
+
+    df["CodeX"] = (
+        df["Code"]
+        .astype(str)
+        .str.strip()
+        .str.replace(
+            r"\.0$",
+            "",
+            regex=True,
+        )
+    )
+
+    df["Prev5AvgVolumeX"] = pd.to_numeric(
+        df["Prev5AvgVolume"],
+        errors="coerce",
+    )
+
+    df = (
+        df
+        .drop_duplicates(
+            subset=["CodeX"],
+            keep="last",
+        )
+    )
+
+    df = df[
+        df["Prev5AvgVolumeX"].notna()
+        & (df["Prev5AvgVolumeX"] > 0)
+        & (df["CodeX"] != "")
+    ]
+
+    master_values = [
+        (
+            str(row.CodeX),
+            float(row.Prev5AvgVolumeX),
+        )
+        for row in df.itertuples(
+            index=False
+        )
+    ]
+
+    if not master_values:
+        raise RuntimeError(
+            "Volume master is empty."
+        )
+
+    excel, book, sheet = get_live_board()
+
+    sheet.Cells(
+        1,
+        27,
+    ).Value = "CodeMaster"
+
+    sheet.Cells(
+        1,
+        28,
+    ).Value = "Prev5AvgVolumeMaster"
+
+    # Remove the previous master only.
+    sheet.Range(
+        "AA2:AB10000"
+    ).ClearContents()
+
+    end_row = (
+        len(master_values)
+        + 1
+    )
+
+    sheet.Range(
+        sheet.Cells(2, 27),
+        sheet.Cells(end_row, 28),
+    ).Value = tuple(master_values)
+
+    excel.Calculate()
+    book.Save()
+
+    print(
+        "Volume master refresh : OK"
+    )
+    print(
+        f"Master stocks         : "
+        f"{len(master_values)}"
+    )
+
+    return len(master_values)
+
 
 
 def get_current_price(code):

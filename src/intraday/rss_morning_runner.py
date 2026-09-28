@@ -35,6 +35,7 @@ from rss_live_board import (
     get_live_board,
     clear_h1_labels,
     add_candidate,
+    refresh_volume_master,
 )
 from run_morning_screener_rss import build_morning_panel
 from analyze_h1_true_pullback_entry import floor_to_tick
@@ -1022,6 +1023,20 @@ def main():
         return
 
     check_rss_startup()
+
+    # ============================================
+    # Refresh live-board volume master.
+    #
+    # Use the latest morning_baseline.csv so
+    # VolumeRatio / CxV work for current stocks.
+    # ============================================
+
+    print()
+    print("=" * 60)
+    print(" LIVE BOARD VOLUME MASTER")
+    print("=" * 60)
+
+    refresh_volume_master()
 
     # ============================================
     # Load the 09:20-side full-market panel.
