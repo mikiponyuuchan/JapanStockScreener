@@ -179,23 +179,18 @@ def setup_batch(
     sheet,
     batch,
 ):
+    """
+    Prepare one Rakuten RSS batch.
+
+    Excel can temporarily reject COM calls while
+    MarketSpeed II RSS is updating cells.  Retry the
+    whole setup so a partially written batch is cleared
+    and rebuilt from the beginning.
+    """
     end_row = (
         START_ROW
         + len(batch)
         - 1
-    )
-
-    clear_board(sheet)
-
-    sheet.Range(
-        "A1:D1"
-    ).Value = (
-        (
-            "Code",
-            "Price",
-            "ChangePercent",
-            "Volume",
-        ),
     )
 
     rss_price = "\u73fe\u5728\u5024"
@@ -218,11 +213,62 @@ def setup_batch(
             )
         )
 
-    sheet.Range(
-        f"A{START_ROW}:D{end_row}"
-    ).Formula = tuple(values)
+    max_retries = 20
+    retry_wait = 0.25
+    last_error = None
 
-    return end_row
+    for attempt in range(
+        1,
+        max_retries + 1,
+    ):
+        try:
+            # Rebuild from a clean board on every retry.
+            clear_board(sheet)
+
+            sheet.Range(
+                "A1:D1"
+            ).Value = (
+                (
+                    "Code",
+                    "Price",
+                    "ChangePercent",
+                    "Volume",
+                ),
+            )
+
+            sheet.Range(
+                f"A{START_ROW}:D{end_row}"
+            ).Formula = tuple(values)
+
+            if attempt > 1:
+                print(
+                    "  Excel COM setup recovered "
+                    f"after {attempt - 1} retries"
+                )
+
+            return end_row
+
+        except Exception as exc:
+            last_error = exc
+
+            if attempt >= max_retries:
+                break
+
+            if attempt == 1:
+                print(
+                    "  Excel COM setup busy "
+                    "- retrying..."
+                )
+
+            time.sleep(
+                retry_wait
+            )
+
+    raise RuntimeError(
+        "Excel COM setup failed after "
+        f"{max_retries} retries : "
+        f"{last_error}"
+    ) from last_error
 
 
 def inspect_batch(
@@ -357,7 +403,50 @@ def fetch_batch(
         batch,
     )
 
-    excel.Calculate()
+    # Excel may also reject Calculate temporarily while
+    # Rakuten RSS is processing the newly written formulas.
+    calc_max_retries = 20
+    calc_retry_wait = 0.25
+    calc_last_error = None
+
+    for calc_attempt in range(
+        1,
+        calc_max_retries + 1,
+    ):
+        try:
+            excel.Calculate()
+            calc_last_error = None
+
+            if calc_attempt > 1:
+                print(
+                    "  Excel COM calculate recovered "
+                    f"after {calc_attempt - 1} retries"
+                )
+
+            break
+
+        except Exception as exc:
+            calc_last_error = exc
+
+            if calc_attempt >= calc_max_retries:
+                break
+
+            if calc_attempt == 1:
+                print(
+                    "  Excel COM calculate busy "
+                    "- retrying..."
+                )
+
+            time.sleep(
+                calc_retry_wait
+            )
+
+    if calc_last_error is not None:
+        raise RuntimeError(
+            "Excel COM calculate failed after "
+            f"{calc_max_retries} retries : "
+            f"{calc_last_error}"
+        ) from calc_last_error
 
     setup_seconds = (
         time.perf_counter()
