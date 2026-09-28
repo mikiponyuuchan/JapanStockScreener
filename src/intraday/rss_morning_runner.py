@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools"
@@ -86,6 +88,13 @@ H1_FILTER_LOWER = -3.0
 H1_FILTER_UPPER = 1.0
 
 H1_MAX_SELECTED = 3
+
+H1_0932_REFILL_LOG_FILE = (
+    ROOT
+    / "data"
+    / "tracking"
+    / "h1_0932_refill_log.csv"
+)
 
 H1_EARLY_VOLUME = {}
 H1_TOP3_RANK = {}
@@ -561,6 +570,15 @@ def run_h1_0932_refill_filter():
             rss_map[code] = row
 
     pass_codes = []
+    filter_rows = []
+
+    filter_now = datetime.now()
+    detection_date = filter_now.strftime(
+        "%Y-%m-%d"
+    )
+    filter_time = filter_now.strftime(
+        "%H:%M:%S"
+    )
 
     for cxv_rank, code in enumerate(
         H1_CANDIDATES,
@@ -638,6 +656,29 @@ def run_h1_0932_refill_filter():
             f"=> {result}"
         )
 
+        filter_rows.append(
+            {
+                "DetectionDate":
+                    detection_date,
+                "FilterTime":
+                    filter_time,
+                "CxVRank":
+                    cxv_rank,
+                "Code":
+                    code,
+                "Price0930":
+                    base_price,
+                "Price0932":
+                    current_price,
+                "MovePct":
+                    move_pct,
+                "FilterResult":
+                    result,
+                "H1Rank":
+                    None,
+            }
+        )
+
     selected = (
         pass_codes[
             :H1_MAX_SELECTED
@@ -671,6 +712,57 @@ def run_h1_0932_refill_filter():
             f"  H1 #{rank} "
             f"{code} "
             f"(CxV #{original_rank})"
+        )
+
+    # ============================================
+    # Save 09:32 refill audit log.
+    # ============================================
+
+    for row in filter_rows:
+        code = row["Code"]
+
+        if code in H1_TOP3_RANK:
+            row["H1Rank"] = H1_TOP3_RANK[code]
+
+    if filter_rows:
+        log_df = pd.DataFrame(filter_rows)
+
+        H1_0932_REFILL_LOG_FILE.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        if H1_0932_REFILL_LOG_FILE.exists():
+            old_df = pd.read_csv(
+                H1_0932_REFILL_LOG_FILE,
+                dtype={"Code": str},
+                low_memory=False,
+            )
+
+            log_df = pd.concat(
+                [old_df, log_df],
+                ignore_index=True,
+            )
+
+            log_df = log_df.drop_duplicates(
+                subset=[
+                    "DetectionDate",
+                    "CxVRank",
+                    "Code",
+                ],
+                keep="last",
+            )
+
+        log_df.to_csv(
+            H1_0932_REFILL_LOG_FILE,
+            index=False,
+            encoding="utf-8-sig",
+        )
+
+        print()
+        print(
+            "H1 09:32 refill log : "
+            f"{H1_0932_REFILL_LOG_FILE}"
         )
 
     # Remove temporary candidate labels.
