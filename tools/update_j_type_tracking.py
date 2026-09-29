@@ -1,6 +1,8 @@
 from pathlib import Path
 from datetime import date
 import sys
+import io
+from contextlib import redirect_stderr
 
 import pandas as pd
 
@@ -296,11 +298,12 @@ def main():
         print("Nothing to update.")
         return
 
-    history_map = _download_history_batch(
-        codes,
-        period="3mo",
-        batch_size=100,
-    )
+    with redirect_stderr(io.StringIO()):
+        history_map = _download_history_batch(
+            codes,
+            period="3mo",
+            batch_size=100,
+        )
 
     total_updates = 0
     updated_rows = 0
