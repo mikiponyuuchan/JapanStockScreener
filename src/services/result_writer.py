@@ -28,12 +28,6 @@ from services.tracking_service import (
     record_initial_move,
 )
 
-from services.p5_tracking_service import (
-    load_p5_tracking,
-    record_p5_candidates,
-    update_p5_tracking,
-)
-
 from services.yahoo_credit_service import (
     load_latest_credit_data,
     download_credit_batch,
@@ -3027,27 +3021,8 @@ def save_result(df):
             )
 
     # ======================================================
-    # P5早期候補
+    # P5 disabled in main screener
     # ======================================================
-
-    p5_candidates = (
-        make_p5_candidates(
-            df
-        )
-    )
-
-    print(
-        "P5早期候補件数 :",
-        len(p5_candidates)
-    )
-
-    # ======================================================
-    # P5追跡
-    # ======================================================
-
-    # Tracking updates are disabled in the main screener.
-    # Existing tracking CSV data is loaded only for Excel display.
-    p5_tracking_df = load_p5_tracking()
 
     news_data = {}
 
@@ -3208,36 +3183,18 @@ def save_result(df):
     )
 
     # ======================================================
-    # P5早期候補
+    # P5 sheets disabled
+    # Remove legacy P5 sheets left in an existing workbook.
     # ======================================================
 
-    if "P5早期候補" in workbook.sheetnames:
-
-        workbook.remove(
-            workbook["P5早期候補"]
-        )
-
-    create_p5_candidates_sheet(
-        workbook,
-        p5_candidates,
-        sheet_name="P5早期候補",
-    )
-
-    # ======================================================
-    # P5追跡
-    # ======================================================
-
-    if "P5追跡" in workbook.sheetnames:
-
-        workbook.remove(
-            workbook["P5追跡"]
-        )
-
-    create_p5_tracking_sheet(
-        workbook,
-        p5_tracking_df,
-        sheet_name="P5追跡",
-    )
+    for legacy_p5_sheet in [
+        "P5早期候補",
+        "P5追跡",
+    ]:
+        if legacy_p5_sheet in workbook.sheetnames:
+            workbook.remove(
+                workbook[legacy_p5_sheet]
+            )
 
     # ======================================================
     # 全銘柄
@@ -3368,8 +3325,6 @@ def save_result(df):
     # シート順
     #
     # 最新TOP20
-    # P5早期候補
-    # P5追跡
     # 過去TOP20（新しい順）
     # 全銘柄
     # 初動追跡
@@ -3393,8 +3348,6 @@ def save_result(df):
     desired_order = (
         [
             top20_sheet_name,
-            "P5早期候補",
-            "P5追跡",
         ]
         + past_top20_sheet_names
         + [
