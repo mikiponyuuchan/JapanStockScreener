@@ -15,19 +15,12 @@ if str(SRC) not in sys.path:
 
 from services.result_writer import (
     make_initial_move_top20,
-    make_p5_candidates,
 )
 
 from services.tracking_service import (
     load_tracking,
     update_tracking_results,
     record_initial_move,
-)
-
-from services.p5_tracking_service import (
-    load_p5_tracking,
-    record_p5_candidates,
-    update_p5_tracking,
 )
 
 
@@ -104,20 +97,9 @@ def main():
         )
     )
 
-    p5_candidates = (
-        make_p5_candidates(
-            df
-        )
-    )
-
     print(
         "Initial TOP20 :",
         len(initial_move_top20),
-    )
-
-    print(
-        "P5 candidates :",
-        len(p5_candidates),
     )
 
     # ======================================================
@@ -152,43 +134,6 @@ def main():
 
         print(
             "Initial tracking ERROR :",
-            e,
-        )
-
-    # ======================================================
-    # P5 tracking
-    # ======================================================
-
-    print()
-    print("[P5 tracking]")
-
-    try:
-
-        p5_tracking_df = (
-            load_p5_tracking()
-        )
-
-        p5_tracking_df = (
-            record_p5_candidates(
-                p5_candidates
-            )
-        )
-
-        p5_tracking_df = (
-            update_p5_tracking(
-                p5_tracking_df
-            )
-        )
-
-        print(
-            "P5 tracking rows :",
-            len(p5_tracking_df),
-        )
-
-    except Exception as e:
-
-        print(
-            "P5 tracking ERROR :",
             e,
         )
 
