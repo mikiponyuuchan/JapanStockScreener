@@ -1296,6 +1296,7 @@ def main():
     )
 
     global H1_CANDIDATES
+    global H1_0930_SNAPSHOT
 
     H1_CANDIDATES = [
         str(code).strip().replace(
@@ -1305,6 +1306,71 @@ def main():
         for code
         in h1_candidates["CodeX"].tolist()
     ]
+
+    # ============================================
+    # Preserve the 09:30 full-market scan values.
+    #
+    # The full-market Rakuten RSS scan can finish
+    # after 09:30:05.  Therefore the normal capture
+    # slot may already have been missed.
+    #
+    # Use the values already stored in the 09:30
+    # morning panel as the authoritative base for
+    # the later 09:32 refill filter and BUY/WAIT.
+    # ============================================
+
+    H1_0930_SNAPSHOT = {}
+
+    panel_code_map = {}
+
+    for _, panel_row in panel_df.iterrows():
+
+        code = str(
+            panel_row.get("Code", "")
+        ).strip()
+
+        if code.endswith(".0"):
+            code = code[:-2]
+
+        if code:
+            panel_code_map[code] = panel_row
+
+    for code in H1_CANDIDATES:
+
+        panel_row = panel_code_map.get(
+            code
+        )
+
+        if panel_row is None:
+            continue
+
+        price = _safe_float(
+            panel_row.get("MorningPrice")
+        )
+
+        volume = _safe_float(
+            panel_row.get("MorningVolume")
+        )
+
+        if (
+            price is None
+            or price <= 0
+            or volume is None
+            or volume < 0
+        ):
+            continue
+
+        H1_0930_SNAPSHOT[code] = {
+            "Price": price,
+            "Volume": volume,
+        }
+
+    print()
+    print(
+        "H1 09:30 panel snapshot : "
+        f"{len(H1_0930_SNAPSHOT)} / "
+        f"{len(H1_CANDIDATES)}"
+    )
 
     print()
     print("=" * 60)
