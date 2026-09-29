@@ -1,5 +1,7 @@
 import sys
 import time
+import io
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 import pandas as pd
@@ -47,11 +49,12 @@ def main():
 
     started = time.time()
 
-    history_map = _download_history_batch(
-        codes,
-        period="6mo",
-        batch_size=BATCH_SIZE,
-    )
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        history_map = _download_history_batch(
+            codes,
+            period="6mo",
+            batch_size=BATCH_SIZE,
+        )
 
     # ==================================================
     # Retry stocks missed by the first Yahoo batch.
@@ -79,11 +82,12 @@ def main():
     retry_recovered = 0
 
     if retry_codes:
-        retry_map = _download_history_batch(
-            retry_codes,
-            period="6mo",
-            batch_size=BATCH_SIZE,
-        )
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            retry_map = _download_history_batch(
+                retry_codes,
+                period="6mo",
+                batch_size=BATCH_SIZE,
+            )
 
         for code in retry_codes:
             retry_df = retry_map.get(code)
