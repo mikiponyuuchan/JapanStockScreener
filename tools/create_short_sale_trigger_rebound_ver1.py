@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout, redirect_stderr
+import io
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -224,19 +226,20 @@ def download_daily(code, trigger_date):
     )
 
     try:
-        df = yf.download(
-            f"{code}.T",
-            start=start.strftime(
-                "%Y-%m-%d"
-            ),
-            end=end.strftime(
-                "%Y-%m-%d"
-            ),
-            interval="1d",
-            progress=False,
-            auto_adjust=False,
-            threads=False,
-        )
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            df = yf.download(
+                    f"{code}.T",
+                start=start.strftime(
+                    "%Y-%m-%d"
+                ),
+                end=end.strftime(
+                    "%Y-%m-%d"
+                ),
+                interval="1d",
+                progress=False,
+                auto_adjust=False,
+                threads=False,
+            )
     except Exception as exc:
         print(
             f"DAILY ERROR "

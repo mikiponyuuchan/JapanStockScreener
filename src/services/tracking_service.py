@@ -4,7 +4,7 @@ from datetime import datetime
 
 import holidays
 import io
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 
 from services.yahoo_service import (
     get_history,
@@ -333,7 +333,7 @@ def get_price_on_or_after(
 
     try:
 
-        with redirect_stdout(io.StringIO()):
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             batch_result = (
                 _download_history_batch(
                     [str(code)],
@@ -557,7 +557,7 @@ def update_tracking_results(
 
         try:
 
-            with redirect_stdout(io.StringIO()):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 yahoo_results = (
                     _download_history_batch(
                         target_codes,
