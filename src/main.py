@@ -1,4 +1,6 @@
 ﻿import time
+import io
+from contextlib import redirect_stderr
 import pandas as pd
 
 from concurrent.futures import (
@@ -89,11 +91,12 @@ def main():
 
     batch_start = time.time()
 
-    history_map = _download_history_batch(
-        codes,
-        period="6mo",
-        batch_size=BATCH_SIZE
-    )
+    with redirect_stderr(io.StringIO()):
+        history_map = _download_history_batch(
+            codes,
+            period="6mo",
+            batch_size=BATCH_SIZE
+        )
 
     batch_time = (
         time.time()
