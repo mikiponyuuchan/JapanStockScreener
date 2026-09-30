@@ -29,7 +29,7 @@ BATCH_SIZE = 400
 START_ROW = 2
 
 POLL_INTERVAL = 0.25
-BATCH_TIMEOUT_SECONDS = 8.0
+BATCH_TIMEOUT_SECONDS = 15.0
 
 # Batch early-exit settings.
 # Always allow RSS enough startup time first.
