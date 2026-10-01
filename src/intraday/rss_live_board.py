@@ -634,6 +634,103 @@ def clear_board():
 
 
 
+
+def clear_j1_labels():
+    """
+    Remove old J1 labels from column H.
+
+    Stock codes are preserved.
+
+    H1 / SSR and all other labels are preserved.
+    """
+
+    excel, book, sheet = get_live_board()
+
+    changed = 0
+
+    for row_number in range(
+        START_ROW,
+        END_ROW + 1,
+    ):
+        value = sheet.Cells(
+            row_number,
+            8,
+        ).Value
+
+        if not value:
+            continue
+
+        labels = [
+            item.strip()
+            for item in str(value).split("/")
+            if item.strip()
+        ]
+
+        new_labels = [
+            item
+            for item in labels
+            if (
+                item != "J1 BUY"
+                and not item.startswith(
+                    "J1 BUY "
+                )
+            )
+        ]
+
+        if new_labels == labels:
+            continue
+
+        sheet.Cells(
+            row_number,
+            8,
+        ).Value = " / ".join(
+            new_labels
+        )
+
+        changed += 1
+
+    excel.Calculate()
+    book.Save()
+
+    print(
+        f"Old J1 labels cleared : "
+        f"{changed}"
+    )
+
+    return changed
+
+
+def add_j1_live_board_codes(codes):
+    """
+    Add today's J1 NEXT_OPEN stocks
+    to the live board.
+
+    Existing rows are reused by add_candidate().
+    """
+
+    added = 0
+
+    for code in codes:
+        code = normalize_code(code)
+
+        if not code:
+            continue
+
+        row_number = add_candidate(
+            code,
+            "J1 BUY",
+        )
+
+        if row_number is not None:
+            added += 1
+
+    print(
+        f"J1 live-board stocks  : "
+        f"{added}"
+    )
+
+    return added
+
 def clear_h1_labels():
     """
     H列から古いH1順位ラベルだけを削除する。
