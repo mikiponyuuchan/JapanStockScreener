@@ -380,17 +380,24 @@ def update_h1_hybrid_wait_live():
     print(" H1 HYBRID BUY / WAIT")
     print("=" * 60)
 
-    if not H1_TOP3_RANK:
+    if not H1_CANDIDATES:
         print(
-            "No final H1 stocks."
+            "No H1 TOP10 candidates."
         )
         H1_HYBRID_DECISION_DONE = True
         print("=" * 60)
         return
 
-    for code, rank in sorted(
-        H1_TOP3_RANK.items(),
-        key=lambda item: item[1],
+    # BUY / WAIT is displayed for the full
+    # 09:30 CxV TOP10 candidate pool.
+    #
+    # IMPORTANT:
+    # H1_TOP3_RANK and H1_MAX_SELECTED remain
+    # unchanged.  They continue to represent
+    # the formal refill-selected TOP3.
+    for rank, code in enumerate(
+        H1_CANDIDATES,
+        start=1,
     ):
         early_volume = H1_EARLY_VOLUME.get(
             code
