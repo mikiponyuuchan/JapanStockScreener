@@ -38,6 +38,7 @@ from rss_live_board import (
     clear_h1_labels,
     add_candidate,
     refresh_volume_master,
+    refresh_expanded_price_limits,
 )
 from run_morning_screener_rss import build_morning_panel
 from analyze_h1_true_pullback_entry import floor_to_tick
@@ -1183,6 +1184,32 @@ def main():
     refresh_volume_master()
 
     # ============================================
+    # Refresh today's JPX expanded price limits.
+    #
+    # This must never stop the Morning Runner.
+    # The helper automatically falls back to the
+    # normal TSE price-limit formula.
+    # ============================================
+
+    print()
+    print("=" * 60)
+    print(" JPX EXPANDED PRICE LIMIT")
+    print("=" * 60)
+
+    try:
+        refresh_expanded_price_limits()
+    except Exception as exc:
+        print(
+            "Expanded price-limit refresh failed."
+        )
+        print(
+            "Morning Runner will continue."
+        )
+        print(
+            f"Reason : {exc}"
+        )
+
+    # ============================================
     # Load the 09:20-side full-market panel.
     #
     # Candidate selection is NOT performed here.
@@ -1450,6 +1477,23 @@ def main():
     print(
         "H1 TOP10 candidate live board update : OK"
     )
+
+    # ============================================
+    # Refresh stop-high prices AFTER the TOP10
+    # stocks have been written to the live board.
+    #
+    # Every J row is first restored to the normal
+    # TSE price-limit formula.  JPX expanded-limit
+    # stocks are then overwritten with the official
+    # JPX stop-high price.
+    # ============================================
+
+    print()
+    print("=" * 60)
+    print(" LIVE BOARD PRICE LIMIT")
+    print("=" * 60)
+
+    refresh_expanded_price_limits()
 
     run_capture()
 

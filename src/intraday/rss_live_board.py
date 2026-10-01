@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 import win32com.client as win32
 
 
@@ -91,6 +93,317 @@ def get_live_board():
         f"{last_error}"
     ) from last_error
 
+
+
+
+def _normal_limit_up_formula(row_number):
+    """
+    Return the existing normal TSE upper-limit formula.
+
+    The reference price is obtained directly from
+    Rakuten RSS.
+    """
+    r = row_number
+
+    prev_close = (
+        f'RssMarket(A{r}&".T","前日終値")'
+    )
+
+    return (
+        f'=IFERROR(LET('
+        f'p,{prev_close},'
+        f'IFS('
+        f'p<100,p+30,'
+        f'p<200,p+50,'
+        f'p<500,p+80,'
+        f'p<700,p+100,'
+        f'p<1000,p+150,'
+        f'p<1500,p+300,'
+        f'p<2000,p+400,'
+        f'p<3000,p+500,'
+        f'p<5000,p+700,'
+        f'p<7000,p+1000,'
+        f'p<10000,p+1500,'
+        f'p<15000,p+3000,'
+        f'p<20000,p+4000,'
+        f'p<30000,p+5000,'
+        f'p<50000,p+7000,'
+        f'p<70000,p+10000,'
+        f'p<100000,p+15000,'
+        f'p<150000,p+30000,'
+        f'p<200000,p+40000,'
+        f'p<300000,p+50000,'
+        f'p<500000,p+70000,'
+        f'p<700000,p+100000,'
+        f'p<1000000,p+150000,'
+        f'p<1500000,p+300000,'
+        f'p<2000000,p+400000,'
+        f'p<3000000,p+500000,'
+        f'p<5000000,p+700000,'
+        f'p<7000000,p+1000000,'
+        f'p<10000000,p+1500000,'
+        f'p<15000000,p+3000000,'
+        f'p<20000000,p+4000000,'
+        f'p<30000000,p+5000000,'
+        f'p<50000000,p+7000000,'
+        f'TRUE,p+10000000'
+        f')),"")'
+    )
+
+
+def _extract_jpx_expanded_limits(text):
+    """
+    Extract:
+        stock code -> published JPX stop-high price
+
+    Only JPX-published stop-high values are used.
+    The expanded width is NOT added manually because
+    tick-size rules can make that result incorrect.
+    """
+    import re
+
+    result = {}
+
+    # JPX announcements normally contain a block such as:
+    #
+    #   株式（コード 9246）
+    #   ...
+    #   ストップ高：3,345円
+    #
+    # Limit the search distance so a code cannot accidentally
+    # pick up the price belonging to another stock.
+    pattern = re.compile(
+        r'コード[\s　]*([0-9A-Z]{4})'
+        r'.{0,700}?'
+        r'ストップ高[\s　]*[：:][\s　]*'
+        r'([0-9,]+)[\s　]*円',
+        re.DOTALL,
+    )
+
+    for match in pattern.finditer(text):
+        code = match.group(1).strip()
+        price = int(
+            match.group(2).replace(",", "")
+        )
+
+        if code and price > 0:
+            result[code] = price
+
+    return result
+
+
+def fetch_jpx_expanded_price_limits():
+    """
+    Search recent JPX market-news pages directly and return:
+
+        stock code -> JPX-published stop-high price
+
+    No JPX index-page URL is required.
+    """
+    from datetime import datetime, timedelta
+
+    today = datetime.now().date()
+
+    expanded = {}
+
+    # Search recent announcement dates.
+    # Seven calendar days covers weekends and normal
+    # holiday sequences.
+    candidate_dates = [
+        today - timedelta(days=i)
+        for i in range(1, 8)
+    ]
+
+    for announce_date in candidate_dates:
+
+        date_token = announce_date.strftime(
+            "%Y%m%d"
+        )
+
+        # JPX may publish several market-news articles
+        # on the same day, so do not assume "-01".
+        for article_no in range(1, 6):
+
+            url = (
+                "https://www.jpx.co.jp/"
+                "news/1030/"
+                f"{date_token}-{article_no:02d}.html"
+            )
+
+            try:
+                response = requests.get(
+                    url,
+                    timeout=10,
+                )
+
+                if response.status_code == 404:
+                    continue
+
+                response.raise_for_status()
+
+                soup = BeautifulSoup(
+                    response.content,
+                    "html.parser",
+                )
+
+                page_text = soup.get_text(
+                    " ",
+                    strip=True,
+                )
+
+                if "制限値幅の拡大" not in page_text:
+                    continue
+
+                # JPX announcement must explicitly say
+                # that the expanded limit applies today.
+                #
+                # Examples:
+                #   翌営業日（10月1日）
+                #   翌営業日（1日）
+                full_date_text = (
+                    f"{today.month}月{today.day}日"
+                )
+
+                short_date_text = (
+                    f"（{today.day}日）"
+                )
+
+                if (
+                    full_date_text not in page_text
+                    and short_date_text not in page_text
+                ):
+                    continue
+
+                found = (
+                    _extract_jpx_expanded_limits(
+                        page_text
+                    )
+                )
+
+                if found:
+                    expanded.update(found)
+
+                    print(
+                        "JPX expanded-limit page : "
+                        f"{url}"
+                    )
+
+            except requests.RequestException:
+                # A missing/broken candidate page must
+                # never stop the morning runner.
+                continue
+
+    return expanded
+
+
+def refresh_expanded_price_limits():
+    """
+    Refresh J/K on the H1 live board.
+
+    Normal stocks:
+        J = normal TSE upper price limit.
+
+    Expanded-limit stocks:
+        J = JPX-published stop-high price.
+
+    K always remains:
+        stop-high / current price - 1
+
+    JPX network/parser failure is non-fatal.  In that case all
+    rows use the normal price-limit formula.
+    """
+    excel, book, sheet = get_live_board()
+
+    expanded = {}
+
+    try:
+        expanded = (
+            fetch_jpx_expanded_price_limits()
+        )
+
+        print(
+            "JPX expanded price limit : CHECK OK"
+        )
+        print(
+            "Expanded stocks          : "
+            f"{len(expanded)}"
+        )
+
+    except Exception as exc:
+        print(
+            "JPX expanded price limit : CHECK FAILED"
+        )
+        print(
+            "Fallback                 : "
+            "NORMAL PRICE LIMIT"
+        )
+        print(
+            f"Reason                   : {exc}"
+        )
+
+    applied = []
+
+    for row_number in range(
+        START_ROW,
+        END_ROW + 1,
+    ):
+        code = normalize_code(
+            sheet.Cells(
+                row_number,
+                1,
+            ).Value
+        )
+
+        # Always restore the normal formula first.  This is
+        # important because yesterday's expanded value must not
+        # remain in the workbook on a later day.
+        sheet.Cells(
+            row_number,
+            10,
+        ).Formula = (
+            _normal_limit_up_formula(
+                row_number
+            )
+        )
+
+        if code in expanded:
+            limit_price = expanded[code]
+
+            # JPX's published stop-high is authoritative.
+            sheet.Cells(
+                row_number,
+                10,
+            ).Value = limit_price
+
+            applied.append(
+                (code, limit_price)
+            )
+
+        sheet.Cells(
+            row_number,
+            11,
+        ).Formula = (
+            f'=IFERROR('
+            f'J{row_number}/C{row_number}-1,'
+            f'""'
+            f')'
+        )
+
+    excel.Calculate()
+    book.Save()
+
+    if applied:
+        for code, price in applied:
+            print(
+                "Expanded limit applied  : "
+                f"{code} -> {price:,}"
+            )
+    else:
+        print(
+            "Expanded limit applied  : none"
+        )
+
+    return expanded
 
 
 def refresh_volume_master():
