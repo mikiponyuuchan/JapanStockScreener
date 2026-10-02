@@ -101,6 +101,16 @@ def get_excel():
 
 
 def get_test_sheet():
+    """
+    Get the workbook used for the full-market
+    Rakuten RSS snapshot.
+
+    If the workbook is already open, reuse it.
+
+    If it is not open, automatically open the
+    existing workbook from data/intraday.
+    """
+
     excel = get_excel()
 
     try:
@@ -108,10 +118,51 @@ def get_test_sheet():
             WORKBOOK_NAME
         )
 
-    except Exception as exc:
-        raise RuntimeError(
-            f"{WORKBOOK_NAME} is not open."
-        ) from exc
+        print(
+            f"RSS snapshot workbook : "
+            f"already open"
+        )
+
+    except Exception:
+        workbook_path = (
+            ROOT
+            / "data"
+            / "intraday"
+            / WORKBOOK_NAME
+        ).resolve()
+
+        if not workbook_path.exists():
+            raise RuntimeError(
+                "RSS snapshot workbook "
+                "was not found: "
+                f"{workbook_path}"
+            )
+
+        print(
+            "RSS snapshot workbook : "
+            "opening automatically"
+        )
+        print(
+            f"Workbook              : "
+            f"{workbook_path}"
+        )
+
+        try:
+            book = excel.Workbooks.Open(
+                str(workbook_path)
+            )
+
+        except Exception as exc:
+            raise RuntimeError(
+                "RSS snapshot workbook "
+                "could not be opened: "
+                f"{workbook_path}"
+            ) from exc
+
+        print(
+            "RSS snapshot workbook : "
+            "OPEN OK"
+        )
 
     sheet = book.Worksheets.Item(1)
 
