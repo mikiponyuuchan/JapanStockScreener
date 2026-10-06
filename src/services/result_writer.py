@@ -33,6 +33,10 @@ from services.yahoo_credit_service import (
     download_credit_batch,
 )
 
+from services.jpx_risk_filter import (
+    load_risk_display_map,
+)
+
 # ==========================================================
 # 共通設定
 # ==========================================================
@@ -1476,6 +1480,7 @@ def create_top20_sheet(
         "銘柄名",
         "終値",
         "初動スコア",
+        "JPX判定",
         "信用倍率",
         "売り残増加",
         "高騰理由",
@@ -1514,6 +1519,10 @@ def create_top20_sheet(
                 top20_codes.append(code)
 
     credit_map = {}
+
+    # JPX risk information is display-only.
+    # TOP20 ranking is not changed.
+    risk_display_map = load_risk_display_map()
 
     # Yahoo credit disabled in main screener.
     # Remove 'False and' to restore it.
@@ -1633,6 +1642,13 @@ def create_top20_sheet(
             )
 
             # ------------------------------------------------
+            # JPX判定
+
+            jpx_risk = risk_display_map.get(
+                code,
+                "",
+            )
+
             # 高騰理由
             # ------------------------------------------------
 
@@ -1856,6 +1872,8 @@ def create_top20_sheet(
                         ""
                     ),
 
+                    "JPX判定": jpx_risk,
+
                     "信用倍率": credit_ratio,
 
                     "売り残増加": sell_increase,
@@ -1981,15 +1999,16 @@ def create_top20_sheet(
             "B": 14,    # name
             "C": 8,     # close
             "D": 7,     # initial score
-            "E": 6,     # P5　condition
+            "E": 6,     # P5 condition
             "F": 6,     # buy avoidance
             "G": 12,    # avoidance comment
-            "H": 7,     # credit ratio
-            "I": 7,     # short increase
-            "J": 13,    # reason
-            "K": 20,    # news
-            "L": 11,    # news date
-            "M": 30,    # chart
+            "H": 24,    # JPX risk
+            "I": 7,     # credit ratio
+            "J": 7,     # short increase
+            "K": 13,    # reason
+            "L": 20,    # news
+            "M": 11,    # news date
+            "N": 30,    # chart
         }
     )
 
@@ -2051,6 +2070,77 @@ def create_top20_sheet(
     #   ・赤字
     #   ・フォントサイズ拡大
     # ======================================================
+
+    # ======================================================
+    # JPX risk display
+    #
+    # BLOCK = red fill + white bold font
+    # WARN  = yellow fill + bold font
+    # ======================================================
+
+    if "JPX判定" in headers:
+
+        jpx_col = headers[
+            "JPX判定"
+        ]
+
+        jpx_block_fill = PatternFill(
+            fill_type="solid",
+            start_color="FFC00000",
+            end_color="FFC00000",
+        )
+
+        jpx_warn_fill = PatternFill(
+            fill_type="solid",
+            start_color="FFFFC000",
+            end_color="FFFFC000",
+        )
+
+        for row_number in range(
+            2,
+            sheet.max_row + 1
+        ):
+
+            cell = sheet.cell(
+                row=row_number,
+                column=jpx_col,
+            )
+
+            cell.alignment = Alignment(
+                horizontal="left",
+                vertical="center",
+                wrap_text=True,
+            )
+
+            value = str(
+                cell.value or ""
+            ).strip()
+
+            if value.startswith(
+                "JPX BLOCK"
+            ):
+
+                cell.fill = jpx_block_fill
+
+                cell.font = Font(
+                    name=cell.font.name,
+                    size=cell.font.sz or 11,
+                    bold=True,
+                    color="FFFFFFFF",
+                )
+
+            elif value.startswith(
+                "JPX WARN"
+            ):
+
+                cell.fill = jpx_warn_fill
+
+                cell.font = Font(
+                    name=cell.font.name,
+                    size=cell.font.sz or 11,
+                    bold=True,
+                    color="FF000000",
+                )
 
     # ======================================================
     # Buy avoidance display
