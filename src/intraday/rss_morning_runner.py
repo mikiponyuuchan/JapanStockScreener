@@ -19,9 +19,17 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools"
+SRC = ROOT / "src"
 
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from services.jpx_risk_filter import (
+    filter_blocked_stocks,
+)
 
 from rss_watchlist import (
     read_panel,
@@ -1616,6 +1624,15 @@ def main():
 
     panel_df = read_panel(
         panel_path
+    )
+
+    # JPX risk filter
+    # BLOCK stocks are removed before CxV ranking.
+    # WARN stocks remain tradable.
+    panel_df = filter_blocked_stocks(
+        panel_df,
+        code_column="Code",
+        verbose=True,
     )
 
     watchlist = build_watchlist(
