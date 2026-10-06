@@ -1,8 +1,20 @@
 
 from pathlib import Path
 from datetime import date
+import sys
 
 import pandas as pd
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from services.jpx_risk_filter import (
+    filter_blocked_stocks,
+)
 
 
 TRACKING_FILE = Path(
@@ -109,6 +121,15 @@ def main():
         (today_j1["Change1"] >= CHANGE_MIN)
         & (today_j1["Change1"] < CHANGE_MAX)
     ].copy()
+
+    # JPX risk filter
+    # BLOCK stocks must not enter
+    # tomorrow's real J1 trade plan.
+    trade = filter_blocked_stocks(
+        trade,
+        code_column="Code",
+        verbose=True,
+    )
 
     trade = trade.sort_values(
         [
