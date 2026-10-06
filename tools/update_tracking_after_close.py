@@ -17,6 +17,10 @@ from services.result_writer import (
     make_initial_move_top20,
 )
 
+from services.jpx_risk_filter import (
+    build_jpx_risk_list,
+)
+
 from services.tracking_service import (
     load_tracking,
     update_tracking_results,
@@ -238,6 +242,62 @@ def main():
         print(
             "J1 confirmed tracking ERROR :",
             e,
+        )
+
+    # ======================================================
+    # JPX risk cache refresh
+    #
+    # Refresh before creating tomorrow's J1 trade plan.
+    # If refresh fails, keep using the last valid cache.
+    # ======================================================
+
+    print()
+    print("[JPX risk cache refresh]")
+
+    try:
+
+        risk_df = build_jpx_risk_list()
+
+        block_count = (
+            risk_df["Action"]
+            .eq("BLOCK")
+            .sum()
+        )
+
+        warn_count = (
+            risk_df["Action"]
+            .eq("WARN")
+            .sum()
+        )
+
+        print(
+            "JPX risk rows :",
+            len(risk_df),
+        )
+
+        print(
+            "BLOCK         :",
+            block_count,
+        )
+
+        print(
+            "WARN          :",
+            warn_count,
+        )
+
+        print(
+            "JPX risk cache refresh : complete"
+        )
+
+    except Exception as e:
+
+        print(
+            "JPX risk cache refresh ERROR :",
+            e,
+        )
+
+        print(
+            "Using last valid JPX risk cache."
         )
 
     # ======================================================

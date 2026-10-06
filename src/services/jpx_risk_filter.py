@@ -254,11 +254,72 @@ def build_jpx_risk_list():
         exist_ok=True,
     )
 
-    df.to_csv(
-        OUTPUT_PATH,
-        index=False,
-        encoding="utf-8-sig",
+    # ======================================================
+    # Safe cache replacement
+    #
+    # Never write directly to the current valid cache.
+    # Write and validate a temporary file first, then replace.
+    # ======================================================
+
+    temp_path = OUTPUT_PATH.with_suffix(
+        ".tmp.csv"
     )
+
+    try:
+        df.to_csv(
+            temp_path,
+            index=False,
+            encoding="utf-8-sig",
+        )
+
+        check_df = pd.read_csv(
+            temp_path,
+            dtype={"Code": str},
+            encoding="utf-8-sig",
+        )
+
+        required_columns = {
+            "Code",
+            "RiskType",
+            "Action",
+            "Reason",
+            "UpdatedAt",
+        }
+
+        missing_columns = (
+            required_columns
+            - set(check_df.columns)
+        )
+
+        if missing_columns:
+            raise RuntimeError(
+                "Temporary JPX risk cache "
+                "missing columns: "
+                + ", ".join(
+                    sorted(missing_columns)
+                )
+            )
+
+        if check_df.empty:
+            raise RuntimeError(
+                "Temporary JPX risk cache is empty."
+            )
+
+        if len(check_df) != len(df):
+            raise RuntimeError(
+                "Temporary JPX risk cache "
+                "row count mismatch: "
+                f"{len(check_df)} != {len(df)}"
+            )
+
+        # Atomic replacement on the same filesystem.
+        temp_path.replace(
+            OUTPUT_PATH
+        )
+
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
 
     return df
 
@@ -429,6 +490,22 @@ def load_risk_display_map():
                 continue
 
             reason = str(value).strip()
+
+            display_reason_map = {
+                "DELISTING":
+                    "整理銘柄",
+                "SPECIAL_ALERT":
+                    "特別注意銘柄",
+                "SUPERVISION_CONFIRMING":
+                    "監理銘柄（確認中）",
+                "SUPERVISION_REVIEW":
+                    "監理銘柄（審査中）",
+            }
+
+            reason = display_reason_map.get(
+                reason,
+                reason,
+            )
 
             if (
                 reason
