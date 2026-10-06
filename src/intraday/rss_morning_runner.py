@@ -748,10 +748,54 @@ def update_h1_hybrid_wait_live():
             decision = "BUY"
             price_text = "-"
 
-        add_candidate(
-            code,
-            label,
-        )
+        # Excel COM may temporarily reject a live-board
+        # write while Rakuten RSS / Excel is busy.
+        add_max_retries = 20
+        add_retry_wait = 0.25
+        add_last_error = None
+
+        for add_attempt in range(
+            1,
+            add_max_retries + 1,
+        ):
+            try:
+                add_candidate(
+                    code,
+                    label,
+                )
+                add_last_error = None
+
+                if add_attempt > 1:
+                    print(
+                        "  H1 live-board write recovered "
+                        f"after {add_attempt - 1} retries"
+                    )
+
+                break
+
+            except Exception as exc:
+                add_last_error = exc
+
+                if add_attempt >= add_max_retries:
+                    break
+
+                if add_attempt == 1:
+                    print(
+                        "  H1 live-board COM busy "
+                        "- retrying..."
+                    )
+
+                import time
+                time.sleep(
+                    add_retry_wait
+                )
+
+        if add_last_error is not None:
+            raise RuntimeError(
+                "H1 live-board write failed after "
+                f"{add_max_retries} retries : "
+                f"{add_last_error}"
+            ) from add_last_error
 
         print(
             f"H1 #{rank} "
