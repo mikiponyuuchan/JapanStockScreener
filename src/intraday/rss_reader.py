@@ -4,12 +4,15 @@
 
 import time
 
-import win32com.client as win32
+from rss_excel import get_microsoft_excel
 
 
 def get_excel_app():
     """
-    起動中の Excel を取得する。
+    Get the Microsoft Excel instance that owns
+    the Rakuten RSS H1 workbook.
+
+    WPS / Kingsoft is ignored by rss_excel.
     """
     retry_count = 5
     retry_wait = 0.5
@@ -20,23 +23,24 @@ def get_excel_app():
         retry_count + 1,
     ):
         try:
-            return win32.GetActiveObject(
-                "Excel.Application"
+            return get_microsoft_excel(
+                start_if_missing=True
             )
 
         except Exception as exc:
             last_error = exc
 
             if attempt < retry_count:
-                time.sleep(retry_wait)
+                time.sleep(
+                    retry_wait
+                )
 
     raise RuntimeError(
-        "???? Excel ?????????"
-        "Excel ? MarketSpeed II RSS ?"
-        "????????????????"
-        f" ?????: {last_error}"
+        "Microsoft Excel RSS connection "
+        "failed after "
+        f"{retry_count} attempts: "
+        f"{last_error}"
     ) from last_error
-
 
 def get_rss_sheet():
     """

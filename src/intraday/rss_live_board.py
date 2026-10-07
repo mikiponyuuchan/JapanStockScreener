@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import win32com.client as win32
+from rss_excel import get_microsoft_excel
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,8 +65,8 @@ def get_live_board():
         retry_count + 1,
     ):
         try:
-            excel = win32.GetActiveObject(
-                "Excel.Application"
+            excel = get_microsoft_excel(
+                start_if_missing=True
             )
 
             book = excel.Workbooks(

@@ -41,6 +41,7 @@ from volume_tracker import (
     save_snapshot,
 )
 from rss_reader import read_rss_rows
+from rss_excel import ensure_rss_workbooks
 from rss_live_board import (
     get_live_board,
     clear_h1_labels,
@@ -119,6 +120,53 @@ H1_CANDIDATES = []
 # the 09:32 PASS / SKIP refill selection, but it
 # must still use the original 09:20 -> 09:30 growth.
 H1_0930_SNAPSHOT = {}
+
+
+
+# ================================================
+# Microsoft Excel / RSS workbook preparation
+# ================================================
+
+def prepare_rss_excel():
+    """
+    Prepare the dedicated Microsoft Excel instance
+    and all Rakuten RSS workbooks.
+
+    WPS / Kingsoft is ignored by rss_excel.
+    """
+    print()
+    print("=" * 60)
+    print(" MICROSOFT EXCEL PREPARE")
+    print("=" * 60)
+
+    excel, results = ensure_rss_workbooks()
+
+    print(
+        "Microsoft Excel COM       : OK"
+    )
+    print(
+        f"Microsoft Excel Version   : "
+        f"{excel.Version}"
+    )
+    print(
+        f"Microsoft Excel Path      : "
+        f"{excel.Path}"
+    )
+
+    for workbook_name, status in (
+        results.items()
+    ):
+        print(
+            f"{workbook_name:<34}: "
+            f"{status}"
+        )
+
+    print(
+        "RSS Excel preparation     : OK"
+    )
+    print("=" * 60)
+
+    return excel
 
 
 # ================================================
@@ -1421,6 +1469,7 @@ def main():
     while True:
 
         try:
+            prepare_rss_excel()
             check_rss_startup()
             break
 

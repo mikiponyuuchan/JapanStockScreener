@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 import pandas as pd
-import win32com.client as win32
+from rss_excel import get_microsoft_excel
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -89,16 +89,22 @@ def normalize_code(value):
 
 
 def get_excel():
+    """
+    Get the Microsoft Excel instance used by
+    Rakuten RSS.
+
+    WPS / Kingsoft is ignored by rss_excel.
+    """
     try:
-        return win32.GetActiveObject(
-            "Excel.Application"
+        return get_microsoft_excel(
+            start_if_missing=True
         )
 
     except Exception as exc:
         raise RuntimeError(
-            "Running Excel was not found."
+            "Microsoft Excel RSS instance "
+            "was not found."
         ) from exc
-
 
 def get_test_sheet():
     """
