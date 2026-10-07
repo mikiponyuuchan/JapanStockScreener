@@ -175,10 +175,29 @@ def main():
     )
     print()
 
+    output_path = (
+        OUTPUT_DIR
+        / (
+            f"{detection_date}"
+            "_j1_trade_plan.csv"
+        )
+    )
+
     if trade.empty:
         print(
             "No J1 Trade Ver1 candidates."
         )
+
+        # Safety:
+        # If this detection date previously produced a plan,
+        # remove it so stale candidates cannot be reused.
+        if output_path.exists():
+            output_path.unlink()
+            print(
+                "Removed stale plan :",
+                output_path,
+            )
+
         return
 
     display_cols = [
@@ -234,14 +253,6 @@ def main():
     OUTPUT_DIR.mkdir(
         parents=True,
         exist_ok=True,
-    )
-
-    output_path = (
-        OUTPUT_DIR
-        / (
-            f"{detection_date}"
-            "_j1_trade_plan.csv"
-        )
     )
 
     out.to_csv(

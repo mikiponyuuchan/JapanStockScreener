@@ -30,6 +30,9 @@ if str(SRC) not in sys.path:
 from services.jpx_risk_filter import (
     filter_blocked_stocks,
 )
+from services.yahoo_service import (
+    get_expected_market_date,
+)
 
 from rss_watchlist import (
     read_panel,
@@ -349,52 +352,30 @@ def load_today_j1_live_board():
         print("=" * 60)
         return []
 
-    today = datetime.now().date()
+    # J1 must use exactly the previous market session.
+    # Do not fall back to an older trade plan.
+    expected_plan_date = (
+        get_expected_market_date()
+        .date()
+    )
 
-    candidates = []
-
-    for path in trading_dir.glob(
-        "*_j1_trade_plan.csv"
-    ):
-        date_text = path.name[
-            :10
-        ]
-
-        try:
-            plan_date = datetime.strptime(
-                date_text,
-                "%Y-%m-%d",
-            ).date()
-        except ValueError:
-            continue
-
-        # J1 uses the previous session's plan.
-        # Never load a plan dated today or later.
-        if plan_date >= today:
-            continue
-
-        candidates.append(
-            (
-                plan_date,
-                path,
-            )
+    plan_path = (
+        trading_dir
+        / (
+            f"{expected_plan_date:%Y-%m-%d}"
+            "_j1_trade_plan.csv"
         )
+    )
 
-    if not candidates:
+    if not plan_path.exists():
         print(
-            "No previous J1 trade plan found."
+            "No J1 trade plan for previous session :",
+            expected_plan_date,
         )
         print("=" * 60)
         return []
 
-    candidates.sort(
-        key=lambda item: item[0],
-        reverse=True,
-    )
-
-    plan_date, plan_path = (
-        candidates[0]
-    )
+    plan_date = expected_plan_date
 
     try:
         df = pd.read_csv(
