@@ -15,6 +15,9 @@ if str(SRC) not in sys.path:
 
 
 from screener.loader import load_stock_list
+from services.jpx_universe_service import (
+    build_current_stock_universe,
+)
 from services.yahoo_service import (
     _download_history_batch,
     get_expected_market_date,
@@ -34,6 +37,22 @@ def main():
     print("=" * 72)
 
     stocks = load_stock_list()
+
+    if stocks is None or stocks.empty:
+        print("ERROR : No stocks.")
+        return 1
+
+    # ==================================================
+    # Build the current JPX domestic common-stock universe.
+    #
+    # stocks.csv is the base universe. Supplement newly
+    # listed stocks and remove stocks already delisted as
+    # of the current market date.
+    # ==================================================
+
+    stocks = build_current_stock_universe(
+        stocks
+    )
 
     if stocks is None or stocks.empty:
         print("ERROR : No stocks.")
