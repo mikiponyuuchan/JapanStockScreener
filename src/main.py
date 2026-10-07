@@ -491,10 +491,53 @@ def main():
 
     # ==================================================
     # TOP20
+    #
+    # 当日の初動ランキングでは、Yahooの日足が
+    # expected_date に到達している銘柄だけを使用する。
+    #
+    # 古い日足の銘柄は全銘柄データには残すが、
+    # 当日のTOP20ランキングからは除外する。
     # ==================================================
 
+    ranking_df = display_df.copy()
+
+    if "_data_date" in ranking_df.columns:
+
+        ranking_dates = pd.to_datetime(
+            ranking_df["_data_date"],
+            errors="coerce"
+        ).dt.normalize()
+
+        expected_date_normalized = pd.Timestamp(
+            expected_date
+        ).normalize()
+
+        fresh_mask = (
+            ranking_dates
+            >= expected_date_normalized
+        )
+
+        ranking_total = len(ranking_df)
+        ranking_df = (
+            ranking_df.loc[fresh_mask]
+            .copy()
+        )
+        ranking_excluded = (
+            ranking_total - len(ranking_df)
+        )
+
+        print()
+        print(
+            f"当日初動ランキング対象 : "
+            f"{len(ranking_df)}"
+        )
+        print(
+            f"日付不一致除外         : "
+            f"{ranking_excluded}"
+        )
+
     top20 = (
-        display_df
+        ranking_df
         .head(20)
         .copy()
     )
