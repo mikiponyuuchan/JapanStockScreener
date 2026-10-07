@@ -18,7 +18,7 @@ from services.yahoo_service import (
 from services.morning_baseline_service import save_morning_baseline
 from services.yahoo_credit_service import load_latest_credit_data
 from services.result_writer import save_result
-from services.jpx_universe_service import filter_delisted_stocks
+from services.jpx_universe_service import build_current_stock_universe
 
 
 # ==========================================================
@@ -55,7 +55,7 @@ def main():
     # JPX上場廃止済み銘柄を現在の実行対象から除外
     # ==================================================
 
-    stocks = filter_delisted_stocks(stocks)
+    stocks = build_current_stock_universe(stocks)
 
     total = len(stocks)
 
