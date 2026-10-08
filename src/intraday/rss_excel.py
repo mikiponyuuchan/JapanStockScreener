@@ -20,6 +20,7 @@ REQUIRED_WORKBOOKS = (
     "rakuten_rss_h1.xlsx",
     "rakuten_rss_live_board.xlsx",
     "rakuten_rss_snapshot_test.xlsx",
+    "rakuten_rss_ssr.xlsx",
 )
 
 EXCEL_EXE = Path(
