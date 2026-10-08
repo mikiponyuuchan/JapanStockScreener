@@ -9,19 +9,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "intraday"))
 
-from show_short_sale_trigger_gd_kabu import (
-    find_latest_trigger_file,
-    read_trigger_file,
-)
-from watch_short_sale_trigger_gd_kabu import (
-    save_ssr_ver2_rows,
-    print_ssr_ver2_candidate,
-)
 from rss_ssr_reader import (
     load_ssr_snapshot,
     read_ssr_rows,
 )
 from watch_short_sale_trigger_rakuten import (
+    find_latest_trigger_file,
+    read_trigger_file,
+    save_ssr_ver2_rows,
+    print_ssr_ver2_candidate,
     scan_row,
     evaluate_ssr_ver2,
 )
