@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import subprocess
 import sys
 import threading
@@ -12,14 +11,19 @@ sys.path.insert(0, str(ROOT / "src" / "intraday"))
 
 from show_short_sale_trigger_gd_kabu import (
     find_latest_trigger_file,
-    get_token,
     read_trigger_file,
 )
 from watch_short_sale_trigger_gd_kabu import (
-    scan_code,
-    evaluate_ssr_ver2,
     save_ssr_ver2_rows,
     print_ssr_ver2_candidate,
+)
+from rss_ssr_reader import (
+    load_ssr_snapshot,
+    read_ssr_rows,
+)
+from watch_short_sale_trigger_rakuten import (
+    scan_row,
+    evaluate_ssr_ver2,
 )
 
 from rss_live_board import (
@@ -28,7 +32,6 @@ from rss_live_board import (
 
 
 SSR_INTERVAL = 30
-SSR_REQUEST_WAIT = 0.25
 
 EARLY_START = (9, 20)
 EARLY_END = (9, 25)
@@ -161,13 +164,12 @@ def print_ssr_candidate(row):
 
 
 def ssr_worker(
-    api_password,
     stop_event,
 ):
     print()
     print("=" * 72)
     print(
-        " SSR WATCH START"
+        " SSR WATCH START - Rakuten RSS"
     )
     print("=" * 72)
 
@@ -189,24 +191,15 @@ def ssr_worker(
         )
         return
 
-    try:
-        token = get_token(
-            api_password
-        )
-
-    except Exception as exc:
-        print(
-            "SSR TOKEN ERROR :",
-            exc,
-        )
-        return
-
     watch = {}
 
     for _, row in trigger.iterrows():
         code = str(
             row["Code"]
         )
+
+        if code.endswith(".0"):
+            code = code[:-2]
 
         watch[code] = {
             "TriggerDate":
@@ -219,8 +212,10 @@ def ssr_worker(
                     "TriggerTime",
                     "",
                 ),
-            "Code": code,
-            "Name": row["Name"],
+            "Code":
+                code,
+            "Name":
+                row["Name"],
         }
 
     unresolved = set(
@@ -253,6 +248,28 @@ def ssr_worker(
 
     print()
 
+    # Load trigger codes into the dedicated
+    # Rakuten RSS SSR workbook once.
+    try:
+        initial_rows = load_ssr_snapshot(
+            list(watch.keys()),
+            wait_seconds=5.0,
+        )
+
+        print(
+            "Rakuten RSS SSR rows :",
+            len(initial_rows),
+            "/",
+            len(watch),
+        )
+
+    except Exception as exc:
+        print(
+            "SSR Rakuten RSS startup error :",
+            exc,
+        )
+        return
+
     while (
         not stop_event.is_set()
         and datetime.now() < cutoff
@@ -261,7 +278,28 @@ def ssr_worker(
             or ver2_watch
         )
     ):
-        api_errors = 0
+        rss_errors = 0
+
+        try:
+            rss_rows = read_ssr_rows()
+
+        except Exception as exc:
+            print(
+                "SSR Rakuten RSS read error :",
+                exc,
+            )
+
+            stop_event.wait(
+                SSR_INTERVAL
+            )
+
+            continue
+
+        rss_map = {
+            str(row["Code"]):
+                row
+            for row in rss_rows
+        }
 
         for code in list(
             unresolved
@@ -276,30 +314,28 @@ def ssr_worker(
                 code
             ]
 
+            rss_row = rss_map.get(
+                code
+            )
+
+            if rss_row is None:
+                rss_errors += 1
+                continue
+
             try:
-                row = scan_code(
-                    token,
-                    code,
-                    item["Name"],
+                row = scan_row(
+                    rss_row
                 )
 
             except Exception as exc:
-                api_errors += 1
+                rss_errors += 1
 
                 print(
-                    f"SSR API ERROR "
+                    f"SSR RSS ERROR "
                     f"{code}: {exc}"
                 )
 
-                time.sleep(
-                    SSR_REQUEST_WAIT
-                )
-
                 continue
-
-            time.sleep(
-                SSR_REQUEST_WAIT
-            )
 
             status = row[
                 "Status"
@@ -337,6 +373,7 @@ def ssr_worker(
                         code,
                         "SSR-Ver1",
                     )
+
                 except Exception as exc:
                     print(
                         "SSR-Ver1 RSS board update skipped : "
@@ -351,24 +388,19 @@ def ssr_worker(
             len(ssr_codes),
             "| Waiting:",
             len(unresolved),
-            "| API errors:",
-            api_errors,
+            "| RSS errors:",
+            rss_errors,
         )
 
         if datetime.now() >= cutoff:
             break
 
-        # Even when all opening prices are resolved,
-        # SSR-Ver1 candidates must remain alive until
-        # 09:30 for SSR-Ver2 evaluation.
         if (
             not unresolved
             and not ver2_watch
         ):
             break
 
-        # Do not sleep past the 09:30 SSR-Ver2
-        # evaluation boundary.
         remaining = (
             cutoff - datetime.now()
         ).total_seconds()
@@ -393,9 +425,25 @@ def ssr_worker(
         print()
         print("=" * 72)
         print(
-            " SSR-Ver2 09:30 EVALUATION"
+            " SSR-Ver2 09:30 EVALUATION - Rakuten RSS"
         )
         print("=" * 72)
+
+        try:
+            final_rows = read_ssr_rows()
+
+            final_map = {
+                str(row["Code"]):
+                    row
+                for row in final_rows
+            }
+
+        except Exception as exc:
+            print(
+                "SSR-Ver2 RSS read error :",
+                exc,
+            )
+            final_map = {}
 
         for code in sorted(
             ver2_watch
@@ -404,23 +452,42 @@ def ssr_worker(
                 code
             ]
 
+            rss_row = final_map.get(
+                code
+            )
+
+            if rss_row is None:
+                print(
+                    f"SSR-Ver2 NO DATA : "
+                    f"{code}"
+                )
+                continue
+
+            # Preserve JPX trigger metadata in the
+            # existing SSR-Ver2 CSV format.
+            rss_row = dict(
+                rss_row
+            )
+
+            rss_row[
+                "TriggerDate"
+            ] = item.get(
+                "TriggerDate",
+                "",
+            )
+
             try:
                 ver2_row = evaluate_ssr_ver2(
-                    token,
-                    item,
+                    rss_row,
                     item.get(
                         "TriggerTime",
                         "",
                     ),
                 )
 
-                time.sleep(
-                    SSR_REQUEST_WAIT
-                )
-
             except Exception as exc:
                 print(
-                    f"SSR-Ver2 API ERROR "
+                    f"SSR-Ver2 RSS ERROR "
                     f"{code}: {exc}"
                 )
                 continue
@@ -448,6 +515,7 @@ def ssr_worker(
                         code,
                         "SSR-Ver2",
                     )
+
                 except Exception as exc:
                     print(
                         "SSR-Ver2 RSS board update skipped : "
@@ -519,7 +587,6 @@ def ssr_worker(
     )
 
     print("=" * 72)
-
 
 def run_early20():
     if not in_window(
@@ -740,16 +807,11 @@ def main():
             "because no JPX trigger file exists."
         )
 
-    api_password = getpass.getpass(
-        "kabu API password: "
-    )
-
     stop_event = threading.Event()
 
     ssr_thread = threading.Thread(
         target=ssr_worker,
         args=(
-            api_password,
             stop_event,
         ),
         daemon=False,

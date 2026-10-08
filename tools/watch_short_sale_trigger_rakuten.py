@@ -257,28 +257,63 @@ def evaluate_ssr_ver2(
     )
 
     return {
-        "Code": code,
-        "Name": name,
-        "TriggerTime": trigger_time,
-        "Status": (
-            "SSR-Ver2"
-            if is_ver2
-            else "NO"
-        ),
-        "PrevClose": prev_close,
-        "Open": open_price,
-        "OpenTime": open_dt,
-        "Current": current_price,
-        "CurrentTime": current_dt,
-        "Low": low_price,
-        "LowTime": low_dt,
-        "GapPct": gap_pct,
-        "PriceFromOpenPct":
-            price_from_open_pct,
-        "ReboundPct": rebound_pct,
+        "StrategyVersion":
+            "SSR-Ver2",
+        "DataType":
+            "FORWARD",
+        "TriggerDate":
+            row.get(
+                "TriggerDate",
+                "",
+            ),
+        "TriggerTime":
+            trigger_time,
+        "TradeDate":
+            datetime.now().strftime(
+                "%Y-%m-%d"
+            ),
+        "Code":
+            code,
+        "Name":
+            name,
+        "PrevClose":
+            prev_close,
+        "TradeOpen":
+            open_price,
+        "GapPct":
+            gap_pct,
+        "EntryTime":
+            current_dt.strftime(
+                "%H:%M:%S"
+            ),
+        "EntryPrice":
+            entry_price,
+        "MorningLow":
+            low_price,
+        "MorningLowTime":
+            low_dt.strftime(
+                "%H:%M:%S"
+            ),
+        "ReboundLowTo0930Pct":
+            rebound_pct,
         "MinutesSinceLow":
             minutes_since_low,
-        "EntryPrice": entry_price,
-        "TakePrice": take_price,
-        "StopPrice": stop_price,
+        "Price0930FromOpenPct":
+            price_from_open_pct,
+        "TakeProfitPct":
+            SSR_VER2_TAKE_PCT,
+        "StopLossPct":
+            SSR_VER2_STOP_PCT,
+        "TakePrice":
+            take_price,
+        "StopPrice":
+            stop_price,
+        "Ver2Candidate":
+            bool(is_ver2),
+        "DataStatus":
+            (
+                "PENDING"
+                if is_ver2
+                else "FILTERED"
+            ),
     }
