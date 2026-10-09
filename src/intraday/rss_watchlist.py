@@ -284,7 +284,7 @@ def write_excel(watchlist):
 
     print(
         "RSS Excel target : "
-        "rakuten_rss_h1.xlsx / "
+        "rakuten_rss_morning.xlsx / "
         "楽天RSS_H1"
     )
 

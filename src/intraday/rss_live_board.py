@@ -20,7 +20,7 @@ BASELINE_FILE = (
     / "morning_baseline.csv"
 )
 
-WORKBOOK_NAME = "rakuten_rss_live_board.xlsx"
+WORKBOOK_NAME = "rakuten_rss_morning.xlsx"
 SHEET_NAME = "H1ライブボード"
 
 START_ROW = 2

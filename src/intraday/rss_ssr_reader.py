@@ -6,7 +6,7 @@ from rss_excel import get_microsoft_excel
 
 ROOT = Path(__file__).resolve().parents[2]
 
-WORKBOOK_NAME = "rakuten_rss_ssr.xlsx"
+WORKBOOK_NAME = "rakuten_rss_morning.xlsx"
 
 WORKBOOK_PATH = (
     ROOT

@@ -1332,10 +1332,10 @@ def check_rss_startup():
 
     except Exception as exc:
         print(
-            "rakuten_rss_h1.xlsx         : NG"
+            "rakuten_rss_morning.xlsx / 楽天RSS_H1      : NG"
         )
         print(
-            "rakuten_rss_live_board.xlsx : NOT CHECKED"
+            "rakuten_rss_morning.xlsx / H1ライブボード : NOT CHECKED"
         )
         print()
         print(
@@ -1350,7 +1350,7 @@ def check_rss_startup():
     row_count = len(rows)
 
     print(
-        "rakuten_rss_h1.xlsx         : OK"
+        "rakuten_rss_morning.xlsx / 楽天RSS_H1      : OK"
     )
     print(
         f"RSS data rows               : {row_count}"
@@ -1374,7 +1374,7 @@ def check_rss_startup():
 
     except Exception as exc:
         print(
-            "rakuten_rss_live_board.xlsx : NG"
+            "rakuten_rss_morning.xlsx / H1ライブボード : NG"
         )
         print()
         print(
@@ -1387,7 +1387,7 @@ def check_rss_startup():
         ) from exc
 
     print(
-        "rakuten_rss_live_board.xlsx : OK"
+        "rakuten_rss_morning.xlsx / H1ライブボード : OK"
     )
     print(
         f"Live board sheet            : {sheet_name}"
@@ -1702,7 +1702,7 @@ def main():
     # ============================================
     # H1 workbook : CxV TOP20
     #
-    # rakuten_rss_h1.xlsx の A2:E21 を
+    # rakuten_rss_morning.xlsx / 楽天RSS_H1 の A2:E21 を
     # TOP20 + RSS式で更新する。
     # ============================================
 
@@ -1861,4 +1861,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

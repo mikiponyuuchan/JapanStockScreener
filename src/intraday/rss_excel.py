@@ -14,13 +14,10 @@ INTRADAY_DIR = (
     / "intraday"
 )
 
-H1_WORKBOOK_NAME = "rakuten_rss_h1.xlsx"
+H1_WORKBOOK_NAME = "rakuten_rss_morning.xlsx"
 
 REQUIRED_WORKBOOKS = (
-    "rakuten_rss_h1.xlsx",
-    "rakuten_rss_live_board.xlsx",
-    "rakuten_rss_snapshot_test.xlsx",
-    "rakuten_rss_ssr.xlsx",
+    "rakuten_rss_morning.xlsx",
 )
 
 EXCEL_EXE = Path(
@@ -71,7 +68,7 @@ def _is_microsoft_excel(excel):
 
 def _find_h1_book_in_rot():
     """
-    Find rakuten_rss_h1.xlsx directly in the
+    Find rakuten_rss_morning.xlsx directly in the
     Running Object Table.
 
     Do not use GetActiveObject("Excel.Application"),
@@ -145,7 +142,7 @@ def get_microsoft_excel(
 ):
     """
     Return the Microsoft Excel instance that owns
-    rakuten_rss_h1.xlsx.
+    rakuten_rss_morning.xlsx.
 
     WPS / Kingsoft is deliberately ignored.
     """

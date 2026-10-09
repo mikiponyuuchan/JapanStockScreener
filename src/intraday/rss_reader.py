@@ -60,12 +60,12 @@ def get_rss_sheet():
             excel = get_excel_app()
 
             book = excel.Workbooks.Item(
-                "rakuten_rss_h1.xlsx"
+                "rakuten_rss_morning.xlsx"
             )
 
             # ???????????????????
             # 1???????????????
-            sheet = book.Worksheets.Item(1)
+            sheet = book.Worksheets.Item("楽天RSS_H1")
 
             return sheet
 
@@ -80,10 +80,9 @@ def get_rss_sheet():
                 time.sleep(retry_wait)
 
     raise RuntimeError(
-        "??RSS??Excel???????"
-        "??????? : "
-        "rakuten_rss_h1.xlsx / 1?????? "
-        f"(5???) : {last_error}"
+        "楽天RSSのExcel接続に失敗しました : "
+        "rakuten_rss_morning.xlsx / 楽天RSS_H1 "
+        f"(5回試行) : {last_error}"
     ) from last_error
 
 
@@ -194,3 +193,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

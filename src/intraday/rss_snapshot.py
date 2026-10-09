@@ -22,7 +22,8 @@ if str(SRC) not in sys.path:
 from screener.loader import load_stock_list
 
 
-WORKBOOK_NAME = "rakuten_rss_snapshot_test.xlsx"
+WORKBOOK_NAME = "rakuten_rss_morning.xlsx"
+SHEET_NAME = "SNAPSHOT"
 
 BATCH_SIZE = 400
 
@@ -170,7 +171,7 @@ def get_test_sheet():
             "OPEN OK"
         )
 
-    sheet = book.Worksheets.Item(1)
+    sheet = book.Worksheets.Item(SHEET_NAME)
 
     return excel, book, sheet
 
