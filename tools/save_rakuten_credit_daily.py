@@ -625,9 +625,17 @@ def main():
         exist_ok=True,
     )
 
+    captured_stamp = captured_at.strftime(
+        "%Y%m%d_%H%M%S"
+    )
+
     output_path = (
         OUTPUT_DIR
-        / f"{selection_date}_credit_daily.csv"
+        / (
+            f"{selection_date}_"
+            f"{captured_stamp}_"
+            "credit_daily.csv"
+        )
     )
 
     with output_path.open(
