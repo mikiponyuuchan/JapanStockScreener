@@ -261,7 +261,9 @@ def _download_morning(
     return pd.DataFrame(rows)
 
 
-def build_morning_panel():
+def build_morning_panel(
+    output_suffix=None,
+):
     print("=" * 60)
     print("Morning Screener - Rakuten RSS")
     print("=" * 60)
@@ -611,14 +613,24 @@ def build_morning_panel():
         exist_ok=True,
     )
 
-    output_file = (
-        OUTPUT_DIR
-        / (
+    if output_suffix:
+        output_name = (
+            fetch_time.strftime(
+                "%Y-%m-%d_%H%M"
+            )
+            + f"_{output_suffix}_panel.csv"
+        )
+    else:
+        output_name = (
             fetch_time.strftime(
                 "%Y-%m-%d_%H%M"
             )
             + "_morning_panel.csv"
         )
+
+    output_file = (
+        OUTPUT_DIR
+        / output_name
     )
 
     merged.to_csv(

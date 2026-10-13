@@ -1564,17 +1564,51 @@ def main():
     # still receive the BUY / WAIT judgment.
     # ============================================
 
+    early_scan_start = today_at(
+        9,
+        20,
+        0,
+    )
+
+    now = datetime.now()
+
+    if now < early_scan_start:
+
+        wait_seconds = (
+            early_scan_start - now
+        ).total_seconds()
+
+        print()
+        print(
+            "Rakuten RSS early full-market scan "
+            "starts at 09:20:00"
+        )
+        print(
+            f"Waiting : {wait_seconds:.1f} sec"
+        )
+
+        time.sleep(
+            wait_seconds
+        )
+
     print()
     print("=" * 60)
     print(" H1 EARLY PANEL")
     print("=" * 60)
 
-    early_panel_path = wait_for_panel()
+    print(
+        "Rakuten RSS 09:20 full-market "
+        "scan starting..."
+    )
+
+    early_panel_path = build_morning_panel(
+        output_suffix="h1_early_rss",
+    )
 
     if early_panel_path is None:
         print(
-            "09:20-09:25 morning_panel "
-            "was not found."
+            "09:20 Rakuten RSS morning_panel "
+            "was not created."
         )
         print(
             "H1 BUY / WAIT cannot be "
@@ -1583,7 +1617,7 @@ def main():
         return
 
     print(
-        "Early panel :",
+        "09:20 Rakuten RSS panel :",
         early_panel_path,
     )
 
