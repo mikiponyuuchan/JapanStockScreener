@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+CREDIT_DAILY = ROOT / "tools" / "save_rakuten_credit_daily.py"
 MORNING_LIVE = ROOT / "tools" / "run_morning_live.py"
 RSS_MORNING = ROOT / "src" / "intraday" / "rss_morning_runner.py"
 
@@ -13,6 +14,7 @@ def main():
     print("=" * 72)
     print(" MORNING ALL-IN-ONE LAUNCHER")
     print("=" * 72)
+    print("0. Credit Daily  : tools\\save_rakuten_credit_daily.py")
     print("1. SSR / Early20 : tools\\run_morning_live.py")
     print("2. J1 / H1       : src\\intraday\\rss_morning_runner.py")
     print("=" * 72)
@@ -20,6 +22,40 @@ def main():
     processes = []
 
     try:
+        print()
+        print("=" * 72)
+        print(" SAVING RAKUTEN CREDIT DAILY")
+        print("=" * 72)
+
+        try:
+            credit_result = subprocess.run(
+                [sys.executable, str(CREDIT_DAILY)],
+                cwd=str(ROOT),
+            )
+
+            if credit_result.returncode == 0:
+                print()
+                print("CREDIT DAILY finished successfully.")
+            else:
+                print()
+                print(
+                    "WARNING : CREDIT DAILY failed "
+                    f"(return code={credit_result.returncode})"
+                )
+                print(
+                    "Morning runners will continue."
+                )
+
+        except Exception as e:
+            print()
+            print(
+                "WARNING : CREDIT DAILY could not be started."
+            )
+            print(f"Reason : {e}")
+            print(
+                "Morning runners will continue."
+            )
+
         print()
         print("Starting MORNING LIVE...")
         live_process = subprocess.Popen(
