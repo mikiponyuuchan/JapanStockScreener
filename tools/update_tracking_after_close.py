@@ -453,36 +453,15 @@ def main():
 
     # ======================================================
     # Intraday Strategy H1-Early20
+    # Validation finished. Keep historical updater/data
+    # for reference and rollback only.
     # ======================================================
 
     print()
-    print("[Intraday Strategy H1-Early20]")
-
-    try:
-
-        subprocess.run(
-            [
-                sys.executable,
-                str(
-                    ROOT
-                    / "tools"
-                    / "update_intraday_strategy_h1_early20.py"
-                ),
-            ],
-            cwd=ROOT,
-            check=True,
-        )
-
-        print(
-            "Intraday Strategy H1-Early20 : complete"
-        )
-
-    except Exception as e:
-
-        print(
-            "Intraday Strategy H1-Early20 ERROR :",
-            e,
-        )
+    print(
+        "[Intraday Strategy H1-Early20] "
+        "DISABLED - validation finished"
+    )
 
     # ======================================================
     # Morning baseline for next trading day

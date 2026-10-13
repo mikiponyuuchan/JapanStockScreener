@@ -815,30 +815,14 @@ def main():
 
     ssr_thread.start()
 
-    if datetime.now() < today_at(
-        EARLY_START[0],
-        EARLY_START[1],
-    ):
-        wait_until(
-            EARLY_START[0],
-            EARLY_START[1],
-        )
-
-        run_early20()
-
-    elif in_window(
-        EARLY_START[0],
-        EARLY_START[1],
-        EARLY_END[0],
-        EARLY_END[1],
-    ):
-        run_early20()
-
-    else:
-        print(
-            "H1-Early20 : SKIPPED "
-            "- started too late."
-        )
+    # H1-Early20 validation is finished.
+    # Keep run_early20() above for historical
+    # reference / rollback only.
+    print()
+    print(
+        "H1-Early20 : DISABLED "
+        "- validation finished."
+    )
 
     # ==================================================
     # Legacy H1 is disabled here.
@@ -848,7 +832,7 @@ def main():
     #     python src/intraday/rss_morning_runner.py
     #
     # Keep run_h1() above temporarily for rollback only.
-    # SSR-Ver1 / SSR-Ver2 / Early20 remain active.
+    # SSR-Ver1 / SSR-Ver2 remain active.
     # ==================================================
 
     print()
