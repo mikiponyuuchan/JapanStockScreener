@@ -271,8 +271,8 @@ def setup_batch(
             )
         )
 
-    max_retries = 20
-    retry_wait = 0.25
+    max_retries = 60
+    retry_wait = 0.5
     last_error = None
 
     for attempt in range(
@@ -336,8 +336,8 @@ def inspect_batch(
     # Excel / ??RSS????????
     # COM????????????????????
     # ??????????????????
-    max_retries = 20
-    retry_wait = 0.25
+    max_retries = 60
+    retry_wait = 0.5
 
     last_error = None
 
@@ -463,8 +463,8 @@ def fetch_batch(
 
     # Excel may also reject Calculate temporarily while
     # Rakuten RSS is processing the newly written formulas.
-    calc_max_retries = 20
-    calc_retry_wait = 0.25
+    calc_max_retries = 60
+    calc_retry_wait = 0.5
     calc_last_error = None
 
     for calc_attempt in range(
