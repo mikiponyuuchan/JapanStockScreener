@@ -136,6 +136,32 @@ def _find_h1_book_in_rot():
     return None, None
 
 
+
+def _excel_process_exists():
+    """Check whether Microsoft Excel is already running."""
+    result = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq EXCEL.EXE", "/NH"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=10,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("Could not inspect Excel processes")
+    return "EXCEL.EXE" in result.stdout.upper()
+
+
+def _retry_existing_book(seconds=5):
+    """Allow time for an existing workbook to register in ROT."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        excel, book = _find_h1_book_in_rot()
+        if excel is not None:
+            return excel
+        time.sleep(0.5)
+    return None
+
+
 def get_microsoft_excel(
     start_if_missing=True,
     timeout=20,
@@ -151,10 +177,23 @@ def get_microsoft_excel(
     if excel is not None:
         return excel
 
+    excel = _retry_existing_book(seconds=5)
+    if excel is not None:
+        return excel
+
     if not start_if_missing:
         raise RuntimeError(
             "Microsoft Excel RSS instance "
             "was not found."
+        )
+
+    if _excel_process_exists():
+        raise RuntimeError(
+            "Excel is already running, but the Rakuten RSS "
+            "workbook was not found in ROT. "
+            "Duplicate Excel launch prevented. "
+            "Close duplicate Excel windows and reopen the "
+            "original workbook, then retry."
         )
 
     if not EXCEL_EXE.exists():
