@@ -363,6 +363,42 @@ def write_rss_sheet(sheet, selections):
     return count
 
 
+
+def write_rss_sheet_with_retry(sheet, selections):
+    import pywintypes
+
+    max_retries = 20
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = write_rss_sheet(sheet, selections)
+
+            if attempt > 1:
+                print(
+                    "Credit RSS write recovered "
+                    f"after {attempt - 1} retries"
+                )
+
+            return result
+
+        except pywintypes.com_error as exc:
+            if exc.hresult not in (
+                -2147418111,
+                -2147417846,
+            ):
+                raise
+
+            if attempt == max_retries:
+                raise
+
+            if attempt == 1:
+                print(
+                    "Credit RSS Excel busy - retrying..."
+                )
+
+            time.sleep(0.5)
+
+
 def read_rss_rows(sheet, count):
     end_row = count + 1
 
@@ -470,7 +506,7 @@ def main():
         SHEET_NAME
     )
 
-    count = write_rss_sheet(
+    count = write_rss_sheet_with_retry(
         sheet,
         selections,
     )
