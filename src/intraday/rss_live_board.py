@@ -775,6 +775,7 @@ def clear_h1_labels():
                 and not item.startswith("H1 #1 ")
                 and not item.startswith("H1 #2 ")
                 and not item.startswith("H1 #3 ")
+                and not item.startswith("H1 CAND #")
             )
         ]
 
