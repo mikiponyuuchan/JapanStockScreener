@@ -125,6 +125,16 @@ def build_fixed_layout(
                 continue
 
         labels = [label] + preserved_labels(code)
+
+        # Preserve J1 BUY when an H1 stock is also
+        # included in the J1 plan.
+        if code in {
+            normalize_stock_code(item)
+            for item in (j1_codes or [])
+        }:
+            if "J1 BUY" not in labels:
+                labels.append("J1 BUY")
+
         layout[row] = (code, " / ".join(labels))
 
     seen_j1 = set()
