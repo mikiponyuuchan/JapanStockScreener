@@ -40,6 +40,14 @@ def build_fixed_layout(
 
     h1_decisions = h1_decisions or {}
 
+    preserve_h1 = h1_codes is None
+
+    if preserve_h1:
+        h1_codes = [
+            current_layout.get(row, ("", ""))[0]
+            for row in range(H1_FIRST, H1_LAST + 1)
+        ]
+
     if j1_codes is None:
         j1_codes = [
             current_layout.get(row, ("", ""))[0]
@@ -108,6 +116,14 @@ def build_fixed_layout(
         if not label:
             label = f"H1 CAND #{rank}"
 
+        if preserve_h1:
+            original_code, original_label = current_layout.get(
+                row, ("", "")
+            )
+            if normalize_stock_code(original_code) == code:
+                layout[row] = (code, original_label)
+                continue
+
         labels = [label] + preserved_labels(code)
         layout[row] = (code, " / ".join(labels))
 
@@ -164,7 +180,7 @@ def build_fixed_layout(
 
         layout[row] = ("", "")
 
-    # Relocate displaced SSR stocks into unused rows 17..21.
+    # Relocate displaced protected stocks into unused rows 17..21.
     placed_codes = {
         normalize_stock_code(code)
         for code, label in layout.values()
@@ -180,10 +196,7 @@ def build_fixed_layout(
         if not code or code in placed_codes:
             continue
 
-        if not any(
-            part.startswith("SSR")
-            for part in split_labels(label)
-        ):
+        if not preserved_labels(code):
             continue
 
         displaced_ssr.append((code, label))
@@ -198,7 +211,7 @@ def build_fixed_layout(
 
     if len(displaced_ssr) > len(free_rows):
         raise RuntimeError(
-            "SSR RELOCATION BLOCKED: insufficient free rows"
+            "PROTECTED RELOCATION BLOCKED: insufficient free rows"
         )
 
     for (code, label), row in zip(displaced_ssr, free_rows):
@@ -228,5 +241,28 @@ def build_fixed_layout(
             "SSR STOCK LOSS BLOCKED: "
             + ", ".join(sorted(missing_ssr))
         )
+
+    # Verify every protected label remains present.
+    for code, old_labels in old_labels_by_code.items():
+        protected = preserved_labels(code)
+
+        if not protected:
+            continue
+
+        actual = set()
+
+        for placed_code, placed_label in layout.values():
+            if normalize_stock_code(placed_code) == code:
+                actual.update(split_labels(placed_label))
+
+        missing = set(protected) - actual
+
+        if missing:
+            raise RuntimeError(
+                "PROTECTED LABEL LOSS BLOCKED: "
+                + code
+                + " / "
+                + ", ".join(sorted(missing))
+            )
 
     return layout
