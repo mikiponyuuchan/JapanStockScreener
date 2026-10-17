@@ -49,9 +49,11 @@ def build_fixed_layout(
         ]
 
     if j1_codes is None:
+        # J1 may share an H1 row when codes overlap.
+        # Restore J1 membership from all fixed rows.
         j1_codes = [
             current_layout.get(row, ("", ""))[0]
-            for row in range(J1_FIRST, J1_LAST + 1)
+            for row in range(H1_FIRST, J1_LAST + 1)
             if any(
                 part == "J1 BUY"
                 or part.startswith("J1 BUY ")
