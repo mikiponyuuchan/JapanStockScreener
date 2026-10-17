@@ -57,7 +57,7 @@ def prepare_board_changes(sheet, layout):
 
         if old_label != new_label:
             changes.append(
-                (row, 8, old_label, new_label)
+                (row, 8, label_cell.Value, new_label)
             )
 
     return changes
