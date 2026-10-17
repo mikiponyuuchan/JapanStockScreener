@@ -4,8 +4,8 @@ Pure H1 board layout bridge.
 No Excel connection, writes, or saves.
 """
 
-from rss_h1_decision import build_h1_decisions
-from rss_board_fixed_layout import build_fixed_layout
+from intraday.rss_h1_decision import build_h1_decisions
+from intraday.rss_board_fixed_layout import build_fixed_layout
 
 
 def build_h1_board_layout(
