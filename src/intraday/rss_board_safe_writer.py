@@ -17,11 +17,38 @@ def normalize_stock_code(value):
     return text
 
 
+def validate_board_layout(layout):
+    """Validate all board rows before accessing Excel."""
+    if not isinstance(layout, dict):
+        raise ValueError("layout must be a dictionary")
+
+    expected_rows = set(range(2, 22))
+    actual_rows = set(layout)
+
+    if actual_rows != expected_rows:
+        missing = sorted(expected_rows - actual_rows)
+        extra = sorted(actual_rows - expected_rows)
+
+        raise ValueError(
+            f"Invalid layout rows: missing={missing}, extra={extra}"
+        )
+
+    for row in range(2, 22):
+        entry = layout[row]
+
+        if not isinstance(entry, (tuple, list)) or len(entry) != 2:
+            raise ValueError(
+                f"Invalid layout entry at row {row}: {entry!r}"
+            )
+
+
 def prepare_board_changes(sheet, layout):
     """
     Read A/H only. Never write or save.
     layout: {row: (code, label)}
     """
+    validate_board_layout(layout)
+
     changes = []
 
     for row in range(2, 22):
