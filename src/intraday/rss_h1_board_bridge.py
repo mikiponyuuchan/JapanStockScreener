@@ -8,6 +8,46 @@ from intraday.rss_h1_decision import build_h1_decisions
 from intraday.rss_board_fixed_layout import build_fixed_layout
 
 
+
+def board_rows_to_layout(current_rows):
+    """
+    Convert read_board() rows into a complete
+    2-21 fixed layout. No Excel access.
+    """
+    layout = {
+        row: ("", "")
+        for row in range(2, 22)
+    }
+
+    seen = set()
+
+    for item in current_rows:
+        row = int(item["row"])
+
+        if row not in layout:
+            raise ValueError(f"Invalid board row: {row}")
+
+        if row in seen:
+            raise ValueError(f"Duplicate board row: {row}")
+
+        seen.add(row)
+
+        code = str(item.get("code") or "").strip()
+
+        if code.endswith(".0"):
+            code = code[:-2]
+
+        label = str(item.get("label") or "").strip()
+
+        if not code and label:
+            raise ValueError(
+                f"Label without stock code at row {row}"
+            )
+
+        layout[row] = (code, label)
+
+    return layout
+
 def build_h1_board_layout(
     current_layout,
     h1_codes,
