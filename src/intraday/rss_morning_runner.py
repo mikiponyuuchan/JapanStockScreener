@@ -47,6 +47,7 @@ from rss_reader import read_rss_rows
 from rss_excel import ensure_rss_workbooks
 from rss_live_board import (
     get_live_board,
+    read_board,
     clear_h1_labels,
     clear_j1_labels,
     add_candidate,
@@ -70,7 +71,7 @@ def preview_h1_runner_board(*, decision_enabled):
         return
 
     preview_h1_fixed_board(
-        current_rows=[],
+        current_rows=read_board(),
         h1_candidates=H1_CANDIDATES,
         j1_codes=J1_CODES,
         early_volume_map=H1_EARLY_VOLUME,
