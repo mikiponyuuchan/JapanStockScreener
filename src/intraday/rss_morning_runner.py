@@ -62,6 +62,7 @@ from intraday.rss_h1_board_preview import preview_h1_fixed_board
 # H1 fixed-board preview (disabled by default).
 # No Excel access in the preview itself.
 H1_FIXED_BOARD_DRY_RUN = False
+J1_CODES = []
 
 
 def preview_h1_runner_board(*, decision_enabled):
@@ -71,6 +72,7 @@ def preview_h1_runner_board(*, decision_enabled):
     preview_h1_fixed_board(
         current_rows=[],
         h1_candidates=H1_CANDIDATES,
+        j1_codes=J1_CODES,
         early_volume_map=H1_EARLY_VOLUME,
         snapshot_map=H1_0930_SNAPSHOT,
         floor_to_tick=floor_to_tick,
@@ -1535,8 +1537,11 @@ def main():
     # rules.
     # ============================================
 
+    global J1_CODES
+    J1_CODES = []
+
     try:
-        load_today_j1_live_board()
+        J1_CODES = load_today_j1_live_board() or []
 
     except Exception as exc:
         print()

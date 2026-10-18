@@ -32,6 +32,7 @@ class TestH1RunnerPreviewHooks(unittest.TestCase):
         namespace = {
             "H1_FIXED_BOARD_DRY_RUN": False,
             "H1_CANDIDATES": ["7203"],
+            "J1_CODES": ["7203", "6501"],
             "H1_EARLY_VOLUME": {"7203": 1000.0},
             "H1_0930_SNAPSHOT": {
                 "7203": {
@@ -66,6 +67,11 @@ class TestH1RunnerPreviewHooks(unittest.TestCase):
             preview.call_args.kwargs["decision_enabled"]
         )
 
+        self.assertEqual(
+            preview.call_args.kwargs["j1_codes"],
+            ["7203", "6501"],
+        )
+
         # ON: 09:32
         hook(decision_enabled=True)
 
@@ -77,6 +83,11 @@ class TestH1RunnerPreviewHooks(unittest.TestCase):
         self.assertEqual(
             preview.call_args.kwargs["h1_candidates"],
             ["7203"],
+        )
+
+        self.assertEqual(
+            preview.call_args.kwargs["j1_codes"],
+            ["7203", "6501"],
         )
 
         print("PREVIEW OFF / ON: PASS")
