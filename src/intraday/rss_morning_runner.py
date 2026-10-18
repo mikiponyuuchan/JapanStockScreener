@@ -70,8 +70,15 @@ def preview_h1_runner_board(*, decision_enabled):
     if not H1_FIXED_BOARD_DRY_RUN:
         return
 
+    current_rows = read_board_preview_safe()
+
+    if not current_rows:
+        raise RuntimeError(
+            "H1 PREVIEW BLOCKED: existing board is empty"
+        )
+
     preview_h1_fixed_board(
-        current_rows=read_board_preview_safe(),
+        current_rows=current_rows,
         h1_candidates=H1_CANDIDATES,
         j1_codes=J1_CODES,
         early_volume_map=H1_EARLY_VOLUME,
