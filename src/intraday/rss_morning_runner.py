@@ -56,6 +56,28 @@ from rss_live_board import (
 )
 from run_morning_screener_rss import build_morning_panel
 from analyze_h1_true_pullback_entry import floor_to_tick
+from intraday.rss_h1_board_preview import preview_h1_fixed_board
+
+
+# H1 fixed-board preview (disabled by default).
+# No Excel access in the preview itself.
+H1_FIXED_BOARD_DRY_RUN = False
+
+
+def preview_h1_runner_board(*, decision_enabled):
+    if not H1_FIXED_BOARD_DRY_RUN:
+        return
+
+    preview_h1_fixed_board(
+        current_rows=[],
+        h1_candidates=H1_CANDIDATES,
+        early_volume_map=H1_EARLY_VOLUME,
+        snapshot_map=H1_0930_SNAPSHOT,
+        floor_to_tick=floor_to_tick,
+        decision_enabled=decision_enabled,
+        growth_threshold=H1_WAIT_GROWTH_THRESHOLD,
+        pullback_pct=H1_WAIT_PULLBACK_LEVEL,
+    )
 
 
 MORNING_DIR = Path(
@@ -1084,6 +1106,9 @@ def run_h1_0932_refill_filter():
             f"{H1_0932_REFILL_LOG_FILE}"
         )
 
+    # Fixed-board preview only (no Excel access).
+    preview_h1_runner_board(decision_enabled=True)
+
     # Remove temporary candidate labels.
     # Only final selected stocks receive H1 labels.
     clear_h1_labels()
@@ -1843,6 +1868,9 @@ def main():
     print("=" * 60)
     print(" H1 09:30 CANDIDATES TOP10")
     print("=" * 60)
+
+    # Fixed-board preview only (no Excel access).
+    preview_h1_runner_board(decision_enabled=False)
 
     clear_h1_labels()
 
