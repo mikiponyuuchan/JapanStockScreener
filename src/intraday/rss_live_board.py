@@ -47,6 +47,32 @@ def normalize_code(value):
     )
 
 
+def _find_live_board(excel):
+    # Locate the existing workbook and worksheet by name.
+    # No Excel launch, cell write, or workbook save.
+    book = None
+
+    for i in range(1, excel.Workbooks.Count + 1):
+        candidate = excel.Workbooks.Item(i)
+        if candidate.Name == WORKBOOK_NAME:
+            book = candidate
+            break
+
+    if book is None:
+        raise RuntimeError(
+            f"RSS workbook not found: {WORKBOOK_NAME}"
+        )
+
+    for i in range(1, book.Worksheets.Count + 1):
+        candidate = book.Worksheets.Item(i)
+        if candidate.Name == SHEET_NAME:
+            return book, candidate
+
+    raise RuntimeError(
+        f"RSS worksheet not found: {SHEET_NAME}"
+    )
+
+
 def get_live_board():
     """
     Get the active Rakuten RSS live board.
@@ -69,13 +95,8 @@ def get_live_board():
                 start_if_missing=True
             )
 
-            book = excel.Workbooks(
-                WORKBOOK_NAME
-            )
+            book, sheet = _find_live_board(excel)
 
-            sheet = book.Worksheets(
-                SHEET_NAME
-            )
 
             return excel, book, sheet
 
@@ -1038,8 +1059,7 @@ def read_board_preview_safe():
         start_if_missing=False
     )
 
-    book = excel.Workbooks(WORKBOOK_NAME)
-    sheet = book.Worksheets(SHEET_NAME)
+    book, sheet = _find_live_board(excel)
 
     rows = []
 
