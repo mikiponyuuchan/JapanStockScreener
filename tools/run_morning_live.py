@@ -364,17 +364,8 @@ def ssr_worker(
                     row
                 )
 
-                try:
-                    add_candidate(
-                        code,
-                        "SSR-Ver1",
-                    )
-
-                except Exception as exc:
-                    print(
-                        "SSR-Ver1 RSS board update skipped : "
-                        f"{exc}"
-                    )
+                # SSR-Ver1 live-board writing disabled.
+                # SSR monitoring and CSV logging remain active.
 
         print(
             datetime.now().strftime(
@@ -506,17 +497,8 @@ def ssr_worker(
                     ver2_row
                 )
 
-                try:
-                    add_candidate(
-                        code,
-                        "SSR-Ver2",
-                    )
-
-                except Exception as exc:
-                    print(
-                        "SSR-Ver2 RSS board update skipped : "
-                        f"{exc}"
-                    )
+                # SSR-Ver2 live-board writing disabled.
+                # SSR monitoring and CSV logging remain active.
 
             else:
                 print(
