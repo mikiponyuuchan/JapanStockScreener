@@ -1027,3 +1027,44 @@ def print_board():
         )
 
     print("=" * 60)
+
+def read_board_preview_safe():
+    """
+    Read the existing H1 board for preview only.
+
+    Never launch Excel, write cells, or save workbook.
+    """
+    excel = get_microsoft_excel(
+        start_if_missing=False
+    )
+
+    book = excel.Workbooks(WORKBOOK_NAME)
+    sheet = book.Worksheets(SHEET_NAME)
+
+    rows = []
+
+    for row_number in range(
+        START_ROW,
+        END_ROW + 1,
+    ):
+        code = normalize_code(
+            sheet.Cells(row_number, 1).Value
+        )
+
+        if not code:
+            continue
+
+        label = sheet.Cells(
+            row_number, 8
+        ).Value
+
+        rows.append({
+            "row": row_number,
+            "code": code,
+            "label": (
+                str(label).strip()
+                if label else ""
+            ),
+        })
+
+    return rows

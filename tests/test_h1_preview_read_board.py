@@ -41,7 +41,7 @@ class TestH1PreviewReadBoard(unittest.TestCase):
             "H1_WAIT_GROWTH_THRESHOLD": 100.0,
             "H1_WAIT_PULLBACK_LEVEL": -0.50,
             "floor_to_tick": int,
-            "read_board": reader,
+            "read_board_preview_safe": reader,
             "preview_h1_fixed_board": preview,
         }
 

@@ -43,7 +43,7 @@ class TestH1RunnerPreviewHooks(unittest.TestCase):
             "H1_WAIT_GROWTH_THRESHOLD": 100.0,
             "H1_WAIT_PULLBACK_LEVEL": -0.50,
             "floor_to_tick": int,
-            "read_board": Mock(return_value=[
+            "read_board_preview_safe": Mock(return_value=[
                 {"row": 2, "code": "7203", "label": "J1 BUY"},
             ]),
             "preview_h1_fixed_board": Mock(),
