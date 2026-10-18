@@ -1,4 +1,4 @@
-﻿# ================================================
+# ================================================
 # 楽天 MarketSpeed II RSS
 # 朝ライブ 一発起動ランナー
 #
@@ -63,6 +63,70 @@ from intraday.rss_h1_board_preview import preview_h1_fixed_board
 # H1 fixed-board preview (disabled by default).
 # No Excel access in the preview itself.
 H1_FIXED_BOARD_DRY_RUN = False
+
+# Production fixed-board switch.
+# Keep False until integration tests and Excel verification pass.
+H1_FIXED_BOARD_WRITE_ENABLED = False
+
+
+def update_h1_fixed_board_live(*, decision_enabled):
+    """
+    Update the H1 fixed board using verified backup,
+    guarded cell writes and one workbook save.
+
+    Never called while the production switch is False.
+    """
+    if not H1_FIXED_BOARD_WRITE_ENABLED:
+        raise RuntimeError(
+            "H1 fixed-board production write is disabled"
+        )
+
+    from intraday.rss_h1_board_adapter import (
+        prepare_h1_fixed_board,
+    )
+    from intraday.rss_board_transaction import (
+        execute_and_save_verified_board,
+    )
+
+    excel, book, sheet = get_live_board()
+
+    current_rows = [
+        {
+            "row": row,
+            "code": sheet.Cells(row, 1).Value,
+            "label": sheet.Cells(row, 8).Value,
+        }
+        for row in range(2, 22)
+    ]
+
+    layout = prepare_h1_fixed_board(
+        current_rows=current_rows,
+        h1_candidates=H1_CANDIDATES,
+        early_volume_map=H1_EARLY_VOLUME,
+        snapshot_map=H1_0930_SNAPSHOT,
+        floor_to_tick=floor_to_tick,
+        j1_codes=J1_CODES,
+        decision_enabled=decision_enabled,
+        growth_threshold=H1_WAIT_GROWTH_THRESHOLD,
+        pullback_pct=H1_WAIT_PULLBACK_LEVEL,
+    )
+
+    backup_dir = (
+        Path("data")
+        / "intraday"
+        / "board_backups"
+    )
+
+    return execute_and_save_verified_board(
+        excel,
+        book,
+        sheet,
+        layout,
+        backup_dir,
+        dry_run=False,
+    )
+
+
 J1_CODES = []
 
 
@@ -683,6 +747,12 @@ def update_h1_hybrid_wait_live():
         print(
             "No H1 TOP10 candidates."
         )
+
+        if H1_FIXED_BOARD_WRITE_ENABLED:
+            update_h1_fixed_board_live(
+                decision_enabled=True,
+            )
+
         H1_HYBRID_DECISION_DONE = True
         print("=" * 60)
         return
@@ -716,10 +786,11 @@ def update_h1_hybrid_wait_live():
                 "early volume unavailable"
             )
 
-            add_candidate(
-                code,
-                f"H1 #{rank} NO DATA",
-            )
+            if not H1_FIXED_BOARD_WRITE_ENABLED:
+                add_candidate(
+                    code,
+                    f"H1 #{rank} NO DATA",
+                )
             continue
 
         if not saved:
@@ -729,10 +800,11 @@ def update_h1_hybrid_wait_live():
                 "09:30 snapshot unavailable"
             )
 
-            add_candidate(
-                code,
-                f"H1 #{rank} NO DATA",
-            )
+            if not H1_FIXED_BOARD_WRITE_ENABLED:
+                add_candidate(
+                    code,
+                    f"H1 #{rank} NO DATA",
+                )
             continue
 
         volume_0930 = _safe_float(
@@ -755,10 +827,11 @@ def update_h1_hybrid_wait_live():
                 "invalid 09:30 price/volume"
             )
 
-            add_candidate(
-                code,
-                f"H1 #{rank} NO DATA",
-            )
+            if not H1_FIXED_BOARD_WRITE_ENABLED:
+                add_candidate(
+                    code,
+                    f"H1 #{rank} NO DATA",
+                )
             continue
 
         growth = (
@@ -817,54 +890,55 @@ def update_h1_hybrid_wait_live():
             decision = "BUY"
             price_text = "-"
 
-        # Excel COM may temporarily reject a live-board
-        # write while Rakuten RSS / Excel is busy.
-        add_max_retries = 20
-        add_retry_wait = 0.25
-        add_last_error = None
+        if not H1_FIXED_BOARD_WRITE_ENABLED:
+            # Excel COM may temporarily reject a live-board
+            # write while Rakuten RSS / Excel is busy.
+            add_max_retries = 20
+            add_retry_wait = 0.25
+            add_last_error = None
 
-        for add_attempt in range(
-            1,
-            add_max_retries + 1,
-        ):
-            try:
-                add_candidate(
-                    code,
-                    label,
-                )
-                add_last_error = None
-
-                if add_attempt > 1:
-                    print(
-                        "  H1 live-board write recovered "
-                        f"after {add_attempt - 1} retries"
+            for add_attempt in range(
+                1,
+                add_max_retries + 1,
+            ):
+                try:
+                    add_candidate(
+                        code,
+                        label,
                     )
+                    add_last_error = None
 
-                break
+                    if add_attempt > 1:
+                        print(
+                            "  H1 live-board write recovered "
+                            f"after {add_attempt - 1} retries"
+                        )
 
-            except Exception as exc:
-                add_last_error = exc
-
-                if add_attempt >= add_max_retries:
                     break
 
-                if add_attempt == 1:
-                    print(
-                        "  H1 live-board COM busy "
-                        "- retrying..."
+                except Exception as exc:
+                    add_last_error = exc
+
+                    if add_attempt >= add_max_retries:
+                        break
+
+                    if add_attempt == 1:
+                        print(
+                            "  H1 live-board COM busy "
+                            "- retrying..."
+                        )
+
+                    import time
+                    time.sleep(
+                        add_retry_wait
                     )
 
-                import time
-                time.sleep(
-                    add_retry_wait
-                )
-
-        if add_last_error is not None:
-            raise RuntimeError(
-                "H1 live-board write failed after "
-                f"{add_max_retries} retries : "
-                f"{add_last_error}"
-            ) from add_last_error
+            if add_last_error is not None:
+                raise RuntimeError(
+                    "H1 live-board write failed after "
+                    f"{add_max_retries} retries : "
+                    f"{add_last_error}"
+                ) from add_last_error
 
         print(
             f"H1 #{rank} "
@@ -877,6 +951,11 @@ def update_h1_hybrid_wait_live():
                 if decision == "WAIT"
                 else ""
             )
+        )
+
+    if H1_FIXED_BOARD_WRITE_ENABLED:
+        update_h1_fixed_board_live(
+            decision_enabled=True,
         )
 
     H1_HYBRID_DECISION_DONE = True
@@ -1121,7 +1200,8 @@ def run_h1_0932_refill_filter():
 
     # Remove temporary candidate labels.
     # Only final selected stocks receive H1 labels.
-    clear_h1_labels()
+    if not H1_FIXED_BOARD_WRITE_ENABLED:
+        clear_h1_labels()
 
     # PASS/SKIP selection is complete.
     # BUY/WAIT is a separate decision.
@@ -1300,6 +1380,13 @@ def run_capture():
                     "H1 09:32 refill filter "
                     f"failed : {exc}"
                 )
+
+                if H1_FIXED_BOARD_WRITE_ENABLED:
+                    raise RuntimeError(
+                        "H1 FIXED BOARD FAILURE: "
+                        "stop runner; inspect Excel and backup. "
+                        "Do not retry automatically."
+                    ) from exc
 
             filter_done = True
 
@@ -1885,16 +1972,22 @@ def main():
     # Fixed-board preview only (no Excel access).
     preview_h1_runner_board(decision_enabled=False)
 
-    clear_h1_labels()
+    if H1_FIXED_BOARD_WRITE_ENABLED:
+        update_h1_fixed_board_live(
+            decision_enabled=False,
+        )
+    else:
+        clear_h1_labels()
 
     for rank, (_, row) in enumerate(
         h1_candidates.iterrows(),
         start=1,
     ):
-        add_candidate(
-            row["CodeX"],
-            f"H1 CAND #{rank}",
-        )
+        if not H1_FIXED_BOARD_WRITE_ENABLED:
+            add_candidate(
+                row["CodeX"],
+                f"H1 CAND #{rank}",
+            )
 
         print(
             f"{rank:2d} "
