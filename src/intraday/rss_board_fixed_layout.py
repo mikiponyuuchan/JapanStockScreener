@@ -211,7 +211,7 @@ def build_fixed_layout(
         if not preserved_labels(code):
             continue
 
-        displaced_ssr.append((code, label))
+        displaced_ssr.append((code, " / ".join(preserved_labels(code))))
         placed_codes.add(code)
 
     free_rows = [
