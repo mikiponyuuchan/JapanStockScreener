@@ -1635,23 +1635,10 @@ def main():
     global J1_CODES
     J1_CODES = []
 
-    try:
-        J1_CODES = load_today_j1_live_board() or []
-
-    except Exception as exc:
-        print()
-        print("=" * 60)
-        print(" J1 LIVE BOARD")
-        print("=" * 60)
-        print(
-            "J1 live-board update failed."
-        )
-        print(
-            "Morning Runner will continue."
-        )
-        print(
-            f"Reason : {exc}"
-        )
+    # J1 live-board loading disabled.
+    # H1-only morning operation.
+    # Keep load_today_j1_live_board() for rollback.
+    print("J1 LIVE BOARD : DISABLED (H1-only mode)")
 
     # ============================================
     # Refresh today's JPX expanded price limits.
