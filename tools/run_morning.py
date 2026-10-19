@@ -57,13 +57,9 @@ def main():
             )
 
         print()
-        print("Starting MORNING LIVE...")
-        live_process = subprocess.Popen(
-            [sys.executable, str(MORNING_LIVE)],
-            cwd=str(ROOT),
-        )
-        processes.append(("MORNING LIVE", live_process))
-        print(f"MORNING LIVE PID : {live_process.pid}")
+        print("MORNING LIVE : DISABLED (SSR stopped)")
+        # SSR-only runner disabled.
+        # H1 remains active in rss_morning_runner.py.
 
         print()
         print("Starting RSS MORNING...")
