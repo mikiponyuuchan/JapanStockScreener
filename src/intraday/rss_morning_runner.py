@@ -2015,6 +2015,36 @@ def main():
         "H1 TOP10 candidate live board update : OK"
     )
 
+    # LOW-CxV: separate rows 12-14, independent of H1 TOP10.
+    # Do not change the existing H1 BUY/WAIT logic.
+    try:
+        from intraday.h1_low_cxv_board import write_low_cxv_board
+
+        write_low_cxv_board(
+            h1_candidates,
+            enabled=True,
+        )
+    except Exception as low_cxv_error:
+        print(
+            "WARNING: LOW-CxV board update failed: "
+            f"{low_cxv_error}"
+        )
+
+    # LOW-CxV forward tracking (independent of H1 TOP10).
+    try:
+        from intraday.h1_low_cxv_recorder import record_low_cxv
+
+        record_low_cxv(
+            h1_candidates,
+            H1_0930_SNAPSHOT,
+            panel_path,
+        )
+    except Exception as low_cxv_tracking_error:
+        print(
+            "WARNING: LOW-CxV tracking failed: "
+            f"{low_cxv_tracking_error}"
+        )
+
     # ============================================
     # Refresh stop-high prices AFTER the TOP10
     # stocks have been written to the live board.

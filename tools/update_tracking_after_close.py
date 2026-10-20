@@ -452,6 +452,33 @@ def main():
         )
 
     # ======================================================
+    # ======================================================
+    # Intraday Strategy H1 LOW-CxV result update
+    # ======================================================
+
+    print()
+    print("[Intraday Strategy H1 LOW-CxV]")
+
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "tools"
+                    / "update_intraday_strategy_h1_low_cxv.py"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+        print("Intraday Strategy H1 LOW-CxV : complete")
+
+    except Exception as e:
+        print("Intraday Strategy H1 LOW-CxV ERROR :", e)
+
+    # ======================================================
     # Intraday Strategy H1-Early20
     # Validation finished. Keep historical updater/data
     # for reference and rollback only.
