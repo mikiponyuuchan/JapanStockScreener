@@ -1971,10 +1971,38 @@ def main():
         start=1,
     ):
         if not H1_FIXED_BOARD_WRITE_ENABLED:
-            add_candidate(
-                row["CodeX"],
-                f"H1 CAND #{rank}",
-            )
+            # Retry transient Excel COM call rejections.
+            import time
+            import pywintypes
+
+            for attempt in range(1, 21):
+                try:
+                    add_candidate(
+                        row["CodeX"],
+                        f"H1 CAND #{rank}",
+                    )
+                    if attempt > 1:
+                        print(
+                            "  H1 09:30 COM recovered after "
+                            f"{attempt - 1} retries"
+                        )
+                    break
+                except pywintypes.com_error as exc:
+                    hresult = exc.args[0] if exc.args else None
+
+                    if hresult not in (-2147418111, -2147417846):
+                        raise
+
+                    if attempt == 20:
+                        raise
+
+                    if attempt == 1:
+                        print(
+                            "  H1 09:30 Excel COM busy "
+                            "- retrying..."
+                        )
+
+                    time.sleep(0.25)
 
         print(
             f"{rank:2d} "
