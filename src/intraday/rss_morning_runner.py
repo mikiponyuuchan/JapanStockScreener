@@ -1972,7 +1972,6 @@ def main():
     ):
         if not H1_FIXED_BOARD_WRITE_ENABLED:
             # Retry transient Excel COM call rejections.
-            import time
             import pywintypes
 
             for attempt in range(1, 21):

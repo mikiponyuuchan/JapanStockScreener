@@ -317,7 +317,29 @@ def fetch_jpx_expanded_price_limits():
     return expanded
 
 
+
 def refresh_expanded_price_limits():
+    """Retry transient Excel COM rejection without changing the calculation."""
+    for attempt in range(1, 6):
+        try:
+            return _refresh_expanded_price_limits_once()
+        except Exception as exc:
+            error_code = getattr(exc, "hresult", None)
+            if error_code is None:
+                args = getattr(exc, "args", ())
+                error_code = args[0] if args and isinstance(args[0], int) else None
+
+            if error_code != -2147418111 or attempt == 5:
+                raise
+
+            print(
+                f"Expanded price limit Excel busy - retry "
+                f"{attempt}/5..."
+            )
+            time.sleep(1.0)
+
+
+def _refresh_expanded_price_limits_once():
     """
     Refresh J/K on the H1 live board.
 
