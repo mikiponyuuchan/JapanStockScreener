@@ -55,118 +55,192 @@ def preview_low_cxv_board(h1_candidates, board_rows):
 
 def write_low_cxv_board(h1_candidates, enabled=False):
     """
-    Write LOW-CxV to rows 12-14 only.
+    Write LOW-CxV without clearing board cells.
 
-    Default: DRY RUN.
-    Requires matching TOP10 in rows 2-11.
+    Preferred rows: 12-14.
+    Overflow rows: 15-21, empty rows only.
+
+    Existing LOW-CxV rows may be updated.
+    Other occupied rows are never overwritten.
     """
 
     from pathlib import Path
     from datetime import datetime
+
+    selected = select_h1_low_cxv(h1_candidates)
+
     if not enabled:
         print("LOW-CxV Excel write: DISABLED")
-        selected = select_h1_low_cxv(h1_candidates)
-        for _, row in selected.iterrows():
-            print(
-                f"Row {int(row['BoardRow'])}: "
-                f"{row['CodeX']} "
-                f"LOW-CxV #{int(row['LowCxVRank'])}"
-            )
+        print("Selected:", len(selected))
         return selected
 
     from intraday.rss_live_board import get_live_board
 
     excel, book, sheet = get_live_board()
 
-    board_rows = {
+    if book.ReadOnly:
+        raise RuntimeError(
+            "LOW-CxV ABORT: Workbook is read-only"
+        )
+
+    # Verify the existing TOP10 before planning any writes.
+    top10_before = {
         row: sheet.Cells(row, 1).Value
         for row in range(2, 12)
     }
 
     selected = preview_low_cxv_board(
-        h1_candidates, board_rows
+        h1_candidates,
+        top10_before,
     )
 
-    if book.ReadOnly:
-        raise RuntimeError("LOW-CxV ABORT: Workbook is read-only")
+    # Read A/H for all possible LOW-CxV target rows.
+    target_rows = list(range(12, 22))
 
     old_values = {
-        (r, c): sheet.Cells(r, c).Value
-        for r in range(12, 15)
-        for c in (1, 8)
+        (row, col): sheet.Cells(row, col).Value
+        for row in target_rows
+        for col in (1, 8)
     }
 
-    for r in range(12, 15):
-        old_code = normalize_code(old_values[(r, 1)])
-        old_label = str(old_values[(r, 8)] or "").strip()
+    # Existing LOW-CxV rows are reusable. Otherwise,
+    # a row must be completely empty in both A and H.
+    existing_low_rows = []
+    empty_rows = []
 
-        if old_code or old_label:
-            if not old_label.startswith("LOW-CxV #"):
-                raise RuntimeError(
-                    f"LOW-CxV ABORT: Row {r} belongs to another strategy"
-                )
+    for row in target_rows:
+        code = normalize_code(old_values[(row, 1)])
+        label = str(
+            old_values[(row, 8)] or ""
+        ).strip()
 
-    backup_dir = Path(book.FullName).parent / "backup"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-
-    backup = backup_dir / (
-        "rakuten_rss_morning_before_low_cxv_"
-        + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        + ".xlsx"
-    )
-
-    book.SaveCopyAs(str(backup))
-
-    if not backup.is_file() or backup.stat().st_size == 0:
-        raise RuntimeError("LOW-CxV ABORT: Backup failed")
-
-    # Recheck TOP10 immediately before changing cells.
-    latest_rows = {
-        r: sheet.Cells(r, 1).Value
-        for r in range(2, 12)
-    }
-    preview_low_cxv_board(h1_candidates, latest_rows)
-
-    # Refuse to overwrite target rows changed since validation.
-    for (r, c), old_value in old_values.items():
-        if sheet.Cells(r, c).Value != old_value:
+        if bool(sheet.Cells(row, 1).HasFormula):
             raise RuntimeError(
-                f"LOW-CxV ABORT: Cell changed before write: {r}, {c}"
+                f"LOW-CxV ABORT: Formula in A{row}; "
+                "no cells changed"
             )
 
+        if bool(sheet.Cells(row, 8).HasFormula):
+            raise RuntimeError(
+                f"LOW-CxV ABORT: Formula in H{row}; "
+                "no cells changed"
+            )
+
+        if label.startswith("LOW-CxV #"):
+            existing_low_rows.append(row)
+        elif not code and not label:
+            empty_rows.append(row)
+
+    # Preserve existing LOW-CxV positions first, then
+    # prefer empty rows 12-14, then empty rows 15-21.
+    preferred_empty = (
+        [r for r in empty_rows if 12 <= r <= 14]
+        + [r for r in empty_rows if 15 <= r <= 21]
+    )
+
+    available_rows = existing_low_rows + preferred_empty
+
+    if len(available_rows) < len(selected):
+        raise RuntimeError(
+            "LOW-CxV ABORT: insufficient reusable or empty rows; "
+            "no cells changed"
+        )
+
+    assignments = []
+
+    for (_, item), row in zip(
+        selected.iterrows(),
+        available_rows,
+    ):
+        assignments.append((
+            row,
+            str(item["CodeX"]),
+            f"LOW-CxV #{int(item['LowCxVRank'])}",
+        ))
+
+    if not assignments:
+        print("LOW-CxV: no candidates to write")
+        return selected
+
+    # Create and verify a workbook backup before writing.
+    from intraday.rss_board_backup_guard import (
+        create_verified_backup,
+    )
+
+    backup_dir = Path(book.FullName).parent / "backup"
+
     try:
-        for row_number in range(12, 15):
-            sheet.Cells(row_number, 1).Value = None
-            sheet.Cells(row_number, 8).Value = None
+        backup_path = create_verified_backup(
+            book,
+            backup_dir,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "LOW-CxV ABORT: Verified backup failed; "
+            "no board cells were changed"
+        ) from exc
 
-        for _, row in selected.iterrows():
-            r = int(row["BoardRow"])
-            rank = int(row["LowCxVRank"])
+    # Recheck TOP10 and every target cell after backup.
+    latest_top10 = {
+        row: sheet.Cells(row, 1).Value
+        for row in range(2, 12)
+    }
 
-            sheet.Cells(r, 1).Value = str(row["CodeX"])
-            sheet.Cells(r, 8).Value = f"LOW-CxV #{rank}"
+    if latest_top10 != top10_before:
+        raise RuntimeError(
+            "LOW-CxV ABORT: TOP10 changed after backup"
+        )
 
+    for (row, col), old_value in old_values.items():
+        if sheet.Cells(row, col).Value != old_value:
+            raise RuntimeError(
+                f"LOW-CxV ABORT: Cell changed after backup: "
+                f"{row}, {col}"
+            )
+
+    changed_cells = []
+
+    try:
+        # No blanket clearing. Write only selected target cells.
+        for row, code, label in assignments:
+            for col, value in ((1, code), (8, label)):
+                old_value = sheet.Cells(row, col).Value
+
+                if old_value != value:
+                    sheet.Cells(row, col).Value = value
+                    changed_cells.append(
+                        (row, col, old_value)
+                    )
+
+        excel.Calculate()
         book.Save()
 
     except Exception as write_error:
-        try:
-            for (r, c), value in old_values.items():
-                sheet.Cells(r, c).Value = value
-        except Exception as restore_error:
+        restore_errors = []
+
+        for row, col, old_value in reversed(changed_cells):
+            try:
+                sheet.Cells(row, col).Value = old_value
+            except Exception as restore_error:
+                restore_errors.append(
+                    f"{row},{col}: {restore_error}"
+                )
+
+        if restore_errors:
             raise RuntimeError(
-                "LOW-CxV write failed AND rollback failed. "
-                f"Backup: {backup}. "
-                f"Write error: {write_error}. "
-                f"Restore error: {restore_error}"
+                "LOW-CxV WRITE/SAVE FAILED; rollback incomplete. "
+                f"Backup: {backup_path}. "
+                + "; ".join(restore_errors)
             ) from write_error
 
         raise RuntimeError(
-            "LOW-CxV write failed; cell rollback attempted. "
-            "Restored values have not been saved. "
-            f"Backup: {backup}"
+            "LOW-CxV WRITE/SAVE FAILED; cell rollback attempted. "
+            "Workbook save state may be uncertain. "
+            f"Backup: {backup_path}. Do not retry automatically."
         ) from write_error
 
     print("LOW-CxV BOARD WRITE OK")
-    print("Backup:", backup)
+    print("Rows written:", [row for row, _, _ in assignments])
+    print("Backup:", backup_path)
 
     return selected

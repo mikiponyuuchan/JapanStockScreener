@@ -90,7 +90,7 @@ def build_fixed_layout(
             current_layout.get(row, ("", ""))[0],
             current_layout.get(row, ("", ""))[1],
         )
-        if row >= 17
+        if row >= 12
         else ("", "")
         for row in range(FIRST_ROW, LAST_ROW + 1)
     }
