@@ -2002,7 +2002,7 @@ def create_top20_sheet(
             "E": 6,     # P5 condition
             "F": 6,     # buy avoidance
             "G": 12,    # avoidance comment
-            "H": 24,    # JPX risk
+            "H": 15,    # JPX risk
             "I": 7,     # credit ratio
             "J": 7,     # short increase
             "K": 13,    # reason
