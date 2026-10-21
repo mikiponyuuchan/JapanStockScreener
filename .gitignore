@@ -48,3 +48,16 @@ data/jpx_short_sale_trigger/
 # 日次決算分析生成データ
 data/analysis/20??-??-??_earnings_catalyst_ver1*.csv
 data/analysis/20??-??-??_earnings_strength_ranking.csv
+# 新規生成される分析・追跡データ
+/data/analysis/**/*.csv
+/data/tracking/**/*.csv
+/data/trading/**/*.csv
+/data/credit_daily/
+
+# JPX検証用ダウンロード
+/data/jpx_price_limit_test.html
+/data/jpx_stock_list_test.xls
+/data/jpx_stock_list_test.xlsx
+
+# 一時的なテストバックアップ
+*.pre_lookup_test.bak
