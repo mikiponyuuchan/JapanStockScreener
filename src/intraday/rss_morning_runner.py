@@ -66,7 +66,7 @@ H1_FIXED_BOARD_DRY_RUN = False
 
 # Production fixed-board switch.
 # Keep False until integration tests and Excel verification pass.
-H1_FIXED_BOARD_WRITE_ENABLED = False
+H1_FIXED_BOARD_WRITE_ENABLED = True
 
 
 def update_h1_fixed_board_live(*, decision_enabled):
